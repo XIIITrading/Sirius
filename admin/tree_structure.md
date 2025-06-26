@@ -1,8 +1,12 @@
 # Project Structure
-Last updated: 2025-06-25 10:43:11
+Last updated: 2025-06-26 10:16:32
 
 ```
-Vega/
+Sirius/
+│   ├── .env
+│   ├── README.md # Project documentation
+│   ├── git_commit.py
+│   ├── git_replace.py
 │   ├── main.py # Main application entry point
 │   ├── admin/
 │   │   ├── tree_structure.md
@@ -10,17 +14,24 @@ Vega/
 │   ├── modules/
 │   │   ├── calculations/
 │   │   │   ├── market-structure/
+│   │   │   │   ├── __init__.py
 │   │   │   ├── volume/
+│   │   │   │   ├── __init__.py
 │   │   │   │   ├── cluster_analyzer.py
 │   │   │   │   ├── hvn_engine.py
 │   │   │   │   ├── ranking_engine.py
 │   │   │   │   ├── session_profile.py
 │   │   │   │   ├── volume_profile.py
 │   │   ├── data/
+│   │   │   ├── __init__.py
+│   │   │   ├── polygon_bridge.py
+│   │   ├── filters/
+│   │   ├── scanners/
 │   │   ├── tests/
 │   │   ├── ui/
 │   │   │   ├── charts/
 │   │   │   ├── dashboards/
+│   │   │   │   ├── __init__.py
 │   │   │   │   ├── hvn_dashboard.py
 │   │   │   ├── grids/
 │   ├── polygon/
@@ -57,6 +68,8 @@ Vega/
 │   │   │   │   │   ├── AMZN/
 │   │   │   │   │   │   ├── AMZN_1day.parquet
 │   │   │   │   │   │   ├── AMZN_1min.parquet
+│   │   │   │   │   ├── CRCL/
+│   │   │   │   │   │   ├── CRCL_15min.parquet
 │   │   │   │   │   ├── GOOG/
 │   │   │   │   │   │   ├── GOOG_15min.parquet
 │   │   │   │   │   │   ├── GOOG_1day.parquet
@@ -85,9 +98,11 @@ Vega/
 │   │   │   │   │   │   ├── SPY_5min.parquet
 │   │   │   │   │   ├── TSLA/
 │   │   │   │   │   │   ├── TSLA_15min.parquet
+│   │   │   │   │   │   ├── TSLA_1d.parquet
 │   │   │   │   │   │   ├── TSLA_1day.parquet
 │   │   │   │   │   │   ├── TSLA_1hour.parquet
 │   │   │   │   │   │   ├── TSLA_1min.parquet
+│   │   │   │   │   │   ├── TSLA_5min.parquet
 │   │   ├── docs/
 │   │   │   ├── config_overview.txt
 │   │   │   ├── core_overview.txt

@@ -3802,3 +3802,153 @@
 2025-06-26 10:02:10 - polygon.storage - INFO - Saved 601 rows for CRCL 15min (0.04 MB)
 2025-06-26 10:02:10 - polygon.fetcher - INFO - Filled 7 small gaps in data
 2025-06-26 10:02:10 - polygon.fetcher - INFO - Returned 576 rows for CRCL 15min
+2025-06-26 12:35:54 - polygon.storage - INFO - Storage initialized at C:\XIII Trading\Sirius\polygon\data
+2025-06-26 12:41:32 - polygon.storage - INFO - Storage initialized at C:\XIII Trading\Sirius\polygon\data
+2025-06-26 12:41:32 - polygon.fetcher - INFO - Fetching AAPL 1d data from 2025-06-21 to 2025-06-26
+2025-06-26 12:41:33 - polygon.storage - INFO - Saved 4 rows for AAPL 1d (0.01 MB)
+2025-06-26 12:41:33 - polygon.fetcher - INFO - Returned 4 rows for AAPL 1d
+2025-06-26 12:41:33 - polygon.fetcher - INFO - Fetching AAPL 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 12:41:33 - polygon.fetcher - INFO - Fetching MSFT 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 12:41:33 - polygon.fetcher - INFO - Fetching GOOGL 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 12:41:33 - polygon.storage - INFO - Saved 13 rows for MSFT 1d (0.01 MB)
+2025-06-26 12:41:33 - polygon.storage - INFO - Saved 13 rows for GOOGL 1d (0.01 MB)
+2025-06-26 12:41:33 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 12:41:33 - polygon.fetcher - INFO - Returned 18 rows for MSFT 1d
+2025-06-26 12:41:33 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 12:41:33 - polygon.fetcher - INFO - Fetching MSFT 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 12:41:33 - polygon.fetcher - INFO - Returned 18 rows for GOOGL 1d
+2025-06-26 12:41:33 - polygon.fetcher - INFO - Fetching GOOGL 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 12:41:34 - polygon.storage - INFO - Saved 422 rows for GOOGL 1min (0.02 MB)
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Returned 422 rows for GOOGL 1min
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Fetching AMZN 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 12:41:34 - polygon.storage - INFO - Saved 13 rows for AMZN 1d (0.01 MB)
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Returned 18 rows for AMZN 1d
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Fetching AMZN 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 12:41:34 - polygon.storage - WARNING - Cache file missing: C:\Users\codyc\AlphaXIII_V2\polygon\data\parquet\symbols\AMZN\AMZN_1min.parquet
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-26 12:41:34 - polygon.storage - INFO - Saved 15824 rows for AMZN 1min (0.54 MB)
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Returned 378 rows for AMZN 1min
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Fetching TSLA 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 12:41:34 - polygon.storage - WARNING - Cache file missing: C:\Users\codyc\XIIITrading_Systems\Vega\polygon\data\parquet\symbols\TSLA\TSLA_1d.parquet
+2025-06-26 12:41:34 - polygon.storage - INFO - Saved 2055 rows for MSFT 1min (0.09 MB)
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Returned 278 rows for MSFT 1min
+2025-06-26 12:41:34 - polygon.storage - INFO - Saved 122 rows for TSLA 1d (0.01 MB)
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Returned 18 rows for TSLA 1d
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 12:41:34 - polygon.storage - WARNING - Cache file missing: C:\Users\codyc\AlphaXIII_V2\polygon\data\parquet\symbols\TSLA\TSLA_1min.parquet
+2025-06-26 12:41:34 - polygon.storage - INFO - Saved 13 rows for AAPL 1d (0.01 MB)
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Returned 18 rows for AAPL 1d
+2025-06-26 12:41:34 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 12:41:34 - polygon.storage - WARNING - Cache file missing: C:\Users\codyc\AlphaXIII_V2\polygon\data\parquet\symbols\AAPL\AAPL_1min.parquet
+2025-06-26 12:41:35 - polygon.storage - INFO - Saved 17750 rows for AAPL 1min (0.59 MB)
+2025-06-26 12:41:35 - polygon.fetcher - INFO - Returned 417 rows for AAPL 1min
+2025-06-26 12:41:35 - polygon.storage - INFO - Saved 21488 rows for TSLA 1min (0.84 MB)
+2025-06-26 12:41:35 - polygon.fetcher - INFO - Returned 515 rows for TSLA 1min
+2025-06-26 13:57:08 - polygon.storage - INFO - Storage initialized at C:\XIII Trading\Sirius\polygon\data
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Fetching AAPL 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Fetching MSFT 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Fetching GOOGL 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Fetching AMZN 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Fetching TSLA 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Returned 13 rows from cache
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-26 13:57:08 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 13 rows for MSFT 1d (0.01 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 13 rows for GOOGL 1d (0.01 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 18 rows for MSFT 1d
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching MSFT 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 18 rows for GOOGL 1d
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 13 rows for AMZN 1d (0.01 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching GOOGL 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 13 rows for AAPL 1d (0.01 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 18 rows for AMZN 1d
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching AMZN 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 18 rows for AAPL 1d
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Partial cache hit, fetching 2 missing ranges
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 21563 rows for TSLA 1min (0.84 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 590 rows for TSLA 1min
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching META 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 2130 rows for MSFT 1min (0.09 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 353 rows for MSFT 1min
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching NVDA 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 13 rows for META 1d (0.01 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 18 rows for META 1d
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching JPM 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 15899 rows for AMZN 1min (0.54 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 453 rows for AMZN 1min
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching BRK-B 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 17825 rows for AAPL 1min (0.59 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 492 rows for AAPL 1min
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching UNH 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 13 rows for NVDA 1d (0.01 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 18 rows for NVDA 1d
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching NVDA 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:09 - polygon.storage - WARNING - Cache file missing: C:\Users\codyc\AlphaXIII_V2\polygon\data\parquet\symbols\NVDA\NVDA_1min.parquet
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 13 rows for JPM 1d (0.01 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 18 rows for JPM 1d
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching JPM 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:09 - polygon.storage - INFO - Saved 497 rows for GOOGL 1min (0.02 MB)
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 497 rows for GOOGL 1min
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching XOM 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:09 - polygon.core - WARNING - No results in aggregate response for BRK-B
+2025-06-26 13:57:09 - polygon.fetcher - WARNING - No data returned for BRK-B 2025-06-07 to 2025-06-26
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Returned 0 rows for BRK-B 1d
+2025-06-26 13:57:09 - polygon.fetcher - INFO - Fetching JNJ 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 13 rows for UNH 1d (0.01 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 18 rows for UNH 1d
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Fetching UNH 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 294 rows for JPM 1min (0.02 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 294 rows for JPM 1min
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Fetching V 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 13 rows for XOM 1d (0.01 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 18 rows for XOM 1d
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Fetching XOM 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 13 rows for JNJ 1d (0.01 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 18 rows for JNJ 1d
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Fetching JNJ 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 21661 rows for NVDA 1min (0.77 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 596 rows for NVDA 1min
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Fetching PG 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 361 rows for UNH 1min (0.02 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 361 rows for UNH 1min
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Fetching MA 1d data from 2025-06-07 to 2025-06-26
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 13 rows for V 1d (0.01 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 18 rows for V 1d
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Fetching V 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 306 rows for XOM 1min (0.02 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 306 rows for XOM 1min
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 275 rows for JNJ 1min (0.02 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 275 rows for JNJ 1min
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 291 rows for V 1min (0.02 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 291 rows for V 1min
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 13 rows for PG 1d (0.01 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 13 rows for MA 1d (0.01 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 18 rows for PG 1d
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Fetching PG 1min data from 2025-06-26 to 2025-06-26
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Filled 3 small gaps in data
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 18 rows for MA 1d
+2025-06-26 13:57:10 - polygon.storage - INFO - Saved 275 rows for PG 1min (0.02 MB)
+2025-06-26 13:57:10 - polygon.fetcher - INFO - Returned 275 rows for PG 1min

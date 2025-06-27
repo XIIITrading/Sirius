@@ -11,6 +11,11 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 import logging
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -357,10 +362,85 @@ class MarketFilter:
         return len(errors) == 0, errors
 
 
-# Example usage for testing
-# Add this to the end of market_filter.py (replace the current example_usage function)
+def push_to_supabase(scan_results: pd.DataFrame, scan_date: datetime):
+    """
+    Push scan results to Supabase.
+    
+    Args:
+        scan_results: DataFrame with scan results
+        scan_date: Date of the scan
+    """
+    try:
+        from supabase import create_client, Client
+    except ImportError:
+        print("\n❌ Supabase client not installed. Please install with: pip install supabase")
+        return False
+    
+    # Get Supabase credentials from environment variables
+    supabase_url = os.getenv('SUPABASE_URL')
+    supabase_key = os.getenv('SUPABASE_KEY')
+    
+    if not supabase_url or not supabase_key:
+        print("\n❌ Supabase credentials not found in environment variables.")
+        print("   Please set SUPABASE_URL and SUPABASE_KEY in your .env file")
+        return False
+    
+    try:
+        # Initialize Supabase client
+        supabase: Client = create_client(supabase_url, supabase_key)
+        
+        # Prepare data for insertion
+        records = []
+        for _, row in scan_results.iterrows():
+            record = {
+                'ticker': row['ticker'],
+                'price': float(row['price']),
+                'rank': int(row['rank']),
+                'premarket_volume': int(row['premarket_volume']),
+                'avg_daily_volume': int(row['avg_daily_volume']),
+                'dollar_volume': float(row['dollar_volume']),
+                'atr': float(row['atr']),
+                'atr_percent': float(row['atr_percent']),
+                'interest_score': float(row['interest_score']),
+                'pm_vol_ratio_score': float(row['pm_vol_ratio_score']),
+                'atr_percent_score': float(row['atr_percent_score']),
+                'dollar_vol_score': float(row['dollar_vol_score']),
+                'pm_vol_abs_score': float(row['pm_vol_abs_score']),
+                'price_atr_bonus': float(row['price_atr_bonus']),
+                'scan_date': scan_date.strftime('%Y-%m-%d'),
+                'passed_filters': True,  # All results passed filters
+                'market_session': 'pre-market'
+            }
+            records.append(record)
+        
+        # Insert records
+        print(f"\n📤 Pushing {len(records)} records to Supabase...")
+        
+        # Insert in batches to handle large datasets
+        batch_size = 100
+        for i in range(0, len(records), batch_size):
+            batch = records[i:i + batch_size]
+            response = supabase.table('premarket_scans').upsert(batch).execute()
+        
+        print(f"✅ Successfully pushed {len(records)} records to Supabase!")
+        return True
+        
+    except Exception as e:
+        print(f"\n❌ Error pushing to Supabase: {e}")
+        return False
 
-# Replace the example_usage() function in market_filter.py with this:
+
+def get_user_confirmation(prompt: str) -> bool:
+    """Get yes/no confirmation from user."""
+    while True:
+        response = input(f"\n{prompt} (y/n): ").strip().lower()
+        if response in ['y', 'yes']:
+            return True
+        elif response in ['n', 'no']:
+            return False
+        else:
+            print("Please enter 'y' for yes or 'n' for no.")
+
 
 def example_usage():
     """Example usage with real data from SP500Bridge."""
@@ -380,13 +460,16 @@ def example_usage():
         print("Make sure sp500_bridge.py and sp500_tickers.py are in the same directory")
         return
     
-    print("Market Filter Test - Fetching Real S&P 500 Data")
+    print("Market Filter - S&P 500 Full Scan")
     print("=" * 70)
-    print(f"Test Time: {datetime.now()}")
-    print("\nThis will fetch real market data for 5-10 test stocks...")
-    print("For full S&P 500 scan, use sp500_bridge.py directly\n")
+    print(f"Scan Time: {datetime.now()}")
     
-    # Test with relaxed criteria for better results
+    # Get all S&P 500 tickers
+    all_tickers = get_sp500_tickers()
+    print(f"\nScanning ALL {len(all_tickers)} S&P 500 stocks...")
+    print("⚠️  This will take several minutes to complete...\n")
+    
+    # Use relaxed criteria for better results
     relaxed_criteria = FilterCriteria(
         min_price=5.0,
         max_price=500.0,
@@ -399,21 +482,20 @@ def example_usage():
     
     # Initialize bridge with relaxed criteria
     try:
-        bridge = SP500Bridge(filter_criteria=relaxed_criteria, parallel_workers=5)
-        
-        # For testing, only use a subset of tickers (faster)
-        test_tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 
-                       'JPM', 'BRK-B', 'UNH', 'XOM', 'JNJ', 'V', 'PG', 'MA']
-        bridge.tickers = test_tickers
-        
-        print(f"Testing with {len(test_tickers)} popular S&P 500 stocks...\n")
+        # Use more parallel workers for full scan
+        bridge = SP500Bridge(filter_criteria=relaxed_criteria, parallel_workers=10)
         
         # Progress callback
         def progress(completed, total, ticker):
-            print(f"  Fetching {ticker} ({completed}/{total})...")
+            if completed % 10 == 0 or completed == total:  # Print every 10 stocks
+                print(f"  Progress: {completed}/{total} ({completed/total*100:.1f}%) - Current: {ticker}")
         
         # Run scan
+        print("Starting scan...")
         scan_results = bridge.run_morning_scan(progress_callback=progress)
+        
+        # Get scan date
+        scan_date = datetime.now()
         
         if scan_results.empty:
             print("\nNo stocks passed filters. This could be because:")
@@ -423,15 +505,12 @@ def example_usage():
             
             # Still create markdown with empty results
             summary = bridge.get_summary_stats(scan_results)
-            create_real_data_markdown(scan_results, summary, relaxed_criteria, test_tickers)
+            create_real_data_markdown(scan_results, summary, relaxed_criteria, len(all_tickers))
         else:
             print(f"\n✓ Found {len(scan_results)} stocks that passed filters")
             
             # Get summary stats
             summary = bridge.get_summary_stats(scan_results)
-            
-            # Create markdown
-            create_real_data_markdown(scan_results, summary, relaxed_criteria, test_tickers)
             
             # Show console output
             print("\nTop Stocks by Interest Score:")
@@ -456,6 +535,18 @@ def example_usage():
                 for component, details in explanation['components'].items():
                     print(f"  {component}: {details['contribution']:.2f} points "
                           f"(raw: {details['raw_value']})")
+            
+            # Ask if user wants to push to Supabase
+            if get_user_confirmation("Would you like to push these results to Supabase?"):
+                success = push_to_supabase(scan_results, scan_date)
+                if success:
+                    print("\n🎉 Data successfully stored in Supabase!")
+                    print("   You can now track your scanner history over time.")
+            else:
+                print("\n⏭️  Skipping Supabase push.")
+            
+            # Create markdown report
+            create_real_data_markdown(scan_results, summary, relaxed_criteria, len(all_tickers))
         
     except Exception as e:
         print(f"\nError during scan: {e}")
@@ -463,7 +554,7 @@ def example_usage():
         traceback.print_exc()
 
 
-def create_real_data_markdown(scan_results, summary, criteria, tickers_tested):
+def create_real_data_markdown(scan_results, summary, criteria, total_tickers_scanned):
     """Create a markdown file with real scan results."""
     import os
     from datetime import datetime
@@ -474,25 +565,21 @@ def create_real_data_markdown(scan_results, summary, criteria, tickers_tested):
     
     # Generate filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = os.path.join(temp_dir, f"market_filter_real_data_{timestamp}.md")
+    output_path = os.path.join(temp_dir, f"market_filter_scan_{timestamp}.md")
     
     with open(output_path, 'w', encoding='utf-8') as f:
         # Header
-        f.write("# Market Filter - Real S&P 500 Data Test\n\n")
+        f.write("# Market Filter - S&P 500 Full Scan Results\n\n")
         f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"**Data Source:** Polygon.io via SP500Bridge\n")
-        f.write(f"**Test Mode:** Direct script execution with real data\n\n")
-        
-        # Test info
-        f.write("## Test Configuration\n\n")
-        f.write(f"**Tickers Tested:** {', '.join(tickers_tested)}\n")
-        f.write(f"**Total Tickers:** {len(tickers_tested)}\n\n")
+        f.write(f"**Scan Type:** Full S&P 500 Scan\n\n")
         
         # Summary
         f.write("## Summary\n\n")
         f.write("| Metric | Value |\n")
         f.write("|--------|-------|\n")
-        f.write(f"| Tickers Scanned | {summary.get('total_scanned', len(tickers_tested))} |\n")
+        f.write(f"| Total S&P 500 Stocks | {total_tickers_scanned} |\n")
+        f.write(f"| Stocks Scanned | {summary.get('total_scanned', total_tickers_scanned)} |\n")
         f.write(f"| Passed Filters | {summary.get('passed_filters', 0)} |\n")
         f.write(f"| Pass Rate | {summary.get('pass_rate', '0.0%')} |\n")
         if summary.get('avg_interest_score'):
@@ -501,7 +588,7 @@ def create_real_data_markdown(scan_results, summary, criteria, tickers_tested):
         f.write("\n")
         
         # Filter Criteria
-        f.write("## Filter Criteria (Relaxed for Testing)\n\n")
+        f.write("## Filter Criteria\n\n")
         f.write("| Criterion | Value |\n")
         f.write("|-----------|-------|\n")
         f.write(f"| Price Range | ${criteria.min_price} - ${criteria.max_price} |\n")
@@ -523,13 +610,13 @@ def create_real_data_markdown(scan_results, summary, criteria, tickers_tested):
             f.write("4. **Criteria**: Even relaxed criteria might be too strict\n\n")
             f.write("**Try running during pre-market hours for best results!**\n")
         else:
-            f.write(f"## Top {min(20, len(scan_results))} Stocks by Interest Score\n\n")
+            f.write(f"## Top {min(50, len(scan_results))} Stocks by Interest Score\n\n")
             
             # Detailed results table
             f.write("| Rank | Ticker | Price | Score | PM Volume | PM % | Avg Volume | ATR | ATR % | $ Volume |\n")
             f.write("|:----:|:------:|------:|------:|----------:|-----:|-----------:|----:|------:|---------:|\n")
             
-            for _, row in scan_results.head(20).iterrows():
+            for _, row in scan_results.head(50).iterrows():
                 pm_vol_pct = (row['premarket_volume'] / row['avg_daily_volume'] * 100)
                 
                 # Highlight top 3
@@ -570,13 +657,25 @@ def create_real_data_markdown(scan_results, summary, criteria, tickers_tested):
                 f.write(f"{top['pm_vol_abs_score']:.1f} | 10% | {top['pm_vol_abs_score']*0.1:.1f} |\n")
                 f.write(f"| Price-ATR | {'Yes' if top['price_atr_bonus'] > 0 else 'No'} | ")
                 f.write(f"{top['price_atr_bonus']:.1f} | 5% | {top['price_atr_bonus']*0.05:.1f} |\n")
+            
+            # Distribution stats
+            if len(scan_results) > 10:
+                f.write("\n## Score Distribution\n\n")
+                f.write("| Range | Count | Percentage |\n")
+                f.write("|-------|------:|-----------:|\n")
+                
+                ranges = [(0, 20), (20, 40), (40, 60), (60, 80), (80, 100)]
+                for low, high in ranges:
+                    count = len(scan_results[(scan_results['interest_score'] >= low) & 
+                                           (scan_results['interest_score'] < high)])
+                    pct = count / len(scan_results) * 100
+                    f.write(f"| {low}-{high} | {count} | {pct:.1f}% |\n")
         
         # Timestamp
         f.write("\n---\n")
-        f.write(f"*Real data test generated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n")
-        f.write(f"*For full S&P 500 scan, use sp500_bridge.py directly*\n")
+        f.write(f"*Full S&P 500 scan completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n")
     
-    print(f"\n✅ Real data markdown created: {output_path}")
+    print(f"\n✅ Scan results markdown created: {output_path}")
     print(f"   Open in VS Code for formatted view")
     
     # Try to open in default editor

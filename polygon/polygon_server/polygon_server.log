@@ -8,3 +8,10 @@
 2025-06-27 12:26:43,311 - polygon.polygon_server.server - INFO - Configuration validated
 2025-06-27 12:26:43,312 - polygon.polygon_server.server - INFO - Polygon module initialized
 2025-06-27 12:26:43,312 - polygon.polygon_server.server - INFO - Server ready at http://0.0.0.0:8200
+2025-06-27 15:12:02,821 - asyncio - DEBUG - Using proactor: IocpProactor
+2025-06-27 15:12:02,840 - polygon.polygon_server.server - INFO - Starting Polygon Data Server...
+2025-06-27 15:12:02,840 - polygon.polygon_server.server - INFO - Configuration validated
+2025-06-27 15:12:02,840 - polygon.polygon_server.server - INFO - Polygon module initialized
+2025-06-27 15:12:02,841 - polygon.polygon_server.server - INFO - Server ready at http://0.0.0.0:8200
+2025-06-27 18:25:41,209 - polygon.polygon_server.server - INFO - Shutting down Polygon Data Server...
+2025-06-27 18:25:41,209 - polygon.polygon_server.server - INFO - Server shutdown complete

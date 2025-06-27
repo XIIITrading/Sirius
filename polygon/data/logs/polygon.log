@@ -14357,3 +14357,280 @@
 2025-06-27 09:11:07 - polygon.storage - INFO - Saved 7394 rows for SMCI 15min (0.31 MB)
 2025-06-27 09:11:07 - polygon.fetcher - INFO - Filled 93 small gaps in data
 2025-06-27 09:11:07 - polygon.fetcher - INFO - Returned 7394 rows for SMCI 15min
+2025-06-27 10:27:12 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 10:27:52 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 10:27:52 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 10:27:52 - polygon.fetcher - INFO - Returned 252 rows for TSLA 1min
+2025-06-27 10:27:53 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 10:27:54 - polygon.fetcher - INFO - Returned 204 rows for AAPL 1min
+2025-06-27 10:27:54 - polygon.fetcher - INFO - Fetching SPY 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 10:27:54 - polygon.fetcher - INFO - Returned 243 rows for SPY 1min
+2025-06-27 10:27:54 - polygon.fetcher - INFO - Fetching QQQ 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 10:27:54 - polygon.fetcher - INFO - Returned 250 rows for QQQ 1min
+2025-06-27 10:27:54 - polygon.fetcher - INFO - Fetching NVDA 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 10:27:54 - polygon.fetcher - INFO - Returned 265 rows for NVDA 1min
+2025-06-27 10:27:54 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 10:27:54 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 10:27:54 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 10:27:55 - polygon.websocket - INFO - Authentication successful
+2025-06-27 10:27:55 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 10:27:55 - polygon.websocket - INFO - Subscribed to 5 channels for 5 symbols
+2025-06-27 10:29:58 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 10:31:08 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 10:31:08 - polygon.fetcher - INFO - Fetching AMZN 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 10:31:08 - polygon.fetcher - INFO - Returned 220 rows for AMZN 1min
+2025-06-27 10:31:09 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 10:31:09 - polygon.fetcher - INFO - Returned 206 rows for AAPL 1min
+2025-06-27 10:31:09 - polygon.fetcher - INFO - Fetching SPY 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 10:31:09 - polygon.fetcher - INFO - Returned 245 rows for SPY 1min
+2025-06-27 10:31:09 - polygon.fetcher - INFO - Fetching QQQ 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 10:31:10 - polygon.fetcher - INFO - Returned 250 rows for QQQ 1min
+2025-06-27 10:31:10 - polygon.fetcher - INFO - Fetching NVDA 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 10:31:10 - polygon.fetcher - INFO - Returned 265 rows for NVDA 1min
+2025-06-27 10:31:10 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 10:31:10 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 10:31:10 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 10:31:10 - polygon.websocket - INFO - Authentication successful
+2025-06-27 10:31:10 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 10:31:10 - polygon.websocket - INFO - Subscribed to 5 channels for 5 symbols
+2025-06-27 10:33:13 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 11:00:38 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 11:00:38 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 11:00:38 - polygon.fetcher - INFO - Returned 258 rows for TSLA 1min
+2025-06-27 11:00:39 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 11:00:39 - polygon.fetcher - INFO - Returned 228 rows for AAPL 1min
+2025-06-27 11:00:39 - polygon.fetcher - INFO - Fetching SPY 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 11:00:39 - polygon.fetcher - INFO - Returned 257 rows for SPY 1min
+2025-06-27 11:00:39 - polygon.fetcher - INFO - Fetching QQQ 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 11:00:40 - polygon.fetcher - INFO - Returned 260 rows for QQQ 1min
+2025-06-27 11:00:40 - polygon.fetcher - INFO - Fetching NVDA 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 11:00:40 - polygon.fetcher - INFO - Returned 267 rows for NVDA 1min
+2025-06-27 11:00:40 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 11:00:40 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 11:00:40 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 11:00:40 - polygon.websocket - INFO - Authentication successful
+2025-06-27 11:00:40 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 11:00:40 - polygon.websocket - INFO - Subscribed to 5 channels for 5 symbols
+2025-06-27 11:02:43 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 11:48:37 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 11:48:37 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 11:48:38 - polygon.fetcher - INFO - Returned 251 rows for TSLA 1min
+2025-06-27 11:48:39 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 11:48:39 - polygon.fetcher - INFO - Returned 240 rows for AAPL 1min
+2025-06-27 11:48:39 - polygon.fetcher - INFO - Fetching SPY 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 11:48:39 - polygon.fetcher - INFO - Returned 254 rows for SPY 1min
+2025-06-27 11:48:39 - polygon.fetcher - INFO - Fetching QQQ 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 11:48:39 - polygon.fetcher - INFO - Returned 253 rows for QQQ 1min
+2025-06-27 11:48:39 - polygon.fetcher - INFO - Fetching NVDA 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 11:48:39 - polygon.fetcher - INFO - Returned 254 rows for NVDA 1min
+2025-06-27 11:48:39 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 11:48:40 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 11:48:40 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 11:48:40 - polygon.websocket - INFO - Authentication successful
+2025-06-27 11:48:40 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 11:48:40 - polygon.websocket - INFO - Subscribed to 5 channels for 5 symbols
+2025-06-27 11:51:40 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 12:12:27 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 12:12:27 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 12:12:28 - polygon.fetcher - INFO - Returned 60 rows for TSLA 5min
+2025-06-27 12:12:29 - polygon.fetcher - INFO - Fetching AAPL 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 12:12:29 - polygon.fetcher - INFO - Returned 60 rows for AAPL 5min
+2025-06-27 12:12:29 - polygon.fetcher - INFO - Fetching SPY 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 12:12:29 - polygon.fetcher - INFO - Returned 60 rows for SPY 5min
+2025-06-27 12:12:29 - polygon.fetcher - INFO - Fetching QQQ 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 12:12:29 - polygon.fetcher - INFO - Returned 60 rows for QQQ 5min
+2025-06-27 12:12:29 - polygon.fetcher - INFO - Fetching NVDA 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 12:12:29 - polygon.fetcher - INFO - Returned 60 rows for NVDA 5min
+2025-06-27 12:12:29 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 12:12:30 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 12:12:30 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 12:12:30 - polygon.websocket - INFO - Authentication successful
+2025-06-27 12:12:30 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 12:12:30 - polygon.websocket - INFO - Subscribed to 5 channels for 5 symbols
+2025-06-27 12:15:31 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 12:26:42 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 12:27:31 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 12:27:31 - polygon.fetcher - INFO - Fetching SPY 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 12:27:31 - polygon.fetcher - INFO - Returned 254 rows for SPY 1min
+2025-06-27 12:27:32 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 12:27:32 - polygon.fetcher - INFO - Fetching SPY 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 12:27:33 - polygon.fetcher - INFO - Returned 60 rows for SPY 5min
+2025-06-27 12:27:33 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 12:27:33 - polygon.fetcher - INFO - Fetching SPY 15min data from 2025-06-27 to 2025-06-27
+2025-06-27 12:27:33 - polygon.fetcher - INFO - Returned 28 rows for SPY 15min
+2025-06-27 12:27:34 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 12:27:34 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 12:27:34 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 12:27:34 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 12:27:34 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 12:27:34 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 12:27:34 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 12:27:34 - polygon.websocket - INFO - Authentication successful
+2025-06-27 12:27:34 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 12:27:34 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 12:27:34 - polygon.websocket - INFO - Authentication successful
+2025-06-27 12:27:34 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 12:27:34 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 12:27:34 - polygon.websocket - INFO - Authentication successful
+2025-06-27 12:27:34 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 12:27:34 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:08:38 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:08:38 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:08:38 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:09:08 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 13:09:08 - polygon.fetcher - INFO - Fetching SPY 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:09:08 - polygon.fetcher - INFO - Returned 269 rows for SPY 1min
+2025-06-27 13:09:09 - polygon.fetcher - INFO - Fetching SPY 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:09:09 - polygon.fetcher - INFO - Returned 72 rows for SPY 5min
+2025-06-27 13:09:10 - polygon.fetcher - INFO - Fetching SPY 15min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:09:10 - polygon.fetcher - INFO - Returned 32 rows for SPY 15min
+2025-06-27 13:09:10 - polygon.fetcher - INFO - Fetching SPY 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:09:11 - polygon.fetcher - INFO - Returned 254 rows for SPY 1min
+2025-06-27 13:09:11 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:09:11 - polygon.fetcher - INFO - Fetching SPY 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:09:11 - polygon.fetcher - INFO - Returned 60 rows for SPY 5min
+2025-06-27 13:09:11 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:09:11 - polygon.fetcher - INFO - Fetching SPY 15min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:09:11 - polygon.fetcher - INFO - Returned 28 rows for SPY 15min
+2025-06-27 13:09:11 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:09:12 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:09:12 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:09:12 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:09:12 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:09:12 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:09:12 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:09:12 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:09:12 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:09:12 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:09:12 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:09:12 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:09:12 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:09:12 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:09:12 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:09:12 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:09:56 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:09:56 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:09:56 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:10:00 - polygon.fetcher - INFO - Fetching PLTR 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:00 - polygon.fetcher - INFO - Returned 268 rows for PLTR 1min
+2025-06-27 13:10:00 - polygon.fetcher - INFO - Fetching PLTR 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:00 - polygon.fetcher - INFO - Returned 71 rows for PLTR 5min
+2025-06-27 13:10:00 - polygon.fetcher - INFO - Fetching PLTR 15min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:00 - polygon.fetcher - INFO - Returned 32 rows for PLTR 15min
+2025-06-27 13:10:00 - polygon.fetcher - INFO - Fetching PLTR 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:01 - polygon.fetcher - INFO - Returned 253 rows for PLTR 1min
+2025-06-27 13:10:01 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:10:01 - polygon.fetcher - INFO - Fetching PLTR 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:01 - polygon.fetcher - INFO - Returned 59 rows for PLTR 5min
+2025-06-27 13:10:01 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:10:01 - polygon.fetcher - INFO - Fetching PLTR 15min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:01 - polygon.fetcher - INFO - Returned 28 rows for PLTR 15min
+2025-06-27 13:10:01 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:10:02 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:10:02 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:10:02 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:10:02 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:10:02 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:10:02 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:10:02 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:10:02 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:10:02 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:10:02 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:10:02 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:10:02 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:10:02 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:10:02 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:10:02 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:10:17 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:10:17 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:10:21 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:22 - polygon.fetcher - INFO - Returned 269 rows for TSLA 1min
+2025-06-27 13:10:22 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:22 - polygon.fetcher - INFO - Returned 71 rows for TSLA 5min
+2025-06-27 13:10:22 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:22 - polygon.fetcher - INFO - Returned 32 rows for TSLA 15min
+2025-06-27 13:10:22 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:22 - polygon.fetcher - INFO - Returned 254 rows for TSLA 1min
+2025-06-27 13:10:22 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:10:22 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:23 - polygon.fetcher - INFO - Returned 59 rows for TSLA 5min
+2025-06-27 13:10:23 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:10:23 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:10:23 - polygon.fetcher - INFO - Returned 28 rows for TSLA 15min
+2025-06-27 13:10:23 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:10:23 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:10:23 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:10:23 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:10:23 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:10:23 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:10:23 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:10:23 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:10:23 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:10:23 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:10:23 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:10:23 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:10:23 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:10:23 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:10:23 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:10:23 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:24:26 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:24:26 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:24:26 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:24:45 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 13:24:45 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:24:46 - polygon.fetcher - INFO - Returned 269 rows for TSLA 1min
+2025-06-27 13:24:46 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:24:47 - polygon.fetcher - INFO - Returned 72 rows for TSLA 5min
+2025-06-27 13:24:47 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:24:47 - polygon.fetcher - INFO - Returned 32 rows for TSLA 15min
+2025-06-27 13:24:48 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:24:48 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:24:48 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:24:48 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:24:48 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:24:48 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:38:16 - polygon.websocket - ERROR - WebSocket error: sent 1000 (OK); then received 1000 (OK)
+2025-06-27 13:38:16 - polygon.websocket - INFO - Reconnecting in 1.0 seconds (attempt 1)
+2025-06-27 13:38:16 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 13:38:17 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:38:17 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:38:17 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:38:17 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:38:17 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:38:17 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 13:43:53 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 13:43:53 - polygon.fetcher - INFO - Fetching SPY 1min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:43:54 - polygon.fetcher - INFO - Returned 269 rows for SPY 1min
+2025-06-27 13:43:55 - polygon.fetcher - INFO - Fetching SPY 5min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:43:55 - polygon.fetcher - INFO - Returned 72 rows for SPY 5min
+2025-06-27 13:43:56 - polygon.fetcher - INFO - Fetching SPY 15min data from 2025-06-27 to 2025-06-27
+2025-06-27 13:43:56 - polygon.fetcher - INFO - Returned 32 rows for SPY 15min
+2025-06-27 13:43:56 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 13:43:57 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 13:43:57 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 13:43:57 - polygon.websocket - INFO - Authentication successful
+2025-06-27 13:43:57 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 13:43:57 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 14:03:25 - polygon.websocket - ERROR - WebSocket error: sent 1000 (OK); then received 1000 (OK)
+2025-06-27 14:03:25 - polygon.websocket - INFO - Reconnecting in 1.0 seconds (attempt 1)
+2025-06-27 14:03:25 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 14:03:26 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 14:03:26 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 14:03:26 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 14:03:26 - polygon.websocket - INFO - Authentication successful
+2025-06-27 14:03:26 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 14:03:26 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-27 14:26:39 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 14:26:39 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 14:26:39 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 14:26:39 - polygon.websocket - INFO - Authentication successful
+2025-06-27 14:26:39 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 14:26:39 - polygon.websocket - INFO - Subscribed to 3 channels for 3 symbols
+2025-06-27 14:31:40 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-27 15:12:02 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-27 15:12:24 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-27 15:12:24 - polygon.websocket - INFO - Sending authentication request...
+2025-06-27 15:12:24 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-27 15:12:24 - polygon.websocket - INFO - Authentication successful
+2025-06-27 15:12:24 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-27 15:12:24 - polygon.websocket - INFO - Subscribed to 3 channels for 3 symbols

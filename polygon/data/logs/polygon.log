@@ -14717,3 +14717,9 @@
 2025-06-28 21:05:03 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
 2025-06-28 21:05:03 - polygon.websocket - INFO - Subscribed to 2 channels for 1 symbols
 2025-06-28 21:07:03 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-28 21:52:55 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-28 21:52:56 - polygon.websocket - INFO - Sending authentication request...
+2025-06-28 21:52:56 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-28 21:52:56 - polygon.websocket - INFO - Authentication successful
+2025-06-28 21:52:56 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-28 21:52:56 - polygon.websocket - INFO - Subscribed to 6 channels for 3 symbols

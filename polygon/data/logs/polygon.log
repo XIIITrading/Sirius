@@ -14689,3 +14689,31 @@
 2025-06-28 15:30:06 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
 2025-06-28 15:30:06 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
 2025-06-28 15:30:06 - polygon.fetcher - INFO - Returned 730 rows from cache
+2025-06-28 16:14:13 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 16:14:13 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 16:14:13 - polygon.fetcher - INFO - Returned 730 rows from cache
+2025-06-28 16:34:04 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 16:34:04 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 16:34:04 - polygon.fetcher - INFO - Returned 735 rows from cache
+2025-06-28 20:21:47 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-28 20:21:48 - polygon.websocket - INFO - Sending authentication request...
+2025-06-28 20:21:48 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-28 20:21:48 - polygon.websocket - INFO - Authentication successful
+2025-06-28 20:21:48 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-28 20:21:48 - polygon.websocket - INFO - Subscribed to 2 channels for 1 symbols
+2025-06-28 20:22:48 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-28 20:34:25 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 20:34:25 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 20:34:25 - polygon.fetcher - INFO - Returned 735 rows from cache
+2025-06-28 21:05:02 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 21:05:02 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2025-06-28 to 2025-06-28
+2025-06-28 21:05:02 - polygon.core - WARNING - No results in aggregate response for AAPL
+2025-06-28 21:05:02 - polygon.fetcher - WARNING - No data returned for AAPL 2025-06-28 to 2025-06-28
+2025-06-28 21:05:02 - polygon.fetcher - INFO - Returned 0 rows for AAPL 1min
+2025-06-28 21:05:02 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-28 21:05:03 - polygon.websocket - INFO - Sending authentication request...
+2025-06-28 21:05:03 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-28 21:05:03 - polygon.websocket - INFO - Authentication successful
+2025-06-28 21:05:03 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-28 21:05:03 - polygon.websocket - INFO - Subscribed to 2 channels for 1 symbols
+2025-06-28 21:07:03 - polygon.websocket - INFO - WebSocket disconnected

@@ -51,6 +51,7 @@ from modules.calculations.trend.statistical_trend_1min import StatisticalTrend1M
 from modules.calculations.trend.statistical_trend_5min import StatisticalTrend5Min
 from modules.calculations.trend.statistical_trend_15min import StatisticalTrend15Min
 from modules.calculations.order_flow.trade_size_distro import TradeSizeDistribution, TradeSizeSignal, Trade
+from modules.calculations.order_flow.bid_ask_imbal import BidAskImbalance, Quote  # NEW IMPORT
 from modules.calculations.volume.tick_flow import TickFlowAnalyzer
 from modules.calculations.volume.volume_analysis_1min import VolumeAnalysis1Min
 from modules.calculations.volume.market_context import MarketContext
@@ -68,7 +69,7 @@ logger = logging.getLogger(__name__)
 
 
 class EnhancedDataFetcher(DataFetcher):
-    """Enhanced data fetcher with trade data support and performance optimizations"""
+    """Enhanced data fetcher with trade and quote data support"""
     
     def __init__(self):
         super().__init__()
@@ -142,6 +143,46 @@ class EnhancedDataFetcher(DataFetcher):
             
         return trades
     
+    async def _fetch_quote_chunk(self, session: aiohttp.ClientSession, symbol: str,
+                            start_ns: int, end_ns: int, limit: int = 50000) -> List[Dict]:
+        """Fetch a single chunk of quotes"""
+        quotes = []
+        base_url = f"https://api.polygon.io/v3/quotes/{symbol}"
+        next_url = base_url
+        
+        params = {
+            'timestamp.gte': str(int(start_ns)),
+            'timestamp.lte': str(int(end_ns)),
+            'limit': limit,
+            'sort': 'timestamp',
+            'order': 'asc',
+            'apiKey': self.api_key
+        }
+        
+        try:
+            while next_url:
+                async with session.get(next_url, params=params if next_url == base_url else None) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"Error fetching quotes: {response.status} - {error_text}")
+                        break
+                        
+                    data = await response.json()
+                    
+                    if 'results' in data:
+                        quotes.extend(data['results'])
+                    
+                    # Check for next page
+                    next_url = data.get('next_url')
+                    if next_url:
+                        next_url = f"{next_url}&apiKey={self.api_key}"
+                        params = None
+                        
+        except Exception as e:
+            logger.error(f"Error in quote chunk fetch: {e}")
+            
+        return quotes
+    
     async def fetch_trades_concurrent(self, symbol: str, start_date: datetime, 
                                     end_date: datetime, chunk_minutes: int = 15,
                                     progress_callback: Optional[callable] = None) -> List[Dict]:
@@ -206,7 +247,7 @@ class EnhancedDataFetcher(DataFetcher):
                 completed += len(batch_tasks)
                 if progress_callback:
                     progress_pct = (completed / len(time_chunks)) * 100
-                    await progress_callback(f"Fetched {completed}/{len(time_chunks)} chunks", progress_pct)
+                    await progress_callback(f"Fetched {completed}/{len(time_chunks)} trade chunks", progress_pct)
                 
                 # Small delay between batches to be API-friendly
                 if i + batch_size < len(tasks):
@@ -229,6 +270,99 @@ class EnhancedDataFetcher(DataFetcher):
             
             logger.info(f"Total trades fetched: {len(formatted_trades):,}")
             return formatted_trades
+            
+        finally:
+            if session_created and self.session:
+                await self.session.close()
+                self.session = None
+    
+    async def fetch_quotes_concurrent(self, symbol: str, start_date: datetime, 
+                                    end_date: datetime, chunk_minutes: int = 15,
+                                    progress_callback: Optional[callable] = None) -> List[Dict]:
+        """
+        Fetch quotes using concurrent requests
+        
+        Args:
+            symbol: Stock symbol
+            start_date: Start datetime (UTC)
+            end_date: End datetime (UTC)
+            chunk_minutes: Minutes per chunk (default 15)
+            progress_callback: Optional callback for progress updates
+            
+        Returns:
+            List of quote dictionaries
+        """
+        # Convert to nanoseconds
+        start_ns = int(start_date.timestamp() * 1e9)
+        end_ns = int(end_date.timestamp() * 1e9)
+        
+        # Create time chunks
+        time_chunks = []
+        chunk_duration_ns = chunk_minutes * 60 * 1e9
+        current_start_ns = start_ns
+        
+        while current_start_ns < end_ns:
+            chunk_end_ns = min(current_start_ns + chunk_duration_ns, end_ns)
+            time_chunks.append((current_start_ns, chunk_end_ns))
+            current_start_ns = chunk_end_ns
+        
+        logger.info(f"Fetching quotes in {len(time_chunks)} chunks of {chunk_minutes} minutes each")
+        
+        # Use existing session or create temporary one
+        session_created = False
+        if not self.session:
+            self.session = aiohttp.ClientSession()
+            session_created = True
+        
+        try:
+            # Create tasks for concurrent fetching
+            tasks = []
+            for i, (chunk_start, chunk_end) in enumerate(time_chunks):
+                task = self._fetch_quote_chunk(self.session, symbol, chunk_start, chunk_end)
+                tasks.append(task)
+            
+            # Execute with progress tracking
+            all_quotes = []
+            completed = 0
+            
+            # Process in batches
+            batch_size = 5
+            for i in range(0, len(tasks), batch_size):
+                batch_tasks = tasks[i:i + batch_size]
+                batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+                
+                for result in batch_results:
+                    if isinstance(result, Exception):
+                        logger.error(f"Quote chunk fetch error: {result}")
+                    elif result:
+                        all_quotes.extend(result)
+                
+                completed += len(batch_tasks)
+                if progress_callback:
+                    progress_pct = (completed / len(time_chunks)) * 100
+                    await progress_callback(f"Fetched {completed}/{len(time_chunks)} quote chunks", progress_pct)
+                
+                if i + batch_size < len(tasks):
+                    await asyncio.sleep(0.1)
+            
+            # Sort all quotes by timestamp
+            all_quotes.sort(key=lambda x: x['participant_timestamp'])
+            
+            # Convert to expected format
+            formatted_quotes = []
+            for quote in all_quotes:
+                formatted_quotes.append({
+                    'symbol': symbol,
+                    'bid': quote['bid_price'],
+                    'ask': quote['ask_price'],
+                    'bid_size': quote['bid_size'],
+                    'ask_size': quote['ask_size'],
+                    'timestamp': quote['participant_timestamp'],  # nanoseconds
+                    'exchange': quote.get('exchange', 0)
+                })
+            
+            logger.info(f"Total quotes fetched: {len(formatted_quotes):,}")
+            return formatted_quotes
             
         finally:
             if session_created and self.session:
@@ -416,6 +550,7 @@ class BacktestWorker(QThread):
     status_signal = pyqtSignal(str)
     progress_signal = pyqtSignal(int)
     trade_progress = pyqtSignal(str, int)  # Trade loading progress
+    quote_progress = pyqtSignal(str, int)  # Quote loading progress
     
     def __init__(self):
         super().__init__()
@@ -427,6 +562,7 @@ class BacktestWorker(QThread):
         self.calc_5min = StatisticalTrend5Min()
         self.calc_15min = StatisticalTrend15Min()
         self.trade_size_calc = TradeSizeDistribution()
+        self.bid_ask_calc = BidAskImbalance()  # NEW CALCULATOR
         self.tick_flow_calc = TickFlowAnalyzer()
         self.volume_1min_calc = VolumeAnalysis1Min()
         self.market_context_calc = MarketContext()
@@ -443,8 +579,12 @@ class BacktestWorker(QThread):
         """Callback for trade fetch progress"""
         self.trade_progress.emit(message, int(progress))
         
+    async def _quote_fetch_progress(self, message: str, progress: float):
+        """Callback for quote fetch progress"""
+        self.quote_progress.emit(message, int(progress))
+        
     async def run_backtest(self):
-        """Run the backtest with optimized trade fetching"""
+        """Run the backtest with optimized trade and quote fetching"""
         try:
             results = {}
             
@@ -586,6 +726,7 @@ class BacktestWorker(QThread):
                 else:  # Normal volume
                     chunk_minutes = 15
                 
+                # Fetch trades
                 trades = await fetcher.fetch_trades_concurrent(
                     symbol=self.symbol,
                     start_date=calc_start,
@@ -593,6 +734,50 @@ class BacktestWorker(QThread):
                     chunk_minutes=chunk_minutes,
                     progress_callback=self._trade_fetch_progress
                 )
+                
+                # NEW: Fetch quotes for bid/ask imbalance
+                self.status_signal.emit("Fetching quote data from Polygon...")
+                quotes = await fetcher.fetch_quotes_concurrent(
+                    symbol=self.symbol,
+                    start_date=calc_start,
+                    end_date=self.entry_time,
+                    chunk_minutes=chunk_minutes,
+                    progress_callback=self._quote_fetch_progress
+                )
+            
+            # Process quotes first
+            if quotes:
+                self.status_signal.emit(f"Processing {len(quotes):,} quotes...")
+                quote_count = 0
+                
+                for quote_data in quotes:
+                    # Convert timestamp from nanoseconds to datetime
+                    quote_time = datetime.fromtimestamp(quote_data['timestamp'] / 1e9, tz=timezone.utc)
+                    
+                    # Skip if after entry time
+                    if quote_time > self.entry_time:
+                        continue
+                    
+                    # Create Quote object
+                    quote_obj = Quote(
+                        symbol=self.symbol,
+                        bid=quote_data['bid'],
+                        ask=quote_data['ask'],
+                        bid_size=quote_data['bid_size'],
+                        ask_size=quote_data['ask_size'],
+                        timestamp=quote_time
+                    )
+                    
+                    # Process quote
+                    self.bid_ask_calc.process_quote(quote_obj)
+                    quote_count += 1
+                    
+                    # Update progress periodically
+                    if quote_count % 10000 == 0:
+                        progress_pct = int((quote_count / len(quotes)) * 10) + 65  # 65-75% range
+                        self.progress_signal.emit(progress_pct)
+                
+                logger.info(f"Processed {quote_count:,} quotes")
             
             if trades:
                 self.status_signal.emit(f"Processing {len(trades):,} trades...")
@@ -608,7 +793,7 @@ class BacktestWorker(QThread):
                     batch = trades[batch_start:batch_end]
                     
                     # Update progress
-                    progress_pct = int((batch_end / total_trades) * 30) + 60  # 60-90% range
+                    progress_pct = int((batch_end / total_trades) * 15) + 75  # 75-90% range
                     self.progress_signal.emit(progress_pct)
                     self.trade_progress.emit(
                         f"Processing trades {batch_start:,}-{batch_end:,} of {total_trades:,}", 
@@ -645,6 +830,9 @@ class BacktestWorker(QThread):
                         )
                         self.trade_size_calc.process_trade(trade_obj)
                         
+                        # Bid/Ask Imbalance
+                        bid_ask_signal = self.bid_ask_calc.process_trade(trade_obj)
+                        
                         # Tick Flow
                         self.tick_flow_calc.process_trade(self.symbol, formatted_trade)
                         
@@ -670,6 +858,7 @@ class BacktestWorker(QThread):
             
             # Get final signals
             results['trade_size'] = self.trade_size_calc.latest_signals.get(self.symbol)
+            results['bid_ask'] = self.bid_ask_calc.latest_signals.get(self.symbol)  # NEW
             results['tick_flow'] = self.tick_flow_calc.get_current_analysis(self.symbol)
             results['volume_1min'] = self.volume_1min_calc.get_current_analysis(self.symbol)
             results['market_context'] = self.market_context_calc.get_current_analysis(self.symbol)
@@ -816,20 +1005,24 @@ class BacktestingDashboard(QMainWindow):
         flow_layout = QGridLayout(flow_group)
         
         self.widget_trade_size = OrderFlowWidget("Trade Size Distribution", "trade_size")
-        self.widget_trade_size.setMaximumHeight(300)
+        self.widget_trade_size.setMaximumHeight(250)
         flow_layout.addWidget(self.widget_trade_size, 0, 0)
         
+        self.widget_bid_ask = OrderFlowWidget("Bid/Ask Imbalance", "bid_ask")  # NEW WIDGET
+        self.widget_bid_ask.setMaximumHeight(250)
+        flow_layout.addWidget(self.widget_bid_ask, 0, 1)
+        
         self.widget_tick_flow = OrderFlowWidget("Tick Flow", "tick_flow")
-        self.widget_tick_flow.setMaximumHeight(300)
-        flow_layout.addWidget(self.widget_tick_flow, 0, 1)
+        self.widget_tick_flow.setMaximumHeight(250)
+        flow_layout.addWidget(self.widget_tick_flow, 1, 0)
         
         self.widget_volume_1min = OrderFlowWidget("1-Min Volume", "volume_1min")
-        self.widget_volume_1min.setMaximumHeight(300)
-        flow_layout.addWidget(self.widget_volume_1min, 1, 0)
+        self.widget_volume_1min.setMaximumHeight(250)
+        flow_layout.addWidget(self.widget_volume_1min, 1, 1)
         
         self.widget_market_context = OrderFlowWidget("Market Context", "market_context")
-        self.widget_market_context.setMaximumHeight(300)
-        flow_layout.addWidget(self.widget_market_context, 1, 1)
+        self.widget_market_context.setMaximumHeight(250)
+        flow_layout.addWidget(self.widget_market_context, 2, 0, 1, 2)  # Span 2 columns
         
         left_layout.addWidget(flow_group)
         left_layout.addStretch()
@@ -1010,6 +1203,7 @@ class BacktestingDashboard(QMainWindow):
         self.worker.status_signal.connect(self.update_status)
         self.worker.progress_signal.connect(self.update_progress)
         self.worker.trade_progress.connect(self.update_trade_progress)
+        self.worker.quote_progress.connect(self.update_quote_progress)  # NEW
         
         # Start worker
         self.worker.start()
@@ -1017,7 +1211,7 @@ class BacktestingDashboard(QMainWindow):
         # Update info bar
         self.info_bar.setText(
             f"Backtesting {symbol} at {entry_time.strftime('%Y-%m-%d %H:%M:%S UTC')} - "
-            f"Fetching real trade data from Polygon.io (optimized)"
+            f"Fetching real trade and quote data from Polygon.io"
         )
         
     def _clear_displays(self):
@@ -1029,7 +1223,7 @@ class BacktestingDashboard(QMainWindow):
             widget.signal_label.setStyleSheet("color: #ffcc00;")
             widget.table.clearContents()
             
-        for widget in [self.widget_trade_size, self.widget_tick_flow, 
+        for widget in [self.widget_trade_size, self.widget_bid_ask, self.widget_tick_flow, 
                       self.widget_volume_1min, self.widget_market_context]:
             widget.signal_label.setText("CALCULATING...")
             widget.signal_frame.setStyleSheet("background-color: #2a2a3a;")
@@ -1066,6 +1260,11 @@ class BacktestingDashboard(QMainWindow):
             self.widget_trade_size.update_trade_size_signal(results['trade_size'])
         else:
             self.widget_trade_size.signal_label.setText("NO DATA")
+            
+        if results.get('bid_ask'):  # NEW
+            self.widget_bid_ask.update_bid_ask_signal(results['bid_ask'])
+        else:
+            self.widget_bid_ask.signal_label.setText("NO DATA")
             
         if results.get('tick_flow'):
             self.widget_tick_flow.update_tick_flow_signal(results['tick_flow'])
@@ -1122,6 +1321,12 @@ class BacktestingDashboard(QMainWindow):
         """Update trade loading progress"""
         self.status_label.setText(message)
         self.progress_bar.setValue(progress)
+        
+    @pyqtSlot(str, int)
+    def update_quote_progress(self, message: str, progress: int):
+        """Update quote loading progress"""
+        self.status_label.setText(message)
+        # Don't update progress bar as it's handled by trades
         
     def export_to_claude(self):
         """Export results to Claude for analysis"""

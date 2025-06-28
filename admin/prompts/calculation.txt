@@ -1,0 +1,19 @@
+I would like your help in developing a calculation for my trading entry-tool. 
+This calculation should be called <name>> and be held in the modules\calculations\order-flow directory. 
+In the script I would like to have two sections 1) working code for the live session with data via polygon websocket, and 2) a test script that can be used when this script is run directly to show that everything is working. 
+Please review the script and the development rules and let me know the best way of running this. If we should decouple the live and backtesting script then that is fine.
+
+Rules for the next chat that should be EXPLICITELY followed. 
+1. DO NOT develop anything without me expressly stating the path to move forward 
+2. Provide options asking for how we should proceed, additionally provide your recommendation on which of the options I should choose 
+3. Once approved to develop, please provide the full script update unless the changes are below 5 lines of code. 
+4. When asked to validate and fix, please review the pasted code and provide syntax updates ONLY 
+5. Wait for my response on what to do next before moving forward 
+6. When the conversation is +85% of the total max conversation limit, AI to provide notification that a summary should be generated and request the summary overview request document. 
+7. Prior to generating the summary, the user will provide the summary overview request document. 
+8. Always start by asking for current file contents 
+9. Please Verify method signatures before calling 
+10. In all scripts, please include a stand-alone test script at the end to ensure functionality is working. This test should not be run when the script is integrated into a larger process. 
+11. Use terminal logging extensively for non- 
+12. All calculations must be done in UTC - Do not convert to ET
+

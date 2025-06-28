@@ -2,8 +2,8 @@
 """
 Module: Claude API Integration
 Purpose: Modular integration with Anthropic's Claude API for trading analysis
-Features: Conversation management, retry logic, rate limiting, context preservation
-Performance: Async support, response caching, error handling
+Features: Conversation management, retry logic, rate limiting, context preservation, OHLC analysis
+Performance: Async support, response caching, error handling, enhanced logging
 """
 
 import os
@@ -92,13 +92,34 @@ class ClaudeIntegration:
             api_key: Claude API key (defaults to env variable)
             model: Claude model to use
         """
+        logger.info(f"Initializing Claude integration...")
+        
         self.api_key = api_key or os.getenv('CLAUDE_API_KEY')
+        
+        # Enhanced logging for initialization
+        logger.info(f"API Key source: {'provided' if api_key else 'environment'}")
+        logger.info(f"API Key present: {'Yes' if self.api_key else 'No'}")
+        logger.info(f"API Key length: {len(self.api_key) if self.api_key else 0}")
+        
         if not self.api_key:
+            logger.error("Claude API key not found!")
             raise ValueError("Claude API key not found. Set CLAUDE_API_KEY in .env file")
         
+        # Log first/last few chars of API key for verification (safely)
+        if self.api_key:
+            key_preview = f"{self.api_key[:8]}...{self.api_key[-4:]}"
+            logger.info(f"API Key preview: {key_preview}")
+        
         self.model = model
-        self.client = Anthropic(api_key=self.api_key)
-        self.async_client = AsyncAnthropic(api_key=self.api_key)
+        logger.info(f"Model: {self.model}")
+        
+        try:
+            self.client = Anthropic(api_key=self.api_key)
+            self.async_client = AsyncAnthropic(api_key=self.api_key)
+            logger.info("Successfully created Anthropic client instances")
+        except Exception as e:
+            logger.error(f"Failed to create Anthropic clients: {type(e).__name__}: {str(e)}")
+            raise
         
         # Conversation management
         self.conversations: Dict[str, ClaudeConversation] = {}
@@ -119,11 +140,19 @@ Focus on:
 3. Market regime considerations
 4. Practical implementation improvements
 5. Statistical significance of patterns
+6. Price action analysis and signal validation
+
+When OHLC data is provided, pay special attention to:
+- Whether signals align with actual price movement
+- Optimal stop loss and take profit levels based on ATR
+- Entry timing improvements based on price patterns
+- Potential false signals or divergences
 
 Provide specific, actionable recommendations backed by the data provided.
 Always consider transaction costs, slippage, and real-world execution challenges."""
         
-        logger.info(f"Claude integration initialized with model: {self.model}")
+        logger.info(f"Claude integration initialized successfully")
+        logger.info(f"Configuration: max_tokens={self.max_tokens}, temperature={self.temperature}")
     
     def create_conversation(self, context: Dict[str, Any] = None) -> str:
         """
@@ -145,6 +174,9 @@ Always consider transaction costs, slippage, and real-world execution challenges
         self.active_conversation_id = conv_id
         
         logger.info(f"Created new conversation: {conv_id}")
+        if context:
+            logger.info(f"Conversation context: {json.dumps(context, default=str)[:200]}...")
+        
         return conv_id
     
     def _enforce_rate_limit(self):
@@ -194,8 +226,22 @@ Always consider transaction costs, slippage, and real-world execution challenges
             # Prepare messages for API
             messages = conversation.get_messages_for_api()
             
+            # Enhanced logging for request
+            logger.info(f"=== Sending message to Claude ===")
+            logger.info(f"Conversation ID: {conversation.id}")
+            logger.info(f"Number of messages in conversation: {len(messages)}")
+            logger.info(f"Request model: {self.model}")
+            logger.info(f"Max tokens: {self.max_tokens}")
+            logger.info(f"Temperature: {self.temperature}")
+            
+            # Log message preview (first 200 chars)
+            logger.info(f"Message preview: {content[:200]}...")
+            logger.info(f"Message length: {len(content)} characters")
+            
             # Send to Claude
-            logger.info(f"Sending message to Claude (conversation: {conversation.id})")
+            logger.info("Sending request to Claude API...")
+            start_time = time.time()
+            
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
@@ -203,6 +249,20 @@ Always consider transaction costs, slippage, and real-world execution challenges
                 system=self.system_prompt,
                 messages=messages
             )
+            
+            elapsed_time = time.time() - start_time
+            
+            # Enhanced logging for response
+            logger.info(f"=== Response received successfully ===")
+            logger.info(f"Response time: {elapsed_time:.2f} seconds")
+            logger.info(f"Response length: {len(response.content[0].text)} characters")
+            logger.info(f"Input tokens used: {response.usage.input_tokens}")
+            logger.info(f"Output tokens used: {response.usage.output_tokens}")
+            logger.info(f"Total tokens used: {response.usage.input_tokens + response.usage.output_tokens}")
+            
+            # Log response preview
+            response_preview = response.content[0].text[:200]
+            logger.info(f"Response preview: {response_preview}...")
             
             # Extract response
             response_text = response.content[0].text
@@ -213,14 +273,35 @@ Always consider transaction costs, slippage, and real-world execution challenges
                 'usage': {
                     'input_tokens': response.usage.input_tokens,
                     'output_tokens': response.usage.output_tokens
-                }
+                },
+                'response_time': elapsed_time
             })
             
-            logger.info(f"Received response: {len(response_text)} chars")
+            logger.info(f"Conversation updated successfully")
             return response_text, conversation
             
         except Exception as e:
-            logger.error(f"Error sending message to Claude: {e}")
+            logger.error(f"=== Error sending message to Claude ===")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error(f"Full error details:", exc_info=True)
+            
+            # More specific error messages
+            error_str = str(e).lower()
+            if "api" in error_str and "key" in error_str:
+                logger.error("API key issue detected - check CLAUDE_API_KEY in .env")
+                logger.error("Make sure the key starts with 'sk-ant-'")
+            elif "rate" in error_str and "limit" in error_str:
+                logger.error("Rate limit issue - consider adding retry logic or waiting")
+            elif "network" in error_str or "connection" in error_str:
+                logger.error("Network connectivity issue - check internet connection")
+            elif "unauthorized" in error_str or "401" in error_str:
+                logger.error("Authentication failed - API key may be invalid")
+            elif "forbidden" in error_str or "403" in error_str:
+                logger.error("Access forbidden - check API key permissions")
+            elif "model" in error_str:
+                logger.error(f"Model issue - ensure {self.model} is available for your API key")
+            
             raise
     
     async def send_message_async(self, content: str, conversation_id: Optional[str] = None,
@@ -284,20 +365,24 @@ Always consider transaction costs, slippage, and real-world execution challenges
         Returns:
             Tuple of (analysis, conversation_id)
         """
+        logger.info("=== Starting backtest analysis ===")
+        
         # Create new conversation with context
         conv_id = self.create_conversation(context or {})
         
         # Format the analysis request
         prompt = self._format_backtest_prompt(results, context)
+        logger.info(f"Generated prompt length: {len(prompt)} characters")
         
         # Send to Claude
         analysis, _ = self.send_message(prompt, conv_id)
         
+        logger.info("=== Backtest analysis complete ===")
         return analysis, conv_id
     
     def _format_backtest_prompt(self, results: Dict[str, Any], 
-                               context: Dict[str, Any] = None) -> str:
-        """Format backtest results into Claude prompt"""
+                           context: Dict[str, Any] = None) -> str:
+        """Format backtest results into Claude prompt with OHLC analysis"""
         prompt = "Please analyze these backtesting results and provide optimization recommendations:\n\n"
         
         # Add context
@@ -311,6 +396,51 @@ Always consider transaction costs, slippage, and real-world execution challenges
                 prompt += f"- Timeframe: {context['timeframe']}\n"
             prompt += "\n"
         
+        # Add OHLC data if available
+        if context and 'ohlc_data' in context:
+            ohlc = context['ohlc_data']
+            prompt += "**Price Action Analysis:**\n"
+            prompt += f"- Entry Price: ${ohlc.get('entry_price', 'N/A')}\n"
+            prompt += f"- Bars analyzed: {ohlc.get('bars_before_entry', 0)} before, {ohlc.get('bars_after_entry', 0)} after entry\n"
+            
+            if 'atr_at_entry' in ohlc:
+                prompt += f"- ATR at entry: ${ohlc['atr_at_entry']} ({ohlc['atr_percentage']:.2f}% of price)\n"
+            
+            if 'price_movement' in ohlc:
+                pm = ohlc['price_movement']
+                prompt += f"\n**Post-Entry Price Movement:**\n"
+                prompt += f"- Maximum gain: {pm.get('max_gain_percent', 0):.2f}%"
+                if 'max_gain_atr' in pm:
+                    prompt += f" ({pm['max_gain_atr']:.1f} ATR)"
+                prompt += "\n"
+                
+                prompt += f"- Maximum loss: {pm.get('max_loss_percent', 0):.2f}%"
+                if 'max_loss_atr' in pm:
+                    prompt += f" ({pm['max_loss_atr']:.1f} ATR)"
+                prompt += "\n"
+                
+                prompt += f"- Close after 20 bars: {pm.get('close_after_20_bars_percent', 0):.2f}%\n"
+            
+            # Include detailed OHLC bars for pattern analysis
+            if 'price_data' in ohlc and len(ohlc['price_data']) > 0:
+                prompt += f"\n**Detailed Price Bars (1-minute):**\n"
+                prompt += "Position | Time | Open | High | Low | Close | Volume\n"
+                prompt += "-" * 60 + "\n"
+                
+                # Show key bars around entry
+                for bar in ohlc['price_data']:
+                    if abs(bar['position']) <= 5 or (bar['position'] > 0 and bar['position'] % 5 == 0):
+                        pos_str = f"{bar['position']:+3d}"
+                        if bar['position'] == 0:
+                            pos_str += " (ENTRY)"
+                        
+                        prompt += f"{pos_str} | {bar['time']} | "
+                        prompt += f"${bar['open']:.2f} | ${bar['high']:.2f} | "
+                        prompt += f"${bar['low']:.2f} | ${bar['close']:.2f} | "
+                        prompt += f"{bar['volume']:,}\n"
+            
+            prompt += "\n"
+        
         # Add trend analysis results
         prompt += "**Trend Analysis Results:**\n"
         
@@ -318,28 +448,72 @@ Always consider transaction costs, slippage, and real-world execution challenges
         if 'trend_1min' in results and results['trend_1min']:
             trend = results['trend_1min']
             prompt += f"\n1-Minute Trend (Scalper):\n"
-            prompt += f"- Signal: {trend.signal}\n"
-            prompt += f"- Confidence: {trend.confidence:.1f}%\n"
-            prompt += f"- Strength: {trend.strength:.1f}%\n"
-            prompt += f"- Target Hold: {trend.target_hold}\n"
+            
+            # Check for different possible attributes
+            if hasattr(trend, 'signal'):
+                prompt += f"- Signal: {trend.signal}\n"
+            if hasattr(trend, 'confidence'):
+                prompt += f"- Confidence: {trend.confidence:.1f}%\n"
+            if hasattr(trend, 'strength'):
+                prompt += f"- Strength: {trend.strength:.1f}%\n"
+            if hasattr(trend, 'target_hold'):
+                prompt += f"- Target Hold: {trend.target_hold}\n"
+            if hasattr(trend, 'direction'):
+                prompt += f"- Direction: {trend.direction}\n"
             if hasattr(trend, 'micro_trend') and trend.micro_trend:
                 prompt += f"- Micro Trend: {trend.micro_trend.get('direction', 'N/A')}\n"
+            
+            # Log available attributes for debugging
+            logger.debug(f"1min trend attributes: {dir(trend)}")
         
         # 5-minute trend
         if 'trend_5min' in results and results['trend_5min']:
             trend = results['trend_5min']
             prompt += f"\n5-Minute Trend (Position):\n"
-            prompt += f"- Direction: {trend.direction}\n"
-            prompt += f"- Strength: {trend.strength:.1f}%\n"
-            prompt += f"- Confidence: {trend.confidence:.1f}%\n"
+            
+            # Check what attributes this object actually has
+            if hasattr(trend, 'signal'):
+                prompt += f"- Signal: {trend.signal}\n"
+            if hasattr(trend, 'direction'):
+                prompt += f"- Direction: {trend.direction}\n"
+            if hasattr(trend, 'trend_direction'):
+                prompt += f"- Direction: {trend.trend_direction}\n"
+            if hasattr(trend, 'strength'):
+                prompt += f"- Strength: {trend.strength:.1f}%\n"
+            if hasattr(trend, 'confidence'):
+                prompt += f"- Confidence: {trend.confidence:.1f}%\n"
+            if hasattr(trend, 'momentum'):
+                prompt += f"- Momentum: {trend.momentum:.2f}\n"
+            if hasattr(trend, 'regime_state'):
+                prompt += f"- Regime: {trend.regime_state}\n"
+            
+            # Log available attributes for debugging
+            logger.debug(f"5min trend type: {type(trend).__name__}")
+            logger.debug(f"5min trend attributes: {[attr for attr in dir(trend) if not attr.startswith('_')]}")
         
         # 15-minute trend
         if 'trend_15min' in results and results['trend_15min']:
             trend = results['trend_15min']
             prompt += f"\n15-Minute Trend (Regime):\n"
-            prompt += f"- State: {trend.regime_state}\n"
-            prompt += f"- Strength: {trend.strength:.1f}%\n"
-            prompt += f"- Confidence: {trend.confidence:.1f}%\n"
+            
+            # Check for various possible attributes
+            if hasattr(trend, 'regime_state'):
+                prompt += f"- State: {trend.regime_state}\n"
+            if hasattr(trend, 'signal'):
+                prompt += f"- Signal: {trend.signal}\n"
+            if hasattr(trend, 'direction'):
+                prompt += f"- Direction: {trend.direction}\n"
+            if hasattr(trend, 'trend_direction'):
+                prompt += f"- Direction: {trend.trend_direction}\n"
+            if hasattr(trend, 'strength'):
+                prompt += f"- Strength: {trend.strength:.1f}%\n"
+            if hasattr(trend, 'confidence'):
+                prompt += f"- Confidence: {trend.confidence:.1f}%\n"
+            if hasattr(trend, 'momentum'):
+                prompt += f"- Momentum: {trend.momentum:.2f}\n"
+            
+            # Log available attributes for debugging
+            logger.debug(f"15min trend attributes: {dir(trend)}")
         
         # Order flow analysis
         prompt += "\n**Order Flow Analysis:**\n"
@@ -353,15 +527,27 @@ Always consider transaction costs, slippage, and real-world execution challenges
                     for k, v in data.items():
                         if not k.startswith('_'):  # Skip private keys
                             prompt += f"- {k}: {v}\n"
+                elif hasattr(data, '__dict__'):
+                    # Handle objects with attributes
+                    for attr in dir(data):
+                        if not attr.startswith('_'):
+                            value = getattr(data, attr, None)
+                            if value is not None and not callable(value):
+                                prompt += f"- {attr}: {value}\n"
                 else:
                     prompt += f"- Data: {str(data)[:200]}...\n"
         
+        # Enhanced questions based on OHLC data
         prompt += "\n**Questions:**\n"
         prompt += "1. What are the key strengths and weaknesses of this setup?\n"
-        prompt += "2. How could the entry timing be improved?\n"
-        prompt += "3. What market conditions would make this setup more reliable?\n"
-        prompt += "4. Suggest specific parameter adjustments for the calculations.\n"
-        prompt += "5. What additional indicators or filters would improve the strategy?\n"
+        prompt += "2. How could the entry timing be improved based on the price action?\n"
+        prompt += "3. Do the signals align with the actual price movement after entry?\n"
+        prompt += "4. What market conditions would make this setup more reliable?\n"
+        prompt += "5. Suggest specific parameter adjustments for the calculations.\n"
+        prompt += "6. Based on the ATR and price movement, what would be optimal stop loss and take profit levels?\n"
+        if context and 'ohlc_data' in context:
+            prompt += "7. Are there any concerning patterns in the OHLC data that contradict the signals?\n"
+            prompt += "8. Would a different timeframe entry (e.g., waiting for a 5-min signal) have improved the outcome?\n"
         
         return prompt
     
@@ -431,10 +617,32 @@ if __name__ == "__main__":
         }
     }
     
+    # Test context with OHLC data
     test_context = {
         'symbol': 'TSLA',
         'entry_time': datetime.now(timezone.utc).isoformat(),
-        'timeframe': '1min'
+        'timeframe': '1min',
+        'ohlc_data': {
+            'entry_price': 185.50,
+            'bars_before_entry': 10,
+            'bars_after_entry': 20,
+            'atr_at_entry': 2.35,
+            'atr_percentage': 1.27,
+            'price_movement': {
+                'max_gain_percent': 0.85,
+                'max_gain_atr': 0.67,
+                'max_loss_percent': -0.42,
+                'max_loss_atr': 0.33,
+                'close_after_20_bars_percent': 0.55
+            },
+            'price_data': [
+                {'position': -2, 'time': '14:28:00', 'open': 185.20, 'high': 185.35, 'low': 185.15, 'close': 185.30, 'volume': 125000},
+                {'position': -1, 'time': '14:29:00', 'open': 185.30, 'high': 185.45, 'low': 185.25, 'close': 185.40, 'volume': 135000},
+                {'position': 0, 'time': '14:30:00', 'open': 185.40, 'high': 185.55, 'low': 185.35, 'close': 185.50, 'volume': 180000},
+                {'position': 1, 'time': '14:31:00', 'open': 185.50, 'high': 185.70, 'low': 185.45, 'close': 185.65, 'volume': 165000},
+                {'position': 2, 'time': '14:32:00', 'open': 185.65, 'high': 185.85, 'low': 185.60, 'close': 185.80, 'volume': 145000},
+            ]
+        }
     }
     
     try:
@@ -447,13 +655,13 @@ if __name__ == "__main__":
         print(f"✓ Created conversation: {conv_id}\n")
         
         # Test 2: Analyze backtest results
-        print("Analyzing backtest results...")
+        print("Analyzing backtest results with OHLC data...")
         analysis, conv_id = claude.analyze_backtest_results(test_results, test_context)
         print(f"\nClaude's Analysis:\n{'-'*50}\n{analysis}\n{'-'*50}\n")
         
         # Test 3: Follow-up question
         print("Sending follow-up question...")
-        follow_up = "Based on the momentum indicators, should I tighten the stop loss for this setup?"
+        follow_up = "Based on the price action data, was the entry timing optimal? Could we have entered one bar later for a better risk/reward?"
         response, _ = claude.send_message(follow_up, conv_id)
         print(f"\nFollow-up Response:\n{'-'*50}\n{response}\n{'-'*50}\n")
         

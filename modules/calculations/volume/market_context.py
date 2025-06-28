@@ -4,6 +4,7 @@ Module: Market Context Analysis (15-Minute)
 Purpose: Identify overall market regime and positioning using volume
 Features: VWAP tracking, relative volume, cumulative delta, regime detection
 Output: BULLISH/BEARISH/NEUTRAL signals based on market structure
+Time Handling: All timestamps in UTC
 """
 
 import asyncio
@@ -16,13 +17,29 @@ import logging
 import time
 import json
 import os
+import time as time_module
 
-# Configure logging
+# Enforce UTC for all operations
+os.environ['TZ'] = 'UTC'
+if hasattr(time_module, 'tzset'):
+    time_module.tzset()
+
+# Configure logging with UTC
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s UTC - %(name)s - %(levelname)s - %(message)s'
 )
+logging.Formatter.converter = time_module.gmtime  # Force UTC in logs
 logger = logging.getLogger(__name__)
+
+# UTC validation function
+def ensure_utc(dt: datetime) -> datetime:
+    """Ensure datetime is UTC-aware"""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    elif dt.tzinfo != timezone.utc:
+        return dt.astimezone(timezone.utc)
+    return dt
 
 
 @dataclass
@@ -71,6 +88,7 @@ class VolumeSignal:
 class MarketContext:
     """
     15-minute market context analyzer for regime identification
+    All timestamps are in UTC.
     """
     
     def __init__(self,
@@ -99,8 +117,23 @@ class MarketContext:
         
         # Session tracking
         self.session_data: Dict[str, Dict] = {}  # VWAP, cumulative volumes
-        self.session_start_time = datetime_time(9, 30)  # Market open
-        self.session_end_time = datetime_time(16, 0)    # Market close
+        
+        # Determine current DST status for market hours
+        now = datetime.now(timezone.utc)
+        self.is_edt = self._is_daylight_saving(now)
+        
+        if self.is_edt:
+            self.session_start_time = datetime_time(13, 30)  # 9:30 AM EDT in UTC
+            self.session_end_time = datetime_time(20, 0)     # 4:00 PM EDT in UTC
+            self.market_open_minutes = 13 * 60 + 30
+            self.market_close_minutes = 20 * 60
+            logger.info("Using EDT market hours: 13:30-20:00 UTC (9:30 AM - 4:00 PM EDT)")
+        else:
+            self.session_start_time = datetime_time(14, 30)  # 9:30 AM EST in UTC
+            self.session_end_time = datetime_time(21, 0)     # 4:00 PM EST in UTC
+            self.market_open_minutes = 14 * 60 + 30
+            self.market_close_minutes = 21 * 60
+            logger.info("Using EST market hours: 14:30-21:00 UTC (9:30 AM - 4:00 PM EST)")
         
         # Historical volume profiles (load from file if exists)
         self.volume_profiles: Dict[str, Dict] = self._load_volume_profiles()
@@ -109,51 +142,118 @@ class MarketContext:
         self.bars_processed = 0
         self.signals_generated = 0
         
+        logger.info(f"Market Context Analyzer initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    
+    def _is_daylight_saving(self, dt: datetime) -> bool:
+        """
+        Determine if given datetime is during EDT (simplified).
+        In reality, DST changes on specific Sundays in March and November.
+        """
+        # Simplified: EDT is roughly March 14 - November 7
+        month = dt.month
+        day = dt.day
+        
+        if month < 3 or month > 11:
+            return False
+        elif month > 3 and month < 11:
+            return True
+        elif month == 3:
+            # Second Sunday of March
+            return day >= 14
+        else:  # month == 11
+            # First Sunday of November
+            return day < 7
+    
+    def _validate_timestamp(self, timestamp: datetime, source: str) -> datetime:
+        """Validate and ensure timestamp is UTC"""
+        if timestamp.tzinfo is None:
+            logger.warning(f"{source}: Naive datetime received, assuming UTC")
+            return timestamp.replace(tzinfo=timezone.utc)
+        elif timestamp.tzinfo != timezone.utc:
+            logger.warning(f"{source}: Non-UTC timezone {timestamp.tzinfo}, converting to UTC")
+            return timestamp.astimezone(timezone.utc)
+        return timestamp
+    
     def _load_volume_profiles(self) -> Dict:
         """Load historical volume profiles for relative volume calculation"""
         # In production, load from database or file
         # For now, create synthetic profiles
         profiles = {}
         
-        # Create time-based volume profile (simplified)
+        # Create time-based volume profile based on current DST status
         times = []
-        current = datetime.now().replace(hour=9, minute=30, second=0, microsecond=0)
-        end = datetime.now().replace(hour=16, minute=0, second=0, microsecond=0)
+        if self.is_edt:
+            current = datetime.now(timezone.utc).replace(hour=13, minute=30, second=0, microsecond=0)
+            end = datetime.now(timezone.utc).replace(hour=20, minute=0, second=0, microsecond=0)
+        else:
+            current = datetime.now(timezone.utc).replace(hour=14, minute=30, second=0, microsecond=0)
+            end = datetime.now(timezone.utc).replace(hour=21, minute=0, second=0, microsecond=0)
         
         while current <= end:
             times.append(current.strftime('%H:%M'))
             current += timedelta(minutes=15)
         
-        # Typical volume distribution (U-shaped)
-        base_volumes = {
-            '09:30': 1.8,  # Opening surge
-            '09:45': 1.5,
-            '10:00': 1.2,
-            '10:15': 1.0,
-            '10:30': 0.9,
-            '10:45': 0.8,
-            '11:00': 0.7,
-            '11:15': 0.7,
-            '11:30': 0.6,
-            '11:45': 0.6,
-            '12:00': 0.5,  # Lunch lull
-            '12:15': 0.5,
-            '12:30': 0.5,
-            '12:45': 0.6,
-            '13:00': 0.7,
-            '13:15': 0.8,
-            '13:30': 0.9,
-            '13:45': 1.0,
-            '14:00': 1.1,
-            '14:15': 1.2,
-            '14:30': 1.3,
-            '14:45': 1.4,
-            '15:00': 1.5,
-            '15:15': 1.6,
-            '15:30': 1.7,
-            '15:45': 1.9,  # Closing surge
-            '16:00': 2.0
-        }
+        # Typical volume distribution (U-shaped) - adjusted for DST
+        if self.is_edt:
+            base_volumes = {
+                '13:30': 1.8,  # Opening surge (9:30 AM EDT)
+                '13:45': 1.5,
+                '14:00': 1.2,
+                '14:15': 1.0,
+                '14:30': 0.9,
+                '14:45': 0.8,
+                '15:00': 0.7,
+                '15:15': 0.7,
+                '15:30': 0.6,
+                '15:45': 0.6,
+                '16:00': 0.5,  # Lunch lull (12:00 PM EDT)
+                '16:15': 0.5,
+                '16:30': 0.5,
+                '16:45': 0.6,
+                '17:00': 0.7,
+                '17:15': 0.8,
+                '17:30': 0.9,
+                '17:45': 1.0,
+                '18:00': 1.1,
+                '18:15': 1.2,
+                '18:30': 1.3,
+                '18:45': 1.4,
+                '19:00': 1.5,
+                '19:15': 1.6,
+                '19:30': 1.7,
+                '19:45': 1.9,  # Closing surge (3:45 PM EDT)
+                '20:00': 2.0   # Close (4:00 PM EDT)
+            }
+        else:
+            base_volumes = {
+                '14:30': 1.8,  # Opening surge (9:30 AM EST)
+                '14:45': 1.5,
+                '15:00': 1.2,
+                '15:15': 1.0,
+                '15:30': 0.9,
+                '15:45': 0.8,
+                '16:00': 0.7,
+                '16:15': 0.7,
+                '16:30': 0.6,
+                '16:45': 0.6,
+                '17:00': 0.5,  # Lunch lull (12:00 PM EST)
+                '17:15': 0.5,
+                '17:30': 0.5,
+                '17:45': 0.6,
+                '18:00': 0.7,
+                '18:15': 0.8,
+                '18:30': 0.9,
+                '18:45': 1.0,
+                '19:00': 1.1,
+                '19:15': 1.2,
+                '19:30': 1.3,
+                '19:45': 1.4,
+                '20:00': 1.5,
+                '20:15': 1.6,
+                '20:30': 1.7,
+                '20:45': 1.9,  # Closing surge (3:45 PM EST)
+                '21:00': 2.0   # Close (4:00 PM EST)
+            }
         
         return {'default': base_volumes}
     
@@ -171,8 +271,14 @@ class MarketContext:
             self.current_bar_trades[symbol] = []
             self._initialize_session(symbol)
             
-        # Get trade time and 15-min interval
+        # Get trade time and ensure UTC
         trade_time = datetime.fromtimestamp(trade_data['timestamp'] / 1000, tz=timezone.utc)
+        trade_time = self._validate_timestamp(trade_time, f"Trade-{symbol}")
+        
+        # Update DST status if date changed
+        if self._is_daylight_saving(trade_time) != self.is_edt:
+            self.is_edt = self._is_daylight_saving(trade_time)
+            self._update_market_hours()
         
         # Check if new session
         if self._is_new_session(symbol, trade_time):
@@ -199,6 +305,24 @@ class MarketContext:
         # Update session running totals
         self._update_session_data(symbol, trade_data)
     
+    def _update_market_hours(self):
+        """Update market hours based on DST status"""
+        if self.is_edt:
+            self.session_start_time = datetime_time(13, 30)
+            self.session_end_time = datetime_time(20, 0)
+            self.market_open_minutes = 13 * 60 + 30
+            self.market_close_minutes = 20 * 60
+            logger.info("Switched to EDT market hours: 13:30-20:00 UTC")
+        else:
+            self.session_start_time = datetime_time(14, 30)
+            self.session_end_time = datetime_time(21, 0)
+            self.market_open_minutes = 14 * 60 + 30
+            self.market_close_minutes = 21 * 60
+            logger.info("Switched to EST market hours: 14:30-21:00 UTC")
+        
+        # Reload volume profiles
+        self.volume_profiles = self._load_volume_profiles()
+    
     def _initialize_session(self, symbol: str):
         """Initialize session data for a symbol"""
         self.session_data[symbol] = {
@@ -208,7 +332,8 @@ class MarketContext:
             'cumulative_volume_price': 0,  # For VWAP
             'session_vwap': 0,
             'session_start': datetime.now(timezone.utc),
-            'last_price': 0
+            'last_price': 0,
+            'last_update': datetime.now(timezone.utc)
         }
     
     def _is_new_session(self, symbol: str, trade_time: datetime) -> bool:
@@ -219,6 +344,12 @@ class MarketContext:
         # Simple check - if more than 12 hours since last update
         last_update = self.session_data[symbol].get('last_update', trade_time)
         if (trade_time - last_update).total_seconds() > 43200:  # 12 hours
+            return True
+            
+        # Check if we've crossed into a new trading day (in UTC)
+        last_date = last_update.date()
+        current_date = trade_time.date()
+        if current_date > last_date and trade_time.time() >= self.session_start_time:
             return True
             
         return False
@@ -315,7 +446,7 @@ class MarketContext:
         self.session_bars[symbol].append(bar)
         self.bars_processed += 1
         
-        print(f"\n✓ 15-min bar completed for {symbol} at {bar_time.strftime('%H:%M')}")
+        print(f"\n✓ 15-min bar completed for {symbol} at {bar_time.strftime('%H:%M UTC')}")
         print(f"  OHLC: {open_price:.2f}/{high_price:.2f}/{low_price:.2f}/{close_price:.2f}")
         print(f"  Volume: {bar_volume:,.0f} ({bar_buy_volume:,.0f} buy / {bar_sell_volume:,.0f} sell)")
         print(f"  Session VWAP: ${session['session_vwap']:.2f}")
@@ -393,20 +524,29 @@ class MarketContext:
         else:
             volume_trend = 'steady'
             
-        # Market phase
-        hour = latest_bar.timestamp.hour
-        minute = latest_bar.timestamp.minute
+        # Market phase (in UTC)
+        bar_time = latest_bar.timestamp
+        hour = bar_time.hour
+        minute = bar_time.minute
+        time_minutes = hour * 60 + minute  # Convert to minutes since midnight
         
-        if hour == 9 and minute < 45:
-            market_phase = 'opening'
-        elif hour < 11:
-            market_phase = 'morning'
-        elif hour < 14:
-            market_phase = 'midday'
-        elif hour < 15 or (hour == 15 and minute < 30):
-            market_phase = 'afternoon'
+        # Check if within market hours
+        if time_minutes < self.market_open_minutes or time_minutes >= self.market_close_minutes:
+            market_phase = 'after_hours'
         else:
-            market_phase = 'closing'
+            # Calculate minutes since market open
+            minutes_since_open = time_minutes - self.market_open_minutes
+            
+            if minutes_since_open < 15:
+                market_phase = 'opening'
+            elif minutes_since_open < 90:  # First 1.5 hours
+                market_phase = 'morning'
+            elif minutes_since_open < 270:  # Until 2 PM ET
+                market_phase = 'midday'
+            elif minutes_since_open < 360:  # Until 3:30 PM ET
+                market_phase = 'afternoon'
+            else:
+                market_phase = 'closing'
             
         # Institutional activity (large trades)
         # Simplified - in reality would track actual large trades
@@ -551,7 +691,9 @@ class MarketContext:
             'bars_processed': self.bars_processed,
             'signals_generated': self.signals_generated,
             'active_symbols': list(self.session_bars.keys()),
-            'bar_counts': {symbol: len(bars) for symbol, bars in self.session_bars.items()}
+            'bar_counts': {symbol: len(bars) for symbol, bars in self.session_bars.items()},
+            'market_hours': f"{self.session_start_time} - {self.session_end_time} UTC",
+            'dst_status': 'EDT' if self.is_edt else 'EST'
         }
 
 
@@ -571,7 +713,17 @@ async def test_market_context():
     from polygon import PolygonWebSocketClient
     
     print("=== MARKET CONTEXT ANALYZER TEST ===")
-    print("Analyzing 15-minute market structure and regime\n")
+    print("Analyzing 15-minute market structure and regime")
+    print(f"Current UTC time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    
+    # Determine current market hours
+    now = datetime.now(timezone.utc)
+    analyzer_temp = MarketContext()  # Create temp instance to check DST
+    if analyzer_temp.is_edt:
+        print("Market hours: 13:30-20:00 UTC (9:30 AM - 4:00 PM EDT)")
+    else:
+        print("Market hours: 14:30-21:00 UTC (9:30 AM - 4:00 PM EST)")
+    print()
     
     # Test configuration
     TEST_SYMBOLS = ['SPY', 'QQQ', 'IWM']  # Major indices for market context
@@ -624,7 +776,8 @@ async def test_market_context():
                     
                     print(f"\n{color_code}{'='*70}\033[0m")
                     print(f"{emoji} {signal.symbol} - Signal: {signal.signal} (Strength: {signal.strength:.0f}%)")
-                    print(f"Time: {bar_time.strftime('%H:%M')} 15-min bar")
+                    print(f"Time: {bar_time.strftime('%H:%M UTC')} 15-min bar")
+                    print(f"Signal Generated: {signal.timestamp.strftime('%H:%M:%S UTC')}")
                     print(f"Reason: {signal.reason}")
                     
                     # Display metrics
@@ -665,8 +818,20 @@ async def test_market_context():
         )
         print("✓ Subscribed successfully")
         
+        current_time = datetime.now(timezone.utc)
         print(f"\n⏰ Running for {TEST_DURATION} seconds...")
-        print("Note: Market may be closed. In live markets, 15-min bars complete at :00, :15, :30, :45\n")
+        print(f"Current UTC time: {current_time.strftime('%H:%M:%S UTC')}")
+        
+        # Check if market is open
+        market_hour = current_time.hour
+        market_minute = current_time.minute
+        time_minutes = market_hour * 60 + market_minute
+        
+        if time_minutes < analyzer.market_open_minutes or time_minutes >= analyzer.market_close_minutes:
+            print(f"\n⚠️  Market is closed (outside {analyzer.session_start_time} - {analyzer.session_end_time} UTC)")
+            print("   During market hours, 15-min bars complete at :00, :15, :30, :45\n")
+        else:
+            print("✅ Market is open - expecting live data\n")
         
         # Create listen task
         listen_task = asyncio.create_task(ws_client.listen())
@@ -682,6 +847,7 @@ async def test_market_context():
             if time.time() - last_stats_time >= 300:
                 stats = analyzer.get_statistics()
                 print(f"\n📊 Stats: {stats['bars_processed']} 15-min bars completed")
+                print(f"   Market Hours: {stats['market_hours']} ({stats['dst_status']})")
                 
                 # Show session stats for each symbol
                 for symbol in TEST_SYMBOLS:
@@ -704,6 +870,7 @@ async def test_market_context():
         print(f"  • 15-min bars processed: {stats['bars_processed']}")
         print(f"  • Signals generated: {stats['signals_generated']}")
         print(f"  • Symbols tracked: {', '.join(stats['active_symbols'])}")
+        print(f"  • Market Hours: {stats['market_hours']} ({stats['dst_status']})")
         
         # Signal summary
         if signal_history:
@@ -742,13 +909,17 @@ async def test_market_context():
 
 
 if __name__ == "__main__":
-    print("Starting Market Context Analyzer")
-    print("This module identifies market regime using 15-minute volume patterns\n")
-    print("Note: Since market is closed, you may not see live data.")
-    print("During market hours, this tracks:")
+    print(f"Starting Market Context Analyzer at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print("This module identifies market regime using 15-minute volume patterns")
+    print("All timestamps are in UTC")
+    print("\nNote: Market hours automatically adjust for Daylight Saving Time:")
+    print("  • EDT (March-November): 13:30-20:00 UTC")
+    print("  • EST (November-March): 14:30-21:00 UTC")
+    print("\nDuring market hours, this tracks:")
     print("  • VWAP and price positioning")
     print("  • Cumulative volume delta")
     print("  • Market regime (trending/ranging/volatile)")
-    print("  • Relative volume vs typical patterns\n")
+    print("  • Relative volume vs typical patterns")
+    print("  • UTC timestamp enforcement\n")
     
     asyncio.run(test_market_context())

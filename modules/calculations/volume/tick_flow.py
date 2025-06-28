@@ -4,6 +4,7 @@ Module: Ultra-Fast Tick Flow Analysis
 Purpose: Detect immediate buying/selling pressure from last 100-500 trades
 Features: Real-time trade classification, large trade detection, momentum surges
 Output: BULLISH/BEARISH/NEUTRAL signals based on order flow
+Time Handling: All timestamps in UTC
 """
 
 import asyncio
@@ -14,13 +15,30 @@ from dataclasses import dataclass, field
 from collections import deque
 import logging
 import time
+import os
+import time as time_module
 
-# Configure logging
+# Enforce UTC for all operations
+os.environ['TZ'] = 'UTC'
+if hasattr(time_module, 'tzset'):
+    time_module.tzset()
+
+# Configure logging with UTC
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s UTC - %(name)s - %(levelname)s - %(message)s'
 )
+logging.Formatter.converter = time_module.gmtime  # Force UTC in logs
 logger = logging.getLogger(__name__)
+
+# UTC validation function
+def ensure_utc(dt: datetime) -> datetime:
+    """Ensure datetime is UTC-aware"""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    elif dt.tzinfo != timezone.utc:
+        return dt.astimezone(timezone.utc)
+    return dt
 
 
 @dataclass
@@ -66,6 +84,7 @@ class VolumeSignal:
 class TickFlowAnalyzer:
     """
     Ultra-fast tick flow analyzer for immediate momentum detection
+    All timestamps are in UTC.
     """
     
     def __init__(self, 
@@ -100,6 +119,20 @@ class TickFlowAnalyzer:
         self.trades_processed = 0
         self.signals_generated = 0
         
+        logger.info(f"Tick Flow Analyzer initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        logger.info(f"Settings: buffer={buffer_size}, large_multiplier={large_trade_multiplier}, "
+                   f"momentum_threshold={momentum_threshold}%")
+    
+    def _validate_timestamp(self, timestamp: datetime, source: str) -> datetime:
+        """Validate and ensure timestamp is UTC"""
+        if timestamp.tzinfo is None:
+            logger.warning(f"{source}: Naive datetime received, assuming UTC")
+            return timestamp.replace(tzinfo=timezone.utc)
+        elif timestamp.tzinfo != timezone.utc:
+            logger.warning(f"{source}: Non-UTC timezone {timestamp.tzinfo}, converting to UTC")
+            return timestamp.astimezone(timezone.utc)
+        return timestamp
+        
     def process_trade(self, symbol: str, trade_data: Dict) -> Optional[VolumeSignal]:
         """
         Process incoming trade and generate signal if conditions met
@@ -117,8 +150,10 @@ class TickFlowAnalyzer:
             self.spread_estimates[symbol] = deque(maxlen=100)
             self.avg_trade_sizes[symbol] = 0
             
-        # Extract trade info
+        # Extract trade info and ensure UTC
         timestamp = datetime.fromtimestamp(trade_data['timestamp'] / 1000, tz=timezone.utc)
+        timestamp = self._validate_timestamp(timestamp, f"Trade-{symbol}")
+        
         price = trade_data['price']
         size = trade_data['size']
         conditions = trade_data.get('conditions', [])
@@ -409,7 +444,8 @@ async def test_tick_flow():
     from polygon import PolygonWebSocketClient
     
     print("=== TICK FLOW ANALYZER TEST ===")
-    print("Analyzing real-time order flow for momentum detection\n")
+    print("Analyzing real-time order flow for momentum detection")
+    print(f"Current UTC time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
     
     # Test configuration
     TEST_SYMBOLS = ['TSLA', 'AAPL', 'SPY']
@@ -449,7 +485,7 @@ async def test_tick_flow():
             
             print(f"\n{color_code}{'='*60}\033[0m")
             print(f"{emoji} {signal.symbol} - Signal: {signal.signal} (Strength: {signal.strength:.0f}%)")
-            print(f"Time: {signal.timestamp.strftime('%H:%M:%S.%f')[:-3]}")
+            print(f"Time: {signal.timestamp.strftime('%H:%M:%S.%f UTC')[:-3]}")
             print(f"Reason: {signal.reason}")
             
             # Display key metrics
@@ -497,6 +533,7 @@ async def test_tick_flow():
             if time.time() - last_stats_time >= 30:
                 stats = analyzer.get_statistics()
                 print(f"\n📊 Stats: {stats['trades_processed']} trades, {stats['signals_generated']} signals")
+                print(f"   Time: {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}")
                 last_stats_time = time.time()
             
             # Show countdown
@@ -511,6 +548,7 @@ async def test_tick_flow():
         print(f"  • Total trades processed: {stats['trades_processed']}")
         print(f"  • Signals generated: {stats['signals_generated']}")
         print(f"  • Symbols tracked: {', '.join(stats['active_symbols'])}")
+        print(f"  • End time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         
         # Signal summary
         if signal_history:
@@ -522,6 +560,13 @@ async def test_tick_flow():
             print(f"  • Bullish: {len(bull_signals)} ({len(bull_signals)/len(signal_history)*100:.0f}%)")
             print(f"  • Bearish: {len(bear_signals)} ({len(bear_signals)/len(signal_history)*100:.0f}%)")
             print(f"  • Neutral: {len(neutral_signals)} ({len(neutral_signals)/len(signal_history)*100:.0f}%)")
+            
+            # Time range of signals
+            if signal_history:
+                first_signal_time = min(s.timestamp for s in signal_history)
+                last_signal_time = max(s.timestamp for s in signal_history)
+                print(f"\n  • First signal: {first_signal_time.strftime('%H:%M:%S UTC')}")
+                print(f"  • Last signal: {last_signal_time.strftime('%H:%M:%S UTC')}")
         
         # Cancel listen task
         listen_task.cancel()
@@ -538,7 +583,8 @@ async def test_tick_flow():
 
 
 if __name__ == "__main__":
-    print("Starting Tick Flow Analyzer")
-    print("This module detects immediate momentum from order flow\n")
+    print(f"Starting Tick Flow Analyzer at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print("This module detects immediate momentum from order flow")
+    print("All timestamps are in UTC\n")
     
     asyncio.run(test_tick_flow())

@@ -1,7 +1,7 @@
 # modules/ui/dashboards/entry_dashboard.py
 """
-Module: Entry Dashboard for Multi-Timeframe Statistical Trend Analysis
-Purpose: Real-time display of 1-min, 5-min, and 15-min trend signals
+Module: Entry Dashboard for Multi-Timeframe Statistical Trend and Order Flow Analysis
+Purpose: Real-time display of trend signals and volume/order flow analysis
 UI Framework: PyQt6 with PyQtGraph
 Features: WebSocket integration, Conditional formatting, Live updates, Historical data loading
 """
@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QTableWidget, QTableWidgetItem,
     QHeaderView, QGroupBox, QSplitter, QFrame, QGridLayout,
-    QProgressBar, QComboBox
+    QProgressBar, QComboBox, QTabWidget, QScrollArea
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, pyqtSlot
 from PyQt6.QtGui import QFont, QColor, QBrush, QPalette
@@ -40,6 +40,12 @@ from modules.calculations.trend.statistical_trend_1min import StatisticalTrend1M
 from modules.calculations.trend.statistical_trend_5min import StatisticalTrend5Min, PositionSignal5Min
 from modules.calculations.trend.statistical_trend_15min import StatisticalTrend15Min, MarketRegimeSignal
 
+# Import volume/order flow calculators
+from modules.calculations.order_flow.trade_size_distro import TradeSizeDistribution, TradeSizeSignal, Trade
+from modules.calculations.volume.tick_flow import TickFlowAnalyzer
+from modules.calculations.volume.volume_analysis_1min import VolumeAnalysis1Min
+from modules.calculations.volume.market_context import MarketContext
+
 # Import Polygon data fetcher
 from polygon import DataFetcher
 
@@ -49,11 +55,19 @@ logger = logging.getLogger(__name__)
 
 
 class TrendWorker(QThread):
-    """Background thread for running trend calculations"""
-    # Signals for UI updates
+    """Background thread for running all calculations"""
+    # Signals for UI updates - Trend
     signal_1min = pyqtSignal(object)  # ScalperSignal
     signal_5min = pyqtSignal(object)  # PositionSignal5Min
     signal_15min = pyqtSignal(object)  # MarketRegimeSignal
+    
+    # Signals for UI updates - Volume/Order Flow
+    trade_size_signal = pyqtSignal(object)  # TradeSizeSignal
+    tick_flow_signal = pyqtSignal(object)   # VolumeSignal from tick_flow
+    volume_1min_signal = pyqtSignal(object) # VolumeSignal from volume_1min
+    market_context_signal = pyqtSignal(object) # VolumeSignal from market_context
+    
+    # General signals
     error_signal = pyqtSignal(str)
     status_signal = pyqtSignal(str)
     progress_signal = pyqtSignal(int)  # Progress percentage
@@ -83,6 +97,36 @@ class TrendWorker(QThread):
             medium_lookback=5,
             long_lookback=10,
             calculation_interval=60
+        )
+        
+        # Volume/Order Flow calculators
+        self.trade_size_calc = TradeSizeDistribution(
+            large_trade_threshold=1000,
+            buffer_size=500,
+            historical_lookback=20,
+            zscore_threshold=2.0,
+            premarket_adjustment=True
+        )
+        
+        self.tick_flow_calc = TickFlowAnalyzer(
+            buffer_size=200,
+            large_trade_multiplier=3.0,
+            momentum_threshold=60.0,
+            min_trades_required=50
+        )
+        
+        self.volume_1min_calc = VolumeAnalysis1Min(
+            lookback_bars=14,
+            absorption_threshold=0.1,
+            efficiency_threshold=0.5,
+            volume_imbalance_threshold=65.0
+        )
+        
+        self.market_context_calc = MarketContext(
+            lookback_bars=10,
+            vwap_deviation_threshold=0.5,
+            volume_surge_threshold=1.5,
+            delta_imbalance_threshold=100000
         )
         
         # Data fetcher
@@ -150,7 +194,7 @@ class TrendWorker(QThread):
             
             self.progress_signal.emit(30)
             
-            # Load 5-minute data (need at least 50 minutes for long lookback)
+            # Load 5-minute data
             self.status_signal.emit("Loading 5-minute data...")
             start_5min = end_time - timedelta(hours=2)
             
@@ -181,7 +225,6 @@ class TrendWorker(QThread):
                     if signal:
                         last_signal = signal
                         
-                # Emit the last valid signal
                 if last_signal:
                     self.signal_5min.emit(last_signal)
                     
@@ -189,7 +232,7 @@ class TrendWorker(QThread):
             
             self.progress_signal.emit(60)
             
-            # Load 15-minute data (need at least 150 minutes for long lookback)
+            # Load 15-minute data
             self.status_signal.emit("Loading 15-minute data...")
             start_15min = end_time - timedelta(hours=4)
             
@@ -220,7 +263,6 @@ class TrendWorker(QThread):
                     if signal:
                         last_signal = signal
                         
-                # Emit the last valid signal
                 if last_signal:
                     self.signal_15min.emit(last_signal)
                     
@@ -228,7 +270,11 @@ class TrendWorker(QThread):
             
             self.progress_signal.emit(80)
             
-            # Step 2: Start WebSocket monitoring with a unified callback
+            # Initialize volume/order flow calculators with historical trades if available
+            # Note: In production, you'd load actual historical trade data here
+            self.status_signal.emit("Initializing order flow analyzers...")
+            
+            # Step 2: Start WebSocket monitoring with both channels
             self.status_signal.emit(f"Starting real-time monitoring for {self.symbol}...")
             
             # Import WebSocket client
@@ -238,15 +284,15 @@ class TrendWorker(QThread):
             self.ws_client = PolygonWebSocketClient()
             await self.ws_client.connect()
             
-            # Subscribe to minute aggregates
+            # Subscribe to BOTH minute aggregates AND trades
             await self.ws_client.subscribe(
                 symbols=[self.symbol],
-                channels=['AM'],  # Aggregate Minute channel
+                channels=['AM', 'T'],  # Aggregate Minutes AND Trades
                 callback=self._handle_unified_websocket_data
             )
             
             self.progress_signal.emit(100)
-            self.status_signal.emit(f"Connected - Monitoring {self.symbol}")
+            self.status_signal.emit(f"Connected - Monitoring {self.symbol} (Trends + Order Flow)")
             
             # Start periodic calculation loops for each timeframe
             self.calc_1min_task = asyncio.create_task(self._run_1min_calculations())
@@ -261,13 +307,13 @@ class TrendWorker(QThread):
             logger.error(f"Monitoring error: {e}", exc_info=True)
             
     async def _handle_unified_websocket_data(self, data: Dict):
-        """Handle incoming WebSocket data for all timeframes"""
+        """Handle incoming WebSocket data for all calculators"""
         try:
             event_type = data.get('event_type')
             symbol = data.get('symbol')
             
             if event_type == 'aggregate' and symbol == self.symbol:
-                # Extract bar data
+                # Existing minute bar handling for trend calculators
                 timestamp = datetime.fromtimestamp(data['timestamp'] / 1000, tz=timezone.utc)
                 
                 # Always update 1-minute with new data
@@ -349,6 +395,31 @@ class TrendWorker(QThread):
                         self.aggregating_15min['volume'] += data['volume']
                         self.aggregating_15min['bar_count'] += 1
                         
+            elif event_type == 'trade' and symbol == self.symbol:
+                # NEW: Route trade data to all volume/order flow calculators
+                
+                # Trade Size Distribution
+                trade_obj = Trade(
+                    symbol=symbol,
+                    price=data['price'],
+                    size=data['size'],
+                    timestamp=datetime.fromtimestamp(data['timestamp'] / 1000, tz=timezone.utc)
+                )
+                signal = self.trade_size_calc.process_trade(trade_obj)
+                if signal and (signal.bull_score >= 2 or signal.bear_score >= 2):
+                    self.trade_size_signal.emit(signal)
+                
+                # Tick Flow Analysis
+                signal = self.tick_flow_calc.process_trade(symbol, data)
+                if signal:
+                    self.tick_flow_signal.emit(signal)
+                
+                # 1-Minute Volume Analysis
+                self.volume_1min_calc.process_trade(symbol, data)
+                
+                # 15-Minute Market Context
+                self.market_context_calc.process_trade(symbol, data)
+                
         except Exception as e:
             logger.error(f"Error handling WebSocket data: {e}", exc_info=True)
             
@@ -829,6 +900,424 @@ class TimeframeWidget(QGroupBox):
             return QColor(150, 150, 150)
 
 
+class OrderFlowWidget(QGroupBox):
+    """Widget for displaying order flow/volume analysis"""
+    
+    def __init__(self, title: str, signal_type: str):
+        super().__init__(title)
+        self.signal_type = signal_type
+        self.has_initial_signal = False
+        self.init_ui()
+        
+    def init_ui(self):
+        """Initialize the UI"""
+        layout = QVBoxLayout()
+        
+        # Signal indicator
+        self.signal_frame = QFrame()
+        self.signal_frame.setFrameStyle(QFrame.Shape.Box)
+        self.signal_frame.setFixedHeight(60)
+        signal_layout = QVBoxLayout(self.signal_frame)
+        
+        self.signal_label = QLabel("WAITING FOR DATA...")
+        self.signal_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.signal_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        signal_layout.addWidget(self.signal_label)
+        
+        self.strength_label = QLabel("")
+        self.strength_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        signal_layout.addWidget(self.strength_label)
+        
+        layout.addWidget(self.signal_frame)
+        
+        # Data table
+        columns = ["Metric", "Value"]
+        self.table = TrendTable(columns)
+        
+        # Set different row counts based on signal type
+        if self.signal_type == "trade_size":
+            self.table.setRowCount(12)
+        elif self.signal_type == "tick_flow":
+            self.table.setRowCount(10)
+        elif self.signal_type == "volume_1min":
+            self.table.setRowCount(8)
+        else:  # market_context
+            self.table.setRowCount(10)
+            
+        layout.addWidget(self.table)
+        
+        # Additional info area
+        self.info_label = QLabel("")
+        self.info_label.setWordWrap(True)
+        self.info_label.setMaximumHeight(50)
+        layout.addWidget(self.info_label)
+        
+        self.setLayout(layout)
+        
+        # Set loading state colors
+        self.signal_frame.setStyleSheet("background-color: #2a2a3a;")
+        self.signal_label.setStyleSheet("color: #999999;")
+        
+    def update_trade_size_signal(self, signal: TradeSizeSignal):
+        """Update trade size distribution display"""
+        if not signal:
+            return
+            
+        self.has_initial_signal = True
+        
+        # Update signal indicator
+        self.signal_label.setText(signal.signal_type)
+        self.strength_label.setText(f"Confidence: {signal.confidence:.1%}")
+        
+        # Color based on signal
+        if signal.bull_score == 2:
+            self.signal_frame.setStyleSheet("background-color: #0a4f0a;")
+            self.signal_label.setStyleSheet("color: #00ff00;")
+        elif signal.bull_score == 1:
+            self.signal_frame.setStyleSheet("background-color: #0a3a0a;")
+            self.signal_label.setStyleSheet("color: #00cc00;")
+        elif signal.bear_score == 2:
+            self.signal_frame.setStyleSheet("background-color: #4f0a0a;")
+            self.signal_label.setStyleSheet("color: #ff0000;")
+        elif signal.bear_score == 1:
+            self.signal_frame.setStyleSheet("background-color: #3a0a0a;")
+            self.signal_label.setStyleSheet("color: #cc0000;")
+        else:
+            self.signal_frame.setStyleSheet("background-color: #2a2a2a;")
+            self.signal_label.setStyleSheet("color: #cccccc;")
+        
+        # Update table
+        row = 0
+        self.table.set_row_data(row, "Price", f"${signal.current_price:.2f}", bold=True)
+        row += 1
+        
+        # Main signal
+        bull_bear = f"Bull: {signal.bull_score} / Bear: {signal.bear_score}"
+        color = QColor(0, 255, 0) if signal.bull_score > signal.bear_score else QColor(255, 0, 0)
+        self.table.set_row_data(row, "Signal", bull_bear, color, bold=True)
+        row += 1
+        
+        # Components
+        c = signal.components
+        self.table.set_row_data(row, "VW Ratio", f"{c.volume_weighted_ratio:.1%}",
+                               self._get_ratio_color(c.volume_weighted_ratio))
+        row += 1
+        
+        self.table.set_row_data(row, "Z-Score", f"{c.zscore:.2f}",
+                               self._get_zscore_color(c.zscore))
+        row += 1
+        
+        self.table.set_row_data(row, "Direction", f"{c.large_direction_ratio:+.2f}",
+                               self._get_direction_value_color(c.large_direction_ratio))
+        row += 1
+        
+        self.table.set_row_data(row, "Inst Score", f"{c.institutional_score:.0%}")
+        row += 1
+        
+        self.table.set_row_data(row, "Avg Size", f"{c.avg_trade_size:.0f}")
+        row += 1
+        
+        self.table.set_row_data(row, "Large Vol", f"{c.large_volume:,.0f}")
+        row += 1
+        
+        self.table.set_row_data(row, "Total Vol", f"{c.total_volume:,.0f}")
+        row += 1
+        
+        self.table.set_row_data(row, "Blocks", f"{c.block_sequences}")
+        row += 1
+        
+        self.table.set_row_data(row, "Icebergs", f"{c.iceberg_candidates}")
+        row += 1
+        
+        self.table.set_row_data(row, "Trades", f"{signal.trade_count}")
+        
+        # Update info
+        self.info_label.setText(f"Reason: {signal.reason}")
+        
+    def update_tick_flow_signal(self, signal):
+        """Update tick flow display"""
+        if not signal:
+            return
+            
+        self.has_initial_signal = True
+        
+        # Update signal indicator
+        self.signal_label.setText(signal.signal)
+        self.strength_label.setText(f"Strength: {signal.strength:.0f}%")
+        
+        # Color based on signal
+        if signal.signal == "BULLISH":
+            self.signal_frame.setStyleSheet("background-color: #0a3a0a;")
+            self.signal_label.setStyleSheet("color: #00cc00;")
+        elif signal.signal == "BEARISH":
+            self.signal_frame.setStyleSheet("background-color: #3a0a0a;")
+            self.signal_label.setStyleSheet("color: #cc0000;")
+        else:
+            self.signal_frame.setStyleSheet("background-color: #2a2a2a;")
+            self.signal_label.setStyleSheet("color: #cccccc;")
+        
+        # Update table
+        m = signal.metrics
+        row = 0
+        
+        self.table.set_row_data(row, "Buy Volume", f"{m['buy_volume_pct']:.1f}%",
+                               self._get_buy_pct_color(m['buy_volume_pct']))
+        row += 1
+        
+        self.table.set_row_data(row, "Buy/Sell", f"{m['buy_trades']}/{m['sell_trades']}")
+        row += 1
+        
+        self.table.set_row_data(row, "Volume", f"{m['buy_volume']:,.0f} / {m['sell_volume']:,.0f}")
+        row += 1
+        
+        self.table.set_row_data(row, "Large Buys", f"{m['large_buy_trades']}")
+        row += 1
+        
+        self.table.set_row_data(row, "Large Sells", f"{m['large_sell_trades']}")
+        row += 1
+        
+        self.table.set_row_data(row, "Trade Rate", f"{m['trade_rate']:.1f}/sec")
+        row += 1
+        
+        self.table.set_row_data(row, "Momentum", f"{m['momentum_score']:+.1f}",
+                               self._get_momentum_color(m['momentum_score']))
+        row += 1
+        
+        self.table.set_row_data(row, "Price Trend", m['price_trend'].upper())
+        row += 1
+        
+        self.table.set_row_data(row, "Avg Size", f"{m['avg_trade_size']:.0f}")
+        row += 1
+        
+        self.table.set_row_data(row, "Total Trades", f"{m['total_trades']}")
+        
+        # Update info
+        self.info_label.setText(f"Reason: {signal.reason}")
+        
+    def update_volume_1min_signal(self, signal):
+        """Update 1-minute volume analysis display"""
+        if not signal:
+            return
+            
+        self.has_initial_signal = True
+        
+        # Update signal indicator
+        self.signal_label.setText(signal.signal)
+        self.strength_label.setText(f"Strength: {signal.strength:.0f}%")
+        
+        # Color based on signal
+        if signal.signal == "BULLISH":
+            self.signal_frame.setStyleSheet("background-color: #0a3a0a;")
+            self.signal_label.setStyleSheet("color: #00cc00;")
+        elif signal.signal == "BEARISH":
+            self.signal_frame.setStyleSheet("background-color: #3a0a0a;")
+            self.signal_label.setStyleSheet("color: #cc0000;")
+        else:
+            self.signal_frame.setStyleSheet("background-color: #2a2a2a;")
+            self.signal_label.setStyleSheet("color: #cccccc;")
+        
+        # Update table
+        m = signal.metrics
+        row = 0
+        
+        self.table.set_row_data(row, "Buy Volume", f"{m['buy_volume_pct']:.1f}%",
+                               self._get_buy_pct_color(m['buy_volume_pct']))
+        row += 1
+        
+        self.table.set_row_data(row, "Efficiency", f"{m['volume_efficiency']:.2f}")
+        row += 1
+        
+        self.table.set_row_data(row, "Rel Volume", f"{m['relative_volume']:.1f}x")
+        row += 1
+        
+        self.table.set_row_data(row, "Bar Strength", f"{m['bar_strength']:.0f}",
+                               self._get_strength_color(m['bar_strength']))
+        row += 1
+        
+        absorption = "YES" if m['absorption_detected'] else "NO"
+        color = QColor(255, 150, 0) if m['absorption_detected'] else QColor(150, 150, 150)
+        self.table.set_row_data(row, "Absorption", absorption, color)
+        row += 1
+        
+        self.table.set_row_data(row, "Volume Trend", m['volume_trend'].upper())
+        row += 1
+        
+        # Fill remaining rows
+        while row < self.table.rowCount():
+            self.table.set_row_data(row, "", "")
+            row += 1
+        
+        # Update info
+        self.info_label.setText(f"Reason: {signal.reason}")
+        
+    def update_market_context_signal(self, signal):
+        """Update market context display"""
+        if not signal:
+            return
+            
+        self.has_initial_signal = True
+        
+        # Update signal indicator
+        self.signal_label.setText(signal.signal)
+        self.strength_label.setText(f"Strength: {signal.strength:.0f}%")
+        
+        # Color based on signal
+        if signal.signal == "BULLISH":
+            self.signal_frame.setStyleSheet("background-color: #0a3a0a;")
+            self.signal_label.setStyleSheet("color: #00cc00;")
+        elif signal.signal == "BEARISH":
+            self.signal_frame.setStyleSheet("background-color: #3a0a0a;")
+            self.signal_label.setStyleSheet("color: #cc0000;")
+        else:
+            self.signal_frame.setStyleSheet("background-color: #2a2a2a;")
+            self.signal_label.setStyleSheet("color: #cccccc;")
+        
+        # Update table
+        m = signal.metrics
+        row = 0
+        
+        self.table.set_row_data(row, "Price vs VWAP", f"{m['price_vs_vwap']:+.2f}%",
+                               self._get_vwap_color(m['price_vs_vwap']))
+        row += 1
+        
+        self.table.set_row_data(row, "Cum Delta", f"{m['cumulative_delta']:+,.0f}",
+                               self._get_delta_color(m['cumulative_delta']))
+        row += 1
+        
+        self.table.set_row_data(row, "Rel Volume", f"{m['relative_volume']:.1f}x")
+        row += 1
+        
+        self.table.set_row_data(row, "Volume Trend", m['volume_trend'].upper())
+        row += 1
+        
+        self.table.set_row_data(row, "Market Phase", m['market_phase'].upper())
+        row += 1
+        
+        self.table.set_row_data(row, "Regime", m['regime'].upper(),
+                               self._get_regime_color(m['regime']))
+        row += 1
+        
+        self.table.set_row_data(row, "Trend Str", f"{m['trend_strength']:.0f}",
+                               self._get_strength_color(m['trend_strength']))
+        row += 1
+        
+        self.table.set_row_data(row, "Inst Activity", f"{m['institutional_activity']:.0f}%")
+        row += 1
+        
+        # Fill remaining rows
+        while row < self.table.rowCount():
+            self.table.set_row_data(row, "", "")
+            row += 1
+        
+        # Update info
+        self.info_label.setText(f"Reason: {signal.reason}")
+        
+    def _get_ratio_color(self, ratio: float) -> QColor:
+        """Get color for volume ratio"""
+        if ratio > 0.3:
+            return QColor(255, 0, 0)  # Very high
+        elif ratio > 0.2:
+            return QColor(255, 150, 0)  # High
+        elif ratio > 0.15:
+            return QColor(255, 255, 0)  # Normal
+        else:
+            return QColor(150, 150, 150)  # Low
+            
+    def _get_zscore_color(self, zscore: float) -> QColor:
+        """Get color for z-score"""
+        if abs(zscore) > 2:
+            return QColor(255, 0, 0)  # Significant
+        elif abs(zscore) > 1:
+            return QColor(255, 150, 0)  # Notable
+        else:
+            return QColor(150, 150, 150)  # Normal
+            
+    def _get_direction_value_color(self, value: float) -> QColor:
+        """Get color for direction value"""
+        if value > 0.3:
+            return QColor(0, 255, 0)
+        elif value > 0:
+            return QColor(0, 200, 0)
+        elif value < -0.3:
+            return QColor(255, 0, 0)
+        elif value < 0:
+            return QColor(200, 0, 0)
+        else:
+            return QColor(150, 150, 150)
+            
+    def _get_buy_pct_color(self, pct: float) -> QColor:
+        """Get color for buy percentage"""
+        if pct > 65:
+            return QColor(0, 255, 0)
+        elif pct > 55:
+            return QColor(0, 200, 0)
+        elif pct < 35:
+            return QColor(255, 0, 0)
+        elif pct < 45:
+            return QColor(200, 0, 0)
+        else:
+            return QColor(150, 150, 150)
+            
+    def _get_momentum_color(self, momentum: float) -> QColor:
+        """Get color for momentum score"""
+        if momentum > 50:
+            return QColor(0, 255, 0)
+        elif momentum > 20:
+            return QColor(0, 200, 0)
+        elif momentum < -50:
+            return QColor(255, 0, 0)
+        elif momentum < -20:
+            return QColor(200, 0, 0)
+        else:
+            return QColor(150, 150, 150)
+            
+    def _get_strength_color(self, strength: float) -> QColor:
+        """Get color for strength value"""
+        if strength >= 70:
+            return QColor(0, 255, 0)
+        elif strength >= 50:
+            return QColor(255, 255, 0)
+        elif strength >= 30:
+            return QColor(255, 150, 0)
+        else:
+            return QColor(150, 150, 150)
+            
+    def _get_vwap_color(self, vwap_diff: float) -> QColor:
+        """Get color for VWAP difference"""
+        if vwap_diff > 0.5:
+            return QColor(0, 255, 0)
+        elif vwap_diff > 0:
+            return QColor(0, 200, 0)
+        elif vwap_diff < -0.5:
+            return QColor(255, 0, 0)
+        elif vwap_diff < 0:
+            return QColor(200, 0, 0)
+        else:
+            return QColor(150, 150, 150)
+            
+    def _get_delta_color(self, delta: float) -> QColor:
+        """Get color for cumulative delta"""
+        if delta > 100000:
+            return QColor(0, 255, 0)
+        elif delta > 0:
+            return QColor(0, 200, 0)
+        elif delta < -100000:
+            return QColor(255, 0, 0)
+        elif delta < 0:
+            return QColor(200, 0, 0)
+        else:
+            return QColor(150, 150, 150)
+            
+    def _get_regime_color(self, regime: str) -> QColor:
+        """Get color for market regime"""
+        if regime.lower() == "trending":
+            return QColor(0, 200, 200)
+        elif regime.lower() == "volatile":
+            return QColor(255, 150, 0)
+        else:
+            return QColor(150, 150, 150)
+
+
 class EntryDashboard(QMainWindow):
     """Main dashboard window"""
     
@@ -841,8 +1330,8 @@ class EntryDashboard(QMainWindow):
         
     def init_ui(self):
         """Initialize the UI"""
-        self.setWindowTitle("Entry Dashboard - Multi-Timeframe Statistical Trends")
-        self.setGeometry(100, 100, 1400, 800)
+        self.setWindowTitle("Entry Dashboard - Trends & Order Flow Analysis")
+        self.setGeometry(100, 100, 1600, 900)
         
         # Central widget
         central_widget = QWidget()
@@ -888,22 +1377,50 @@ class EntryDashboard(QMainWindow):
         line.setFrameShadow(QFrame.Shadow.Sunken)
         main_layout.addWidget(line)
         
-        # Main content area - three timeframes
-        content_layout = QHBoxLayout()
+        # Main content area - Tab widget
+        self.tab_widget = QTabWidget()
+        
+        # Tab 1: Trend Analysis
+        trend_widget = QWidget()
+        trend_layout = QHBoxLayout(trend_widget)
         
         # 1-minute widget
         self.widget_1min = TimeframeWidget("1-Minute Scalper Signals", "1min")
-        content_layout.addWidget(self.widget_1min)
+        trend_layout.addWidget(self.widget_1min)
         
         # 5-minute widget
         self.widget_5min = TimeframeWidget("5-Minute Position Signals", "5min")
-        content_layout.addWidget(self.widget_5min)
+        trend_layout.addWidget(self.widget_5min)
         
         # 15-minute widget
         self.widget_15min = TimeframeWidget("15-Minute Market Regime", "15min")
-        content_layout.addWidget(self.widget_15min)
+        trend_layout.addWidget(self.widget_15min)
         
-        main_layout.addLayout(content_layout)
+        self.tab_widget.addTab(trend_widget, "Trend Analysis")
+        
+        # Tab 2: Order Flow Analysis
+        order_flow_widget = QWidget()
+        order_flow_layout = QGridLayout(order_flow_widget)
+        
+        # Trade Size Distribution
+        self.widget_trade_size = OrderFlowWidget("Trade Size Distribution", "trade_size")
+        order_flow_layout.addWidget(self.widget_trade_size, 0, 0)
+        
+        # Tick Flow
+        self.widget_tick_flow = OrderFlowWidget("Tick Flow Analysis", "tick_flow")
+        order_flow_layout.addWidget(self.widget_tick_flow, 0, 1)
+        
+        # 1-Min Volume
+        self.widget_volume_1min = OrderFlowWidget("1-Min Volume Analysis", "volume_1min")
+        order_flow_layout.addWidget(self.widget_volume_1min, 1, 0)
+        
+        # Market Context
+        self.widget_market_context = OrderFlowWidget("15-Min Market Context", "market_context")
+        order_flow_layout.addWidget(self.widget_market_context, 1, 1)
+        
+        self.tab_widget.addTab(order_flow_widget, "Order Flow Analysis")
+        
+        main_layout.addWidget(self.tab_widget)
         
         # Bottom info bar
         self.info_bar = QLabel("Enter a symbol and click 'Start Monitoring' to begin")
@@ -975,6 +1492,18 @@ class EntryDashboard(QMainWindow):
                 background-color: #0d7377;
                 border-radius: 3px;
             }
+            QTabWidget::pane {
+                border: 1px solid #444;
+                background-color: #2a2a2a;
+            }
+            QTabBar::tab {
+                background-color: #3a3a3a;
+                padding: 8px 16px;
+                margin-right: 2px;
+            }
+            QTabBar::tab:selected {
+                background-color: #0d7377;
+            }
         """)
         
     def start_monitoring(self):
@@ -1002,10 +1531,18 @@ class EntryDashboard(QMainWindow):
             self.worker = TrendWorker()
             self.worker.set_symbol(symbol)
             
-            # Connect signals
+            # Connect trend signals
             self.worker.signal_1min.connect(self.update_1min)
             self.worker.signal_5min.connect(self.update_5min)
             self.worker.signal_15min.connect(self.update_15min)
+            
+            # Connect order flow signals
+            self.worker.trade_size_signal.connect(self.update_trade_size)
+            self.worker.tick_flow_signal.connect(self.update_tick_flow)
+            self.worker.volume_1min_signal.connect(self.update_volume_1min)
+            self.worker.market_context_signal.connect(self.update_market_context)
+            
+            # Connect general signals
             self.worker.error_signal.connect(self.handle_error)
             self.worker.status_signal.connect(self.update_status)
             self.worker.progress_signal.connect(self.update_progress)
@@ -1033,6 +1570,7 @@ class EntryDashboard(QMainWindow):
         self.info_bar.setText("Monitoring stopped")
         self.progress_bar.setVisible(False)
         
+    # Trend update slots
     @pyqtSlot(object)
     def update_1min(self, signal: ScalperSignal):
         """Update 1-minute display"""
@@ -1047,6 +1585,27 @@ class EntryDashboard(QMainWindow):
     def update_15min(self, signal: MarketRegimeSignal):
         """Update 15-minute display"""
         self.widget_15min.update_15min_signal(signal)
+        
+    # Order flow update slots
+    @pyqtSlot(object)
+    def update_trade_size(self, signal: TradeSizeSignal):
+        """Update trade size distribution display"""
+        self.widget_trade_size.update_trade_size_signal(signal)
+        
+    @pyqtSlot(object)
+    def update_tick_flow(self, signal):
+        """Update tick flow display"""
+        self.widget_tick_flow.update_tick_flow_signal(signal)
+        
+    @pyqtSlot(object)
+    def update_volume_1min(self, signal):
+        """Update 1-minute volume display"""
+        self.widget_volume_1min.update_volume_1min_signal(signal)
+        
+    @pyqtSlot(object)
+    def update_market_context(self, signal):
+        """Update market context display"""
+        self.widget_market_context.update_market_context_signal(signal)
         
     @pyqtSlot(str)
     def handle_error(self, error_msg: str):
@@ -1063,7 +1622,7 @@ class EntryDashboard(QMainWindow):
         if "Connected" in status_msg:
             self.status_label.setStyleSheet("color: #00cc00;")
             self.progress_bar.setVisible(False)
-            self.info_bar.setText(f"Monitoring {self.current_symbol} - Updates: 1-min (15s), 5-min (30s), 15-min (60s)")
+            self.info_bar.setText(f"Monitoring {self.current_symbol} - Trends + Order Flow Analysis")
         else:
             self.status_label.setStyleSheet("color: #ffcc00;")
             

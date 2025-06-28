@@ -4,6 +4,7 @@ Module: 1-Minute Volume Analysis
 Purpose: Confirm if volume is creating real price movement or absorption
 Features: Buy/sell volume aggregation, absorption detection, efficiency metrics
 Output: BULLISH/BEARISH/NEUTRAL signals based on volume effectiveness
+Time Handling: All timestamps in UTC
 """
 
 import asyncio
@@ -14,13 +15,30 @@ from dataclasses import dataclass, field
 from collections import deque, defaultdict
 import logging
 import time
+import os
+import time as time_module
 
-# Configure logging
+# Enforce UTC for all operations
+os.environ['TZ'] = 'UTC'
+if hasattr(time_module, 'tzset'):
+    time_module.tzset()
+
+# Configure logging with UTC
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s UTC - %(name)s - %(levelname)s - %(message)s'
 )
+logging.Formatter.converter = time_module.gmtime  # Force UTC in logs
 logger = logging.getLogger(__name__)
+
+# UTC validation function
+def ensure_utc(dt: datetime) -> datetime:
+    """Ensure datetime is UTC-aware"""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    elif dt.tzinfo != timezone.utc:
+        return dt.astimezone(timezone.utc)
+    return dt
 
 
 @dataclass
@@ -72,6 +90,7 @@ class VolumeSignal:
 class VolumeAnalysis1Min:
     """
     1-Minute volume analyzer for confirming price movement
+    All timestamps are in UTC.
     """
     
     def __init__(self,
@@ -108,6 +127,20 @@ class VolumeAnalysis1Min:
         self.bars_processed = 0
         self.signals_generated = 0
         
+        logger.info(f"1-Minute Volume Analyzer initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        logger.info(f"Settings: lookback={lookback_bars}, absorption={absorption_threshold}%, "
+                   f"efficiency={efficiency_threshold}, imbalance={volume_imbalance_threshold}%")
+    
+    def _validate_timestamp(self, timestamp: datetime, source: str) -> datetime:
+        """Validate and ensure timestamp is UTC"""
+        if timestamp.tzinfo is None:
+            logger.warning(f"{source}: Naive datetime received, assuming UTC")
+            return timestamp.replace(tzinfo=timezone.utc)
+        elif timestamp.tzinfo != timezone.utc:
+            logger.warning(f"{source}: Non-UTC timezone {timestamp.tzinfo}, converting to UTC")
+            return timestamp.astimezone(timezone.utc)
+        return timestamp
+        
     def process_trade(self, symbol: str, trade_data: Dict):
         """
         Process incoming trade data and aggregate into minute bars
@@ -122,8 +155,10 @@ class VolumeAnalysis1Min:
             self.current_bar_trades[symbol] = []
             self.large_trade_sizes[symbol] = 0
             
-        # Get trade time and minute
+        # Get trade time and ensure UTC
         trade_time = datetime.fromtimestamp(trade_data['timestamp'] / 1000, tz=timezone.utc)
+        trade_time = self._validate_timestamp(trade_time, f"Trade-{symbol}")
+        
         minute_start = trade_time.replace(second=0, microsecond=0)
         
         # Check if this is a new minute
@@ -217,7 +252,7 @@ class VolumeAnalysis1Min:
         self.minute_bars[symbol].append(bar)
         self.bars_processed += 1
         
-        print(f"\n✓ Bar completed for {symbol} at {bar_time.strftime('%H:%M:%S')}")
+        print(f"\n✓ Bar completed for {symbol} at {bar_time.strftime('%H:%M:%S UTC')}")
         print(f"  OHLC: {open_price:.2f}/{high_price:.2f}/{low_price:.2f}/{close_price:.2f}")
         print(f"  Volume: {total_volume:,.0f} ({buy_volume:,.0f} buy / {sell_volume:,.0f} sell)")
         
@@ -482,7 +517,8 @@ async def test_volume_1min():
     from polygon import PolygonWebSocketClient
     
     print("=== 1-MINUTE VOLUME ANALYZER TEST ===")
-    print("Analyzing volume effectiveness and absorption patterns\n")
+    print("Analyzing volume effectiveness and absorption patterns")
+    print(f"Current UTC time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
     
     # Test configuration
     TEST_SYMBOLS = ['TSLA', 'AAPL', 'SPY']
@@ -535,7 +571,8 @@ async def test_volume_1min():
                     
                     print(f"\n{color_code}{'='*60}\033[0m")
                     print(f"{emoji} {signal.symbol} - Signal: {signal.signal} (Strength: {signal.strength:.0f}%)")
-                    print(f"Time: {bar_time.strftime('%H:%M')} bar completed")
+                    print(f"Time: {bar_time.strftime('%H:%M UTC')} bar completed")
+                    print(f"Signal Generated: {signal.timestamp.strftime('%H:%M:%S UTC')}")
                     print(f"Reason: {signal.reason}")
                     
                     # Display bar details
@@ -578,7 +615,8 @@ async def test_volume_1min():
         print("✓ Subscribed successfully")
         
         print(f"\n⏰ Running for {TEST_DURATION} seconds...")
-        print("Waiting for minute bars to complete...\n")
+        print("Waiting for minute bars to complete...")
+        print("Note: New bars complete at the start of each minute (:00 seconds)\n")
         
         # Create listen task
         listen_task = asyncio.create_task(ws_client.listen())
@@ -594,6 +632,7 @@ async def test_volume_1min():
             if time.time() - last_stats_time >= 60:
                 stats = analyzer.get_statistics()
                 print(f"\n📊 Stats: {stats['bars_processed']} bars completed")
+                print(f"   Time: {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}")
                 last_stats_time = time.time()
             
             # Show countdown
@@ -608,6 +647,7 @@ async def test_volume_1min():
         print(f"  • Bars processed: {stats['bars_processed']}")
         print(f"  • Signals generated: {stats['signals_generated']}")
         print(f"  • Symbols tracked: {', '.join(stats['active_symbols'])}")
+        print(f"  • End time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         
         # Signal summary
         if signal_history:
@@ -625,6 +665,13 @@ async def test_volume_1min():
                                  if s.metrics and s.metrics.get('absorption_detected'))
             if absorption_count > 0:
                 print(f"  • Absorption detected: {absorption_count} times")
+            
+            # Time range
+            if signal_history:
+                first_signal_time = min(s.timestamp for s in signal_history)
+                last_signal_time = max(s.timestamp for s in signal_history)
+                print(f"\n  • First signal: {first_signal_time.strftime('%H:%M:%S UTC')}")
+                print(f"  • Last signal: {last_signal_time.strftime('%H:%M:%S UTC')}")
         
         # Cancel listen task
         listen_task.cancel()
@@ -641,7 +688,8 @@ async def test_volume_1min():
 
 
 if __name__ == "__main__":
-    print("Starting 1-Minute Volume Analyzer")
-    print("This module confirms if volume creates real price movement\n")
+    print(f"Starting 1-Minute Volume Analyzer at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print("This module confirms if volume creates real price movement")
+    print("All timestamps are in UTC\n")
     
     asyncio.run(test_volume_1min())

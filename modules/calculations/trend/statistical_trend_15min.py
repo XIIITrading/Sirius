@@ -21,6 +21,11 @@ import time as time_module
 from scipy import stats
 from numba import jit
 
+# Enforce UTC for all operations
+os.environ['TZ'] = 'UTC'
+if hasattr(time_module, 'tzset'):
+    time_module.tzset()
+
 # Fix import path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 calculations_dir = os.path.dirname(current_dir)
@@ -30,12 +35,22 @@ vega_root = os.path.dirname(modules_dir)
 if vega_root not in sys.path:
     sys.path.insert(0, vega_root)
 
-# Configure logging
+# Configure logging with UTC
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s UTC - %(name)s - %(levelname)s - %(message)s'
 )
+logging.Formatter.converter = time_module.gmtime  # Force UTC in logs
 logger = logging.getLogger(__name__)
+
+# UTC validation function
+def ensure_utc(dt: datetime) -> datetime:
+    """Ensure datetime is UTC-aware"""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    elif dt.tzinfo != timezone.utc:
+        return dt.astimezone(timezone.utc)
+    return dt
 
 
 @dataclass
@@ -93,6 +108,7 @@ class StatisticalTrend15Min:
     """
     15-Minute Statistical Trend Calculator for market regime analysis.
     Provides daily trading bias and major trend identification.
+    All timestamps are in UTC.
     """
     
     def __init__(self,
@@ -150,6 +166,7 @@ class StatisticalTrend15Min:
         
         logger.info(f"Initialized 15-min trend calculator: "
                    f"Short={short_lookback*15}min, Medium={medium_lookback*15}min, Long={long_lookback*15}min")
+        logger.info(f"System initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     
     def initialize_buffers(self, symbol: str):
         """Initialize data buffers for a symbol"""
@@ -174,6 +191,16 @@ class StatisticalTrend15Min:
             'R': 0.05,     # Higher measurement noise
             'K': 0.0       # Kalman gain
         }
+    
+    def _validate_timestamp(self, timestamp: datetime, source: str) -> datetime:
+        """Validate and ensure timestamp is UTC"""
+        if timestamp.tzinfo is None:
+            logger.warning(f"{source}: Naive datetime received, assuming UTC")
+            return timestamp.replace(tzinfo=timezone.utc)
+        elif timestamp.tzinfo != timezone.utc:
+            logger.warning(f"{source}: Non-UTC timezone {timestamp.tzinfo}, converting to UTC")
+            return timestamp.astimezone(timezone.utc)
+        return timestamp
     
     @staticmethod
     @jit(nopython=True)
@@ -329,8 +356,17 @@ class StatisticalTrend15Min:
         if symbol not in self.price_buffers:
             self.initialize_buffers(symbol)
         
+        # Handle timestamp with UTC enforcement
         if timestamp is None:
             timestamp = datetime.now(timezone.utc)
+        else:
+            # Ensure timestamp is UTC-aware
+            if timestamp.tzinfo is None:
+                # If naive datetime, assume UTC and make it aware
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
+            elif timestamp.tzinfo != timezone.utc:
+                # If has timezone but not UTC, convert to UTC
+                timestamp = timestamp.astimezone(timezone.utc)
         
         # Update buffers
         self.price_buffers[symbol].append(close)
@@ -759,13 +795,14 @@ class StatisticalTrend15Min:
         """Start real-time monitoring with WebSocket"""
         from polygon import DataFetcher, PolygonWebSocketClient
         
-        # Load historical data
+        # Load historical data with UTC timestamps
         logger.info(f"Loading historical 15-min data for {len(symbols)} symbols...")
         fetcher = DataFetcher()
         
         for symbol in symbols:
             try:
-                end_time = datetime.now()
+                # Use UTC explicitly
+                end_time = datetime.now(timezone.utc)
                 start_time = end_time - timedelta(hours=3)  # Load 3 hours of 15-min bars
                 
                 df = fetcher.fetch_data(
@@ -778,6 +815,8 @@ class StatisticalTrend15Min:
                 
                 if not df.empty:
                     for idx, row in df.iterrows():
+                        # Ensure index is UTC
+                        timestamp = ensure_utc(idx) if isinstance(idx, datetime) else idx
                         self.update_bar(
                             symbol=symbol,
                             open_price=row['open'],
@@ -785,7 +824,7 @@ class StatisticalTrend15Min:
                             low=row['low'],
                             close=row['close'],
                             volume=row['volume'],
-                            timestamp=idx
+                            timestamp=timestamp
                         )
                     logger.info(f"✓ Loaded {len(df)} 15-min bars for {symbol}")
                 
@@ -820,6 +859,12 @@ class StatisticalTrend15Min:
             symbol = data.get('symbol')
             
             if event_type == 'aggregate' and symbol in self.active_symbols:
+                # Validate and ensure UTC timestamp
+                timestamp = self._validate_timestamp(
+                    datetime.fromtimestamp(data['timestamp'] / 1000, tz=timezone.utc),
+                    f"WebSocket-{symbol}"
+                )
+                
                 # For testing, update on each bar
                 signal = self.update_bar(
                     symbol=symbol,
@@ -828,7 +873,7 @@ class StatisticalTrend15Min:
                     low=data['low'],
                     close=data['close'],
                     volume=data['volume'],
-                    timestamp=datetime.fromtimestamp(data['timestamp'] / 1000, tz=timezone.utc)
+                    timestamp=timestamp
                 )
                 
                 if signal:
@@ -933,11 +978,12 @@ async def run_15min_test():
         update_count += 1
         
         print(f"\n{'='*80}")
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 15-MIN REGIME UPDATE #{update_count} - {signal.symbol}")
+        print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}] 15-MIN REGIME UPDATE #{update_count} - {signal.symbol}")
         print(f"{'='*80}")
         
         # Price and regime
         print(f"💰 Price: ${signal.price:.2f}")
+        print(f"🕐 Data Time: {signal.timestamp.strftime('%H:%M:%S UTC')}")
         
         # Market regime with emoji
         regime_emoji = {
@@ -1027,11 +1073,12 @@ async def run_15min_test():
     try:
         await calculator.start_websocket(TEST_SYMBOLS, display_signal)
         
-        print(f"\n🚀 15-Minute Market Regime Monitor Started")
+        print(f"\n🚀 15-Minute Market Regime Monitor Started at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print(f"📊 Tracking {len(TEST_SYMBOLS)} symbols")
         print(f"⏱️  Timeframes: 45-min, 75-min, 150-min")
         print(f"🔄 Updates every minute")
-        print(f"⏰ Test duration: {TEST_DURATION} seconds\n")
+        print(f"⏰ Test duration: {TEST_DURATION} seconds")
+        print(f"🌍 All timestamps in UTC\n")
         
         print("📖 Regime Guide:")
         print("   BULL MARKET = Strong uptrend across timeframes")
@@ -1076,14 +1123,16 @@ async def run_15min_test():
 
 
 if __name__ == "__main__":
-    print("Starting 15-Minute Statistical Trend Calculator")
-    print("Provides market regime and daily trading bias\n")
+    print(f"Starting 15-Minute Statistical Trend Calculator at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print("Provides market regime and daily trading bias")
+    print("All timestamps are in UTC\n")
     print("Features:")
     print("• Multi-timeframe: 45/75/150 minute analysis")
     print("• Market regime detection (Bull/Bear/Range)")
     print("• Daily trading bias recommendations")
     print("• Key support/resistance levels")
     print("• Volatility state monitoring")
-    print("• Clear daily trading plan\n")
+    print("• Clear daily trading plan")
+    print("• UTC timestamp enforcement\n")
     
     asyncio.run(run_15min_test())

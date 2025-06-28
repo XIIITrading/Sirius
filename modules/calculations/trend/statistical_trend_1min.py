@@ -21,6 +21,11 @@ import time as time_module
 from scipy import stats
 from numba import jit
 
+# Enforce UTC for all operations
+os.environ['TZ'] = 'UTC'
+if hasattr(time_module, 'tzset'):
+    time_module.tzset()
+
 # Fix import path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 calculations_dir = os.path.dirname(current_dir)
@@ -30,12 +35,22 @@ vega_root = os.path.dirname(modules_dir)
 if vega_root not in sys.path:
     sys.path.insert(0, vega_root)
 
-# Configure logging
+# Configure logging with UTC
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s UTC - %(name)s - %(levelname)s - %(message)s'
 )
+logging.Formatter.converter = time_module.gmtime  # Force UTC in logs
 logger = logging.getLogger(__name__)
+
+# UTC validation function
+def ensure_utc(dt: datetime) -> datetime:
+    """Ensure datetime is UTC-aware"""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    elif dt.tzinfo != timezone.utc:
+        return dt.astimezone(timezone.utc)
+    return dt
 
 
 @dataclass
@@ -88,6 +103,7 @@ class StatisticalTrend1Min:
     """
     1-Minute Statistical Trend Calculator optimized for short-term trading.
     Uses multiple micro-timeframes for rapid signal generation.
+    All timestamps are in UTC.
     """
     
     def __init__(self,
@@ -135,6 +151,7 @@ class StatisticalTrend1Min:
         
         logger.info(f"Initialized scalper trend calculator: "
                    f"Micro={micro_lookback}, Short={short_lookback}, Medium={medium_lookback}")
+        logger.info(f"System initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     
     def initialize_buffers(self, symbol: str):
         """Initialize data buffers for a symbol"""
@@ -153,6 +170,16 @@ class StatisticalTrend1Min:
             'R': 0.005,    # Lower measurement noise for faster response
             'K': 0.0       # Kalman gain
         }
+    
+    def _validate_timestamp(self, timestamp: datetime, source: str) -> datetime:
+        """Validate and ensure timestamp is UTC"""
+        if timestamp.tzinfo is None:
+            logger.warning(f"{source}: Naive datetime received, assuming UTC")
+            return timestamp.replace(tzinfo=timezone.utc)
+        elif timestamp.tzinfo != timezone.utc:
+            logger.warning(f"{source}: Non-UTC timezone {timestamp.tzinfo}, converting to UTC")
+            return timestamp.astimezone(timezone.utc)
+        return timestamp
     
     @staticmethod
     @jit(nopython=True)
@@ -243,8 +270,17 @@ class StatisticalTrend1Min:
         if symbol not in self.price_buffers:
             self.initialize_buffers(symbol)
         
+        # Handle timestamp with UTC enforcement
         if timestamp is None:
             timestamp = datetime.now(timezone.utc)
+        else:
+            # Ensure timestamp is UTC-aware
+            if timestamp.tzinfo is None:
+                # If naive datetime, assume UTC and make it aware
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
+            elif timestamp.tzinfo != timezone.utc:
+                # If has timezone but not UTC, convert to UTC
+                timestamp = timestamp.astimezone(timezone.utc)
         
         # Update buffers
         self.price_buffers[symbol].append(price)
@@ -592,14 +628,15 @@ class StatisticalTrend1Min:
         """Start real-time monitoring with WebSocket"""
         from polygon import DataFetcher, PolygonWebSocketClient
         
-        # Load historical data
+        # Load historical data with UTC timestamps
         logger.info(f"Loading historical data for {len(symbols)} symbols...")
         fetcher = DataFetcher()
         
         for symbol in symbols:
             try:
-                end_time = datetime.now()
-                start_time = end_time - timedelta(minutes=15)  # Only need 15 min
+                # Use UTC explicitly
+                end_time = datetime.now(timezone.utc)
+                start_time = end_time - timedelta(minutes=15)
                 
                 df = fetcher.fetch_data(
                     symbol=symbol,
@@ -611,11 +648,13 @@ class StatisticalTrend1Min:
                 
                 if not df.empty:
                     for idx, row in df.iterrows():
+                        # Ensure index is UTC
+                        timestamp = ensure_utc(idx) if isinstance(idx, datetime) else idx
                         self.update_price(
                             symbol=symbol,
                             price=row['close'],
                             volume=row['volume'],
-                            timestamp=idx
+                            timestamp=timestamp
                         )
                     logger.info(f"✓ Loaded {len(df)} bars for {symbol}")
                 
@@ -648,11 +687,17 @@ class StatisticalTrend1Min:
             symbol = data.get('symbol')
             
             if event_type == 'aggregate' and symbol in self.active_symbols:
+                # Validate and ensure UTC timestamp
+                timestamp = self._validate_timestamp(
+                    datetime.fromtimestamp(data['timestamp'] / 1000, tz=timezone.utc),
+                    f"WebSocket-{symbol}"
+                )
+                
                 signal = self.update_price(
                     symbol=symbol,
                     price=data['close'],
                     volume=data['volume'],
-                    timestamp=datetime.fromtimestamp(data['timestamp'] / 1000, tz=timezone.utc)
+                    timestamp=timestamp
                 )
                 
                 if signal and signal.signal != 'NEUTRAL':
@@ -760,11 +805,12 @@ async def run_scalper_test():
         }
         
         print(f"\n{'='*70}")
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] SIGNAL #{update_count} - {signal.symbol}")
+        print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}] SIGNAL #{update_count} - {signal.symbol}")
         print(f"{'='*70}")
         
         # Price info
         print(f"💰 Price: ${signal.price:.2f}")
+        print(f"🕐 Data Time: {signal.timestamp.strftime('%H:%M:%S UTC')}")
         
         # Signal with emoji
         emoji_map = {
@@ -824,7 +870,7 @@ async def run_scalper_test():
     try:
         await calculator.start_websocket(TEST_SYMBOLS, display_signal)
         
-        print(f"\n🚀 Scalper Monitor Started")
+        print(f"\n🚀 Scalper Monitor Started at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print(f"📊 Tracking {len(TEST_SYMBOLS)} symbols")
         print(f"⏱️  Timeframes: 3-min (entry), 5-min (confirm), 10-min (context)")
         print(f"🔄 Updates every 15 seconds + new bars")
@@ -880,12 +926,14 @@ async def run_scalper_test():
 
 
 if __name__ == "__main__":
-    print("Starting 1-Minute Statistical Trend Calculator")
-    print("Optimized for short-term trading (<1 hour holds)\n")
+    print(f"Starting 1-Minute Statistical Trend Calculator at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print("Optimized for short-term trading (<1 hour holds)")
+    print("All timestamps are in UTC\n")
     print("Features:")
     print("• Multi-timeframe analysis: 3/5/10 minutes")
     print("• Rapid signal generation for scalping")
     print("• Clear entry signals with hold times")
-    print("• WebSocket real-time updates\n")
+    print("• WebSocket real-time updates")
+    print("• UTC timestamp enforcement\n")
     
     asyncio.run(run_scalper_test())

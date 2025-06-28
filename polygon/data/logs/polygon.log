@@ -14634,3 +14634,55 @@
 2025-06-27 15:12:24 - polygon.websocket - INFO - Authentication successful
 2025-06-27 15:12:24 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
 2025-06-27 15:12:24 - polygon.websocket - INFO - Subscribed to 3 channels for 3 symbols
+2025-06-28 08:04:38 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 08:04:38 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2025-06-28 to 2025-06-28
+2025-06-28 08:04:39 - polygon.core - WARNING - No results in aggregate response for AAPL
+2025-06-28 08:04:39 - polygon.fetcher - WARNING - No data returned for AAPL 2025-06-28 to 2025-06-28
+2025-06-28 08:04:39 - polygon.fetcher - INFO - Returned 0 rows for AAPL 1min
+2025-06-28 08:04:39 - polygon.websocket - INFO - Connecting to WebSocket: wss://socket.polygon.io/stocks
+2025-06-28 08:04:40 - polygon.websocket - INFO - Sending authentication request...
+2025-06-28 08:04:40 - polygon.websocket - INFO - Connection confirmed, waiting for auth response...
+2025-06-28 08:04:40 - polygon.websocket - INFO - Authentication successful
+2025-06-28 08:04:40 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
+2025-06-28 08:04:40 - polygon.websocket - INFO - Subscribed to 1 channels for 1 symbols
+2025-06-28 08:05:40 - polygon.websocket - INFO - WebSocket disconnected
+2025-06-28 08:57:39 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 08:57:39 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 08:57:40 - polygon.storage - INFO - Saved 908 rows for CRCL 1min (0.04 MB)
+2025-06-28 08:57:40 - polygon.fetcher - INFO - Returned 738 rows for CRCL 1min
+2025-06-28 09:00:17 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 09:01:25 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 09:01:25 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 09:01:26 - polygon.fetcher - INFO - Returned 738 rows from cache
+2025-06-28 09:10:12 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 09:10:12 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 09:10:12 - polygon.fetcher - INFO - Returned 738 rows from cache
+2025-06-28 09:13:52 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 09:13:52 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 09:13:52 - polygon.fetcher - INFO - Returned 739 rows from cache
+2025-06-28 09:19:29 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 09:19:29 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 09:19:29 - polygon.fetcher - INFO - Returned 739 rows from cache
+2025-06-28 09:20:08 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 09:20:08 - polygon.fetcher - INFO - Returned 738 rows from cache
+2025-06-28 09:20:52 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 09:20:52 - polygon.fetcher - INFO - Returned 737 rows from cache
+2025-06-28 09:21:48 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 09:21:48 - polygon.fetcher - INFO - Returned 734 rows from cache
+2025-06-28 09:26:58 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 09:26:58 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 09:26:58 - polygon.fetcher - INFO - Returned 730 rows from cache
+2025-06-28 13:46:48 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 13:46:48 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 13:46:48 - polygon.fetcher - INFO - Returned 730 rows from cache
+2025-06-28 13:54:28 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 13:54:28 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 13:54:28 - polygon.fetcher - INFO - Returned 730 rows from cache
+2025-06-28 14:07:15 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 14:07:15 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 14:07:15 - polygon.fetcher - INFO - Returned 725 rows from cache
+2025-06-28 14:25:21 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 14:25:21 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 14:25:21 - polygon.fetcher - INFO - Returned 739 rows from cache
+2025-06-28 14:25:52 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 14:25:52 - polygon.fetcher - INFO - Returned 730 rows from cache

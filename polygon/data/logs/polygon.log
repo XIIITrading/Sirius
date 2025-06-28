@@ -14686,3 +14686,6 @@
 2025-06-28 14:25:21 - polygon.fetcher - INFO - Returned 739 rows from cache
 2025-06-28 14:25:52 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
 2025-06-28 14:25:52 - polygon.fetcher - INFO - Returned 730 rows from cache
+2025-06-28 15:30:06 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-28 15:30:06 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-28 15:30:06 - polygon.fetcher - INFO - Returned 730 rows from cache

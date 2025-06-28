@@ -32,3 +32,8 @@ numba
 # ===== Additional Dependencies =====
 python-dateutil             # Better date handling
 pytz                        # Timezone support
+
+#====Anthropic====#
+anthropic
+aiohttp
+python-dotenv

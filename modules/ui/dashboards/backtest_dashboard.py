@@ -3,7 +3,7 @@
 Module: Backtesting Dashboard for Entry Algorithm Analysis
 Purpose: Analyze historical entry points with calculations and price action
 UI Framework: PyQt6 with PyQtGraph
-Features: Point-in-time calculations, candlestick charting, no look-ahead bias
+Features: Point-in-time calculations, candlestick charting, no look-ahead bias, Claude AI integration
 Performance: Optimized for high-volume symbols with concurrent trade fetching
 """
 
@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QTableWidget, QHeaderView, QScrollArea, QComboBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QDate, QTime, QDateTime, pyqtSlot
-from PyQt6.QtGui import QFont, QColor, QPalette, QPen
+from PyQt6.QtGui import QFont, QColor, QPalette, QPen, QIcon
 import pyqtgraph as pg
 
 # Setup path for imports
@@ -57,6 +57,10 @@ from modules.calculations.volume.market_context import MarketContext
 
 # Import data fetcher
 from polygon import DataFetcher
+
+# Import Claude integration modules
+from modules.integrations.claude_dialog import ClaudeConversationDialog
+from modules.utils.result_formatter import BacktestResultFormatter
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -702,6 +706,8 @@ class BacktestingDashboard(QMainWindow):
     def __init__(self):
         super().__init__()
         self.worker = None
+        self.latest_results = None  # Store latest backtest results
+        self.latest_context = None  # Store context for Claude
         self.init_ui()
         self.apply_dark_theme()
         
@@ -742,13 +748,24 @@ class BacktestingDashboard(QMainWindow):
         self.time_input.setTime(QTime(14, 30, 0))  # Default to 14:30 UTC (9:30 AM ET)
         controls_layout.addWidget(self.time_input, 0, 5)
         
-        # REMOVED: Timezone selector
-        
         # Run button
         self.run_btn = QPushButton("Run Backtest")
         self.run_btn.clicked.connect(self.run_backtest)
         self.run_btn.setMinimumWidth(120)
-        controls_layout.addWidget(self.run_btn, 0, 6)  # Changed from 8 to 6
+        controls_layout.addWidget(self.run_btn, 0, 6)
+        
+        # Claude export button - initially disabled
+        self.claude_btn = QPushButton("Export to Claude")
+        self.claude_btn.clicked.connect(self.export_to_claude)
+        self.claude_btn.setMinimumWidth(120)
+        self.claude_btn.setEnabled(False)
+        self.claude_btn.setStyleSheet("""
+            QPushButton:disabled {
+                background-color: #4a4a4a;
+                color: #888888;
+            }
+        """)
+        controls_layout.addWidget(self.claude_btn, 0, 7)
         
         # Status and progress
         self.status_label = QLabel("Ready")
@@ -757,9 +774,9 @@ class BacktestingDashboard(QMainWindow):
         
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        controls_layout.addWidget(self.progress_bar, 1, 4, 1, 3)  # Changed from 1, 4, 1, 5
+        controls_layout.addWidget(self.progress_bar, 1, 4, 1, 4)
         
-        controls_layout.setColumnStretch(7, 1)  # Changed from 9 to 7
+        controls_layout.setColumnStretch(8, 1)
         main_layout.addWidget(controls_widget)
         
         # Separator
@@ -963,15 +980,24 @@ class BacktestingDashboard(QMainWindow):
             if reply == QMessageBox.StandardButton.No:
                 return
         
+        # Store context for Claude
+        self.latest_context = {
+            'symbol': symbol,
+            'entry_time': entry_time.strftime('%Y-%m-%d %H:%M:%S UTC'),
+            'timeframe': '1min'
+        }
+        
         # Update UI
         self.status_label.setText(f"Running backtest for {symbol}...")
         self.status_label.setStyleSheet("color: #ffcc00;")
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         self.run_btn.setEnabled(False)
+        self.claude_btn.setEnabled(False)  # Disable Claude button during backtest
         
         # Clear previous results
         self._clear_displays()
+        self.latest_results = None
         
         # Create and start worker
         self.worker = BacktestWorker()
@@ -1013,6 +1039,9 @@ class BacktestingDashboard(QMainWindow):
     @pyqtSlot(dict)
     def display_results(self, results: Dict):
         """Display calculation results"""
+        # Store results for Claude export
+        self.latest_results = results
+        
         # Trend signals
         if results.get('trend_1min'):
             self.widget_1min.update_1min_signal(results['trend_1min'])
@@ -1065,6 +1094,7 @@ class BacktestingDashboard(QMainWindow):
         self.status_label.setStyleSheet("color: #ff0000;")
         self.progress_bar.setVisible(False)
         self.run_btn.setEnabled(True)
+        self.claude_btn.setEnabled(False)
         QMessageBox.critical(self, "Backtest Error", error_msg)
         
     @pyqtSlot(str)
@@ -1075,6 +1105,12 @@ class BacktestingDashboard(QMainWindow):
             self.status_label.setStyleSheet("color: #00cc00;")
             self.progress_bar.setVisible(False)
             self.run_btn.setEnabled(True)
+            # Enable Claude button when backtest is complete
+            if self.latest_results:
+                self.claude_btn.setEnabled(True)
+                self.info_bar.setText(
+                    f"Backtest complete! Click 'Export to Claude' to get AI analysis and optimization recommendations."
+                )
             
     @pyqtSlot(int)
     def update_progress(self, value: int):
@@ -1086,6 +1122,30 @@ class BacktestingDashboard(QMainWindow):
         """Update trade loading progress"""
         self.status_label.setText(message)
         self.progress_bar.setValue(progress)
+        
+    def export_to_claude(self):
+        """Export results to Claude for analysis"""
+        if not self.latest_results or not self.latest_context:
+            QMessageBox.warning(self, "No Results", "Please run a backtest first")
+            return
+            
+        try:
+            # Create Claude dialog with results
+            self.claude_dialog = ClaudeConversationDialog(
+                parent=self,
+                initial_results=self.latest_results,
+                context=self.latest_context
+            )
+            
+            # Show dialog
+            self.claude_dialog.show()
+            
+            # Update status
+            self.info_bar.setText("Claude analysis window opened - analyzing backtest results...")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Claude Error", f"Failed to open Claude dialog: {str(e)}")
+            logger.error(f"Claude export error: {e}", exc_info=True)
 
 
 def main():

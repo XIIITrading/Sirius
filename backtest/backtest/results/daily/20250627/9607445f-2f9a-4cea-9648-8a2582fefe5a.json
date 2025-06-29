@@ -1,0 +1,92 @@
+{
+  "config": {
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:30:00.592000+00:00",
+    "direction": "SHORT",
+    "historical_lookback_hours": 2,
+    "forward_bars": 60,
+    "enabled_calculations": []
+  },
+  "entry_signals": [
+    {
+      "name": "1-Min EMA Crossover",
+      "timestamp": "2025-06-27T13:30:00.592000+00:00",
+      "direction": "BEARISH",
+      "strength": 0.2853439529057885,
+      "confidence": 0.2853439529057885,
+      "metadata": {
+        "ema_9": 223.0007888337536,
+        "ema_21": 223.0271112189426,
+        "ema_spread": -0.026322385188990438,
+        "ema_spread_pct": -0.011889331371074521,
+        "price_vs_ema9": "below",
+        "trend_strength": 0.23778662742149043,
+        "last_crossover_type": "bullish",
+        "reason": "9 EMA (223.00) < 21 EMA (223.03) | Spread: -0.03 (-0.0%) | Recent bullish crossover 0s ago"
+      }
+    }
+  ],
+  "aggregated_signal": {
+    "consensus_direction": "BEARISH",
+    "agreement_score": 100.0,
+    "vote_breakdown": {
+      "BULLISH": 0,
+      "BEARISH": 1,
+      "NEUTRAL": 0
+    },
+    "category_consensus": {
+      "trend": "NO_DATA",
+      "order_flow": "NO_DATA",
+      "volume": "NO_DATA",
+      "market_structure": "NO_DATA"
+    },
+    "average_strength": 0.3,
+    "average_confidence": 0.3,
+    "total_calculations": 15,
+    "participating_calculations": 1,
+    "signals": [
+      {
+        "name": "1-Min EMA Crossover",
+        "timestamp": "2025-06-27T13:30:00.592000+00:00",
+        "direction": "BEARISH",
+        "strength": 0.2853439529057885,
+        "confidence": 0.2853439529057885,
+        "metadata": {
+          "ema_9": 223.0007888337536,
+          "ema_21": 223.0271112189426,
+          "ema_spread": -0.026322385188990438,
+          "ema_spread_pct": -0.011889331371074521,
+          "price_vs_ema9": "below",
+          "trend_strength": 0.23778662742149043,
+          "last_crossover_type": "bullish",
+          "reason": "9 EMA (223.00) < 21 EMA (223.03) | Spread: -0.03 (-0.0%) | Recent bullish crossover 0s ago"
+        }
+      }
+    ]
+  },
+  "forward_analysis": {
+    "entry_price": 219.31,
+    "exit_price": 200.6899,
+    "max_favorable_move": 8.75017099083489,
+    "max_adverse_move": 1.1536181660662994,
+    "final_pnl": 8.490310519356166,
+    "time_to_max_favorable": "2025-06-27T14:27:00+00:00",
+    "time_to_max_adverse": "2025-06-27T13:31:00+00:00",
+    "bars_analyzed": 60,
+    "volume_profile": {
+      "total": 10552326.0,
+      "average": 175872.1,
+      "at_extremes": {
+        "at_high": 241120.0,
+        "at_low": 138154.0
+      }
+    },
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
+  },
+  "runtime_seconds": 0.802477,
+  "timestamp": "2025-06-29T15:32:02.565395+00:00"
+}

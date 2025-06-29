@@ -22,6 +22,7 @@ load_dotenv(env_path)
 
 # Verify environment variables are loaded
 print(f"Loading .env from: {env_path}")
+print(f"SUPABASE_URL exists: {'SUPABASE_URL' in os.environ}")
 print(f"POLYGON_API_KEY exists: {'POLYGON_API_KEY' in os.environ}")
 
 # Fix imports for running from backtest directory
@@ -29,7 +30,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QDateTimeEdit, QComboBox,
     QGroupBox, QSplitter, QTextEdit, QProgressBar, QMessageBox,
-    QTableWidget, QTableWidgetItem, QHeaderView
+    QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QDateTime
 from PyQt6.QtGui import QFont, QColor
@@ -37,9 +38,9 @@ from PyQt6.QtGui import QFont, QColor
 # Import core components with relative imports
 from core.engine import BacktestEngine, BacktestConfig
 from data.polygon_data_manager import PolygonDataManager
-from core.result_store import BacktestResultStore
-from adapters.dummy_adapter import DummyAdapter
+from core.result_store import BacktestResultStore, BacktestResult
 from adapters.indicators.m1_ema_back_adapter import M1EMABackAdapter
+from storage.supabase_storage import prepare_bars_for_storage
 
 # Configure logging
 logging.basicConfig(
@@ -55,7 +56,7 @@ class BacktestWorker(QThread):
     # Signals
     started = pyqtSignal()
     progress = pyqtSignal(int, str)
-    result_ready = pyqtSignal(dict)
+    result_ready = pyqtSignal(dict, object)  # Changed to pass both dict and BacktestResult
     error = pyqtSignal(str)
     finished = pyqtSignal()
     
@@ -85,7 +86,8 @@ class BacktestWorker(QThread):
             result_dict = result.to_dict()
             result_dict['summary'] = result.get_summary()
             
-            self.result_ready.emit(result_dict)
+            # Pass both the dict and the full result object
+            self.result_ready.emit(result_dict, result)
             self.progress.emit(100, "Backtest complete")
             
         except Exception as e:
@@ -97,6 +99,79 @@ class BacktestWorker(QThread):
             loop.close()
 
 
+class PushWorker(QThread):
+    """Worker thread for pushing results to Supabase"""
+    
+    finished = pyqtSignal(str)  # Emits UID on success
+    error = pyqtSignal(str)
+    progress = pyqtSignal(str)
+    
+    def __init__(self, engine: BacktestEngine, result: BacktestResult):
+        super().__init__()
+        self.engine = engine
+        self.result = result
+        
+    def run(self):
+        """Push the result to Supabase"""
+        try:
+            # Create event loop for async operations
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            self.progress.emit("Generating UID...")
+            
+            # Generate UID
+            uid = self.engine.supabase_storage.generate_uid(self.result.config)
+            
+            self.progress.emit(f"Checking if {uid} exists...")
+            
+            # Check if already exists
+            exists = loop.run_until_complete(
+                self.engine.supabase_storage.check_uid_exists(uid)
+            )
+            
+            if exists:
+                self.progress.emit(f"Overwriting existing UID: {uid}")
+            
+            self.progress.emit("Preparing data for storage...")
+            
+            # Get the bars for storage
+            if self.result.bars_for_storage is None:
+                # Prepare bars if not already done
+                if self.result.historical_bars is not None and not self.result.forward_data.empty:
+                    bars_df = prepare_bars_for_storage(
+                        self.result.historical_bars,
+                        self.result.forward_data,
+                        self.result.config.entry_time
+                    )
+                else:
+                    raise Exception("Bar data not available for storage")
+            else:
+                bars_df = self.result.bars_for_storage
+            
+            self.progress.emit("Storing to Supabase...")
+            
+            # Store to Supabase
+            storage_result = loop.run_until_complete(
+                self.engine.supabase_storage.store_backtest_data(
+                    uid=uid,
+                    config=self.result.config,
+                    bars_df=bars_df,
+                    results=self.result
+                )
+            )
+            
+            if storage_result.success:
+                self.finished.emit(uid)
+            else:
+                self.error.emit(storage_result.error or "Unknown storage error")
+                
+        except Exception as e:
+            self.error.emit(str(e))
+        finally:
+            loop.close()
+
+
 class BacktestDashboard(QMainWindow):
     """Main dashboard window for backtesting"""
     
@@ -105,23 +180,20 @@ class BacktestDashboard(QMainWindow):
         self.engine = None
         self.worker = None
         self.registered_adapters = []  # Track registered adapter names
-        self.data_manager = None
+        self.last_result = None  # Store the last BacktestResult object
+        self.last_result_dict = None  # Store the dict version
+        self.push_worker = None
         self.init_engine()
         self.init_ui()
         self.apply_dark_theme()
         
     def init_engine(self):
-        """Initialize backtest engine with Polygon data"""
+        """Initialize backtest engine with real data"""
         try:
-            # Create Polygon data manager
-            self.data_manager = PolygonDataManager(
-                memory_cache_size=100,
-                file_cache_hours=24,
-                extend_window_bars=500
-            )
-            logger.info("Polygon data manager initialized with caching enabled")
+            # Create data manager
+            self.data_manager = PolygonDataManager()
             
-            # Create engine with Polygon data manager
+            # Create engine with the data manager
             self.engine = BacktestEngine(data_manager=self.data_manager)
             logger.info("Backtest engine initialized with Polygon data manager")
             
@@ -129,21 +201,22 @@ class BacktestDashboard(QMainWindow):
             logger.error(f"Failed to initialize engine: {e}")
             # Show error dialog
             QMessageBox.critical(None, "Initialization Error", 
-                               f"Failed to initialize backtest engine:\n{str(e)}\n\n"
-                               "Please check your .env file has POLYGON_API_KEY")
+                            f"Failed to initialize backtest engine:\n{str(e)}\n\n"
+                            "Please check your .env file has SUPABASE_URL, SUPABASE_KEY, and POLYGON_API_KEY")
             raise
         
-        # Register real adapters
+        # Register real adapters only
         try:
             # Register M1 EMA adapter
             m1_ema_adapter = M1EMABackAdapter(buffer_size=100)
             self.engine.register_adapter("m1_ema_crossover", m1_ema_adapter)
             self.registered_adapters.append("m1_ema_crossover")
             
-            # Also keep dummy for testing
-            dummy_adapter = DummyAdapter()
-            self.engine.register_adapter("dummy_test", dummy_adapter)
-            self.registered_adapters.append("dummy_test")
+            # Add more real adapters here as you develop them
+            # For example:
+            # rsi_adapter = RSIAdapter()
+            # self.engine.register_adapter("rsi_divergence", rsi_adapter)
+            # self.registered_adapters.append("rsi_divergence")
             
             logger.info(f"Registered adapters: {', '.join(self.registered_adapters)}")
             
@@ -222,10 +295,33 @@ class BacktestDashboard(QMainWindow):
         self.adapter_combo.addItems(self.registered_adapters)
         layout.addWidget(self.adapter_combo)
         
+        # Store to Supabase checkbox
+        self.store_supabase_checkbox = QCheckBox("Auto-store to Supabase")
+        self.store_supabase_checkbox.setChecked(False)  # Default to off
+        layout.addWidget(self.store_supabase_checkbox)
+        
         # Run button
         self.run_button = QPushButton("Run Backtest")
         self.run_button.clicked.connect(self.run_backtest)
         layout.addWidget(self.run_button)
+        
+        # Push to Supabase button
+        self.push_button = QPushButton("Push to Supabase")
+        self.push_button.clicked.connect(self.push_to_supabase)
+        self.push_button.setEnabled(False)  # Disabled until we have results
+        self.push_button.setStyleSheet("""
+            QPushButton:disabled {
+                background-color: #4a4a4a;
+                color: #888888;
+            }
+            QPushButton:enabled {
+                background-color: #14a085;
+            }
+            QPushButton:enabled:hover {
+                background-color: #1abc9c;
+            }
+        """)
+        layout.addWidget(self.push_button)
         
         # Cache stats button
         self.cache_button = QPushButton("Cache Stats")
@@ -356,6 +452,19 @@ class BacktestDashboard(QMainWindow):
                 padding: 5px;
                 border-radius: 3px;
             }
+            QCheckBox {
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border: 1px solid #444;
+                background-color: #2b2b2b;
+                border-radius: 3px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #0d7377;
+            }
             QTableWidget {
                 background-color: #2b2b2b;
                 alternate-background-color: #323232;
@@ -398,6 +507,7 @@ class BacktestDashboard(QMainWindow):
         
         direction = self.direction_combo.currentText()
         selected_adapter = self.adapter_combo.currentText()
+        store_to_supabase = self.store_supabase_checkbox.isChecked()
         
         # Determine which calculations to run
         if selected_adapter == "All Calculations":
@@ -409,24 +519,31 @@ class BacktestDashboard(QMainWindow):
             enabled_calculations = [selected_adapter]
             self.aggregated_group.setVisible(False)
         
-        # Create config
+        # Create config with Supabase storage option
         config = BacktestConfig(
             symbol=symbol,
             entry_time=entry_time,
             direction=direction,
             historical_lookback_hours=2,
             forward_bars=60,
-            enabled_calculations=enabled_calculations
+            enabled_calculations=enabled_calculations,
+            store_to_supabase=store_to_supabase
         )
         
         # Clear previous results
         self.clear_results()
         
         # Update status
+        status_msg = f"Running "
         if selected_adapter == "All Calculations":
-            self.status_label.setText(f"Running all {len(self.registered_adapters)} calculations...")
+            status_msg += f"all {len(self.registered_adapters)} calculations"
         else:
-            self.status_label.setText(f"Running {selected_adapter}...")
+            status_msg += f"{selected_adapter}"
+        
+        if store_to_supabase:
+            status_msg += " (will auto-store to Supabase)"
+        
+        self.status_label.setText(status_msg + "...")
         
         # Disable controls
         self.run_button.setEnabled(False)
@@ -451,16 +568,32 @@ class BacktestDashboard(QMainWindow):
         self.signals_table.setRowCount(0)
         self.analysis_text.clear()
         self.aggregated_text.clear()
+        self.last_result = None
+        self.last_result_dict = None
+        self.push_button.setEnabled(False)
         
     def update_progress(self, value: int, message: str):
         """Update progress bar and status"""
         self.status_bar.setValue(value)
         self.status_label.setText(message)
         
-    def display_results(self, results: Dict):
+    def display_results(self, results_dict: Dict, result_obj: BacktestResult):
         """Display backtest results"""
+        # Store both versions
+        self.last_result_dict = results_dict
+        self.last_result = result_obj
+        
+        # Enable push button if we have results and Supabase is available
+        if self.engine.supabase_enabled and self.last_result:
+            self.push_button.setEnabled(True)
+            self.push_button.setToolTip("Push these results to Supabase")
+        else:
+            self.push_button.setEnabled(False)
+            if not self.engine.supabase_enabled:
+                self.push_button.setToolTip("Supabase storage not available")
+        
         # Display summary
-        summary = results.get('summary', {})
+        summary = results_dict.get('summary', {})
         self.summary_table.setRowCount(len(summary))
         
         for i, (key, value) in enumerate(summary.items()):
@@ -468,7 +601,7 @@ class BacktestDashboard(QMainWindow):
             self.summary_table.setItem(i, 1, QTableWidgetItem(str(value)))
             
         # Display signals
-        signals = results.get('entry_signals', [])
+        signals = results_dict.get('entry_signals', [])
         self.signals_table.setRowCount(len(signals))
         
         for i, signal in enumerate(signals):
@@ -494,7 +627,7 @@ class BacktestDashboard(QMainWindow):
         
         # Display aggregated signal if running all calculations
         if self.adapter_combo.currentText() == "All Calculations":
-            aggregated = results.get('aggregated_signal', {})
+            aggregated = results_dict.get('aggregated_signal', {})
             if aggregated:
                 agg_text = f"Consensus Direction: {aggregated.get('consensus_direction', 'N/A')}\n"
                 agg_text += f"Agreement Score: {aggregated.get('agreement_score', 0):.1f}%\n"
@@ -505,7 +638,7 @@ class BacktestDashboard(QMainWindow):
                 self.aggregated_text.setText(agg_text)
         
         # Display forward analysis
-        forward = results.get('forward_analysis', {})
+        forward = results_dict.get('forward_analysis', {})
         analysis_text = f"Entry Price: ${forward.get('entry_price', 0):.2f}\n"
         analysis_text += f"Exit Price: ${forward.get('exit_price', 0):.2f}\n"
         analysis_text += f"P&L: {forward.get('final_pnl', 0):.2f}%\n"
@@ -522,6 +655,53 @@ class BacktestDashboard(QMainWindow):
             
         self.analysis_text.setText(analysis_text)
         
+    def push_to_supabase(self):
+        """Push the last backtest result to Supabase"""
+        if not self.last_result:
+            QMessageBox.warning(self, "No Results", "No backtest results to push")
+            return
+            
+        if not self.engine.supabase_enabled:
+            QMessageBox.warning(self, "Supabase Unavailable", 
+                              "Supabase storage is not available. Check your credentials.")
+            return
+        
+        # Disable button during push
+        self.push_button.setEnabled(False)
+        self.push_button.setText("Pushing...")
+        
+        # Create worker to push in background
+        self.push_worker = PushWorker(self.engine, self.last_result)
+        self.push_worker.finished.connect(self.on_push_finished)
+        self.push_worker.error.connect(self.on_push_error)
+        self.push_worker.progress.connect(self.on_push_progress)
+        self.push_worker.start()
+    
+    def on_push_progress(self, message: str):
+        """Update status during push"""
+        self.status_label.setText(message)
+    
+    def on_push_finished(self, uid: str):
+        """Handle successful push to Supabase"""
+        self.push_button.setText("Push to Supabase")
+        self.push_button.setEnabled(True)
+        
+        QMessageBox.information(self, "Success", 
+                               f"Results successfully pushed to Supabase!\n\nUID: {uid}")
+        
+        # Update status
+        self.status_label.setText(f"Pushed to Supabase with UID: {uid}")
+    
+    def on_push_error(self, error_msg: str):
+        """Handle push error"""
+        self.push_button.setText("Push to Supabase")
+        self.push_button.setEnabled(True)
+        
+        QMessageBox.critical(self, "Push Error", 
+                            f"Failed to push to Supabase:\n{error_msg}")
+        
+        self.status_label.setText("Push failed")
+        
     def handle_error(self, error_msg: str):
         """Handle backtest error"""
         QMessageBox.critical(self, "Backtest Error", error_msg)
@@ -531,7 +711,10 @@ class BacktestDashboard(QMainWindow):
         """Handle backtest completion"""
         self.run_button.setEnabled(True)
         self.status_bar.setVisible(False)
-        self.status_label.setText("Backtest complete")
+        if not self.last_result:
+            self.status_label.setText("Backtest failed")
+        else:
+            self.status_label.setText("Backtest complete")
         
     def show_cache_stats(self):
         """Show cache statistics"""
@@ -585,12 +768,12 @@ def run_cli(args):
     # Create engine with data manager
     engine = BacktestEngine(data_manager=data_manager)
     
-    # Register adapters
+    # Register only real adapters
     m1_ema_adapter = M1EMABackAdapter()
     engine.register_adapter("m1_ema_crossover", m1_ema_adapter)
     
-    dummy_adapter = DummyAdapter()
-    engine.register_adapter("dummy_test", dummy_adapter)
+    # More adapters can be added here
+    # engine.register_adapter("rsi_divergence", rsi_adapter)
     
     # Parse entry time
     entry_time = datetime.strptime(args.entry_time, "%Y-%m-%d %H:%M:%S")
@@ -602,14 +785,15 @@ def run_cli(args):
     else:
         enabled_calculations = [args.calculation] if args.calculation else []
     
-    # Create config
+    # Create config with optional Supabase storage
     config = BacktestConfig(
         symbol=args.symbol,
         entry_time=entry_time,
         direction=args.direction,
         historical_lookback_hours=args.lookback_hours,
         forward_bars=args.forward_bars,
-        enabled_calculations=enabled_calculations
+        enabled_calculations=enabled_calculations,
+        store_to_supabase=args.store_supabase if hasattr(args, 'store_supabase') else False
     )
     
     # Run backtest
@@ -632,7 +816,6 @@ def run_cli(args):
         # Save to file if requested
         if args.output:
             with open(args.output, 'w') as f:
-                # Remove the default=str parameter as we're handling serialization in to_dict()
                 json.dump(result.to_dict(), f, indent=2)
             print(f"\nResults saved to {args.output}")
             
@@ -668,6 +851,7 @@ def main():
     parser.add_argument("--lookback-hours", type=int, default=2, help="Historical lookback hours")
     parser.add_argument("--forward-bars", type=int, default=60, help="Forward bars to analyze")
     parser.add_argument("--output", type=str, help="Output file for results")
+    parser.add_argument("--store-supabase", action="store_true", help="Store results to Supabase")
     
     args = parser.parse_args()
     

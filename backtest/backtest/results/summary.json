@@ -50,5 +50,101 @@
       "profitable": "True",
       "signal_aligned_with_outcome": false
     }
+  },
+  {
+    "result_id": "b26c2153-07c1-4641-ac27-d4343e2ee398",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27 13:35:00.283000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "NEUTRAL",
+    "signal_agreement": 50.0,
+    "final_pnl": 6.573920441273656,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "signal_accuracy": {
+      "consensus_matched_user": false,
+      "profitable": "True",
+      "signal_aligned_with_outcome": false
+    }
+  },
+  {
+    "result_id": "9607445f-2f9a-4cea-9648-8a2582fefe5a",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27 13:30:00.592000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "BEARISH",
+    "signal_agreement": 100.0,
+    "final_pnl": 8.490310519356166,
+    "max_favorable_move": 8.75017099083489,
+    "max_adverse_move": 1.1536181660662994,
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": "True",
+      "signal_aligned_with_outcome": "False"
+    }
+  },
+  {
+    "result_id": "d7570c3b-8c45-4a62-a12c-b42edd5bb20c",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:35:00.757000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "BEARISH",
+    "signal_agreement": 100.0,
+    "final_pnl": 6.573920441273656,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
+  },
+  {
+    "result_id": "40bad18b-0131-40de-af44-44f3d2e1cdbd",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:35:00.971000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "BEARISH",
+    "signal_agreement": 100.0,
+    "final_pnl": 6.573920441273656,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
+  },
+  {
+    "result_id": "465d74b5-81fb-4153-9b50-1aec3f106a32",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:35:00.971000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "BEARISH",
+    "signal_agreement": 100.0,
+    "final_pnl": 6.573920441273656,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
+  },
+  {
+    "result_id": "faecf9e1-d02e-4ca7-b9a7-8db4d21a2794",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:45:00.971000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "BEARISH",
+    "signal_agreement": 100.0,
+    "final_pnl": 3.526424225001204,
+    "max_favorable_move": 5.030904125341382,
+    "max_adverse_move": 0.36893296919169266,
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
   }
 ]

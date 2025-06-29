@@ -15,9 +15,15 @@ from pathlib import Path
 import json
 
 from adapters.base import CalculationAdapter, StandardSignal
-from core.data_manager import BacktestDataManager
-from core.result_store import BacktestResultStore, BacktestResult
 from core.signal_aggregator import SignalAggregator
+
+# Import the new storage module
+try:
+    from storage.supabase_storage import BacktestStorage, prepare_bars_for_storage
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
+    logger.warning("Supabase storage module not available")
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +47,9 @@ class BacktestConfig:
     # Calculation settings
     enabled_calculations: List[str] = field(default_factory=list)
     
+    # Storage settings
+    store_to_supabase: bool = False  # New field
+    
     def __post_init__(self):
         """Validate configuration"""
         if self.entry_time.tzinfo != timezone.utc:
@@ -55,24 +64,52 @@ class BacktestEngine:
     Manages the complete backtest lifecycle from data loading to result storage.
     """
     
-    def __init__(self, config_path: Optional[str] = None, data_manager=None):
+    def __init__(self, config_path: Optional[str] = None, 
+                 data_manager: Optional[Any] = None,
+                 enable_supabase_storage: bool = True):
         """
         Initialize backtest engine.
         
         Args:
             config_path: Path to JSON configuration file
-            data_manager: Optional data manager instance (defaults to BacktestDataManager)
+            data_manager: Optional data manager (uses default if None)
+            enable_supabase_storage: Whether to enable Supabase storage
         """
         self.config_path = config_path
         
-        # Use provided data manager or create default
-        if data_manager is not None:
+        # Initialize data manager - support both old and new
+        if data_manager:
             self.data_manager = data_manager
         else:
-            self.data_manager = BacktestDataManager()
-            
+            # Try to use PolygonDataManager first, fall back to BacktestDataManager
+            try:
+                from data.polygon_data_manager import PolygonDataManager
+                self.data_manager = PolygonDataManager()
+                logger.info("Using PolygonDataManager")
+            except ImportError:
+                from core.data_manager import BacktestDataManager
+                self.data_manager = BacktestDataManager()
+                logger.info("Using BacktestDataManager")
+        
+        # Initialize local result store
+        from core.result_store import BacktestResultStore
         self.result_store = BacktestResultStore()
+        
+        # Initialize signal aggregator
         self.signal_aggregator = SignalAggregator()
+        
+        # Initialize Supabase storage if available and enabled
+        self.supabase_storage = None
+        self.supabase_enabled = False
+        
+        if enable_supabase_storage and SUPABASE_AVAILABLE:
+            try:
+                self.supabase_storage = BacktestStorage()
+                self.supabase_enabled = True
+                logger.info("Supabase storage initialized and enabled")
+            except Exception as e:
+                logger.error(f"Failed to initialize Supabase storage: {e}")
+                logger.info("Continuing with local storage only")
         
         # Adapter registry - populated by register_adapter()
         self.adapters: Dict[str, CalculationAdapter] = {}
@@ -114,7 +151,7 @@ class BacktestEngine:
         for name, adapter in adapters.items():
             self.register_adapter(name, adapter)
             
-    async def run_backtest(self, config: BacktestConfig) -> BacktestResult:
+    async def run_backtest(self, config: BacktestConfig) -> 'BacktestResult':
         """
         Run a single backtest iteration.
         
@@ -126,6 +163,12 @@ class BacktestEngine:
         """
         start_time = datetime.now(timezone.utc)
         logger.info(f"Starting backtest for {config.symbol} at {config.entry_time}")
+        
+        # Log storage configuration
+        if config.store_to_supabase and self.supabase_enabled:
+            logger.info("Supabase storage is ENABLED for this backtest")
+        else:
+            logger.info("Supabase storage is DISABLED for this backtest")
         
         try:
             # 1. Load historical data
@@ -148,18 +191,40 @@ class BacktestEngine:
                 config, forward_data, entry_signals
             )
             
-            # 7. Create and store result
+            # 7. Prepare bars for storage (even if not auto-storing, prepare for manual push)
+            bars_for_storage = None
+            if self.supabase_enabled:
+                try:
+                    historical_bars = historical_data.get('bars_1min', pd.DataFrame())
+                    if not historical_bars.empty and not forward_data.empty:
+                        bars_for_storage = prepare_bars_for_storage(
+                            historical_bars, 
+                            forward_data, 
+                            config.entry_time
+                        )
+                        logger.info(f"Prepared {len(bars_for_storage)} bars for storage")
+                except Exception as e:
+                    logger.warning(f"Could not prepare bars for storage: {e}")
+            
+            # 8. Create result with all data including bars
+            from core.result_store import BacktestResult
             result = BacktestResult(
                 config=config,
                 entry_signals=entry_signals,
                 aggregated_signal=aggregated_signal,
                 forward_data=forward_data,
                 forward_analysis=forward_analysis,
-                runtime_seconds=(datetime.now(timezone.utc) - start_time).total_seconds()
+                runtime_seconds=(datetime.now(timezone.utc) - start_time).total_seconds(),
+                historical_bars=historical_data.get('bars_1min'),  # Store for manual push
+                bars_for_storage=bars_for_storage  # Pre-prepared 75 bars
             )
             
-            # Store result
+            # 9. Store result locally (always)
             self.result_store.store_result(result)
+            
+            # 10. Store to Supabase if enabled
+            if config.store_to_supabase and self.supabase_enabled:
+                await self._store_to_supabase(config, historical_data, forward_data, result)
             
             # Update tracking
             self.backtest_count += 1
@@ -171,6 +236,59 @@ class BacktestEngine:
         except Exception as e:
             logger.error(f"Backtest failed: {e}")
             raise
+    
+    async def _store_to_supabase(self, config: BacktestConfig, 
+                                historical_data: Dict[str, Any],
+                                forward_data: pd.DataFrame,
+                                result: 'BacktestResult') -> None:
+        """
+        Store backtest results to Supabase.
+        
+        Args:
+            config: Backtest configuration
+            historical_data: Historical data used
+            forward_data: Forward data analyzed
+            result: Backtest result
+        """
+        try:
+            # Generate UID
+            uid = self.supabase_storage.generate_uid(config)
+            logger.info(f"Storing to Supabase with UID: {uid}")
+            
+            # Check if UID already exists
+            exists = await self.supabase_storage.check_uid_exists(uid)
+            if exists:
+                logger.warning(f"UID {uid} already exists in Supabase, will overwrite")
+            
+            # Use pre-prepared bars if available
+            if result.bars_for_storage is not None:
+                bars_to_store = result.bars_for_storage
+            else:
+                # Prepare bars if not already done
+                historical_bars = historical_data.get('bars_1min', pd.DataFrame())
+                bars_to_store = prepare_bars_for_storage(
+                    historical_bars, 
+                    forward_data, 
+                    config.entry_time
+                )
+            
+            # Store to Supabase
+            storage_result = await self.supabase_storage.store_backtest_data(
+                uid=uid,
+                config=config,
+                bars_df=bars_to_store,
+                results=result
+            )
+            
+            if storage_result.success:
+                logger.info(f"Successfully stored to Supabase: {storage_result.rows_inserted}")
+            else:
+                logger.error(f"Failed to store to Supabase: {storage_result.error}")
+                
+        except Exception as e:
+            logger.error(f"Error storing to Supabase: {e}")
+            # Don't fail the backtest if storage fails
+            # The local storage already succeeded
             
     async def _load_historical_data(self, config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         """Load historical data for calculations"""
@@ -253,7 +371,7 @@ class BacktestEngine:
             adapter.initialize(symbol)
             
             # Feed historical bar data
-            if 'bars_1min' in historical_data:
+            if 'bars_1min' in historical_data and not historical_data['bars_1min'].empty:
                 adapter.feed_historical_data(historical_data['bars_1min'], symbol)
                 
             # Feed trade data if adapter needs it
@@ -301,8 +419,11 @@ class BacktestEngine:
         if forward_data.empty:
             return {
                 'error': 'No forward data available',
+                'entry_price': 0,
+                'exit_price': 0,
                 'max_favorable_move': 0,
-                'max_adverse_move': 0
+                'max_adverse_move': 0,
+                'final_pnl': 0
             }
             
         entry_price = forward_data.iloc[0]['close']
@@ -379,7 +500,7 @@ class BacktestEngine:
         )
         
     async def run_bulk_backtest(self, configs: List[BacktestConfig], 
-                               max_concurrent: int = 5) -> List[BacktestResult]:
+                               max_concurrent: int = 5) -> List['BacktestResult']:
         """
         Run multiple backtests concurrently.
         
@@ -412,7 +533,7 @@ class BacktestEngine:
         
     def get_statistics(self) -> Dict[str, Any]:
         """Get engine statistics"""
-        return {
+        stats = {
             'total_backtests': self.backtest_count,
             'total_runtime_seconds': self.total_runtime,
             'average_runtime_seconds': (
@@ -420,27 +541,18 @@ class BacktestEngine:
                 if self.backtest_count > 0 else 0
             ),
             'registered_adapters': list(self.adapters.keys()),
-            'data_cache_stats': self.data_manager.get_cache_stats(),
+            'supabase_enabled': self.supabase_enabled,
             'result_store_stats': self.result_store.get_statistics()
         }
-
-
-# Test the engine
-if __name__ == "__main__":
-    async def test_engine():
-        """Test the backtest engine"""
-        # Create engine
-        engine = BacktestEngine()
         
-        # Create test config
-        config = BacktestConfig(
-            symbol='AAPL',
-            entry_time=datetime.now(timezone.utc) - timedelta(hours=1),
-            direction='LONG',
-            historical_lookback_hours=2,
-            forward_bars=60
-        )
-        
-        print(f"Engine initialized: {engine.get_statistics()}")
-        
-    asyncio.run(test_engine())
+        # Add data manager stats
+        if hasattr(self.data_manager, 'get_cache_stats'):
+            stats['data_cache_stats'] = self.data_manager.get_cache_stats()
+        elif hasattr(self.data_manager, 'get_statistics'):
+            stats['data_cache_stats'] = self.data_manager.get_statistics()
+            
+        # Add Supabase storage stats
+        if self.supabase_storage:
+            stats['supabase_storage_stats'] = self.supabase_storage.get_statistics()
+            
+        return stats

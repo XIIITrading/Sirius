@@ -70,5 +70,131 @@
     "cached_at": "2025-06-29T14:50:08.479695+00:00",
     "data_points": 951,
     "cache_key": "d61ad34769c1530f89e33ca5178f0105"
+  },
+  "293cacd8151db0d96685619e15e0e422": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:15:00.283000+00:00",
+    "end_time": "2025-06-27T21:55:00.283000+00:00",
+    "cached_at": "2025-06-29T15:17:08.203677+00:00",
+    "data_points": 951,
+    "cache_key": "293cacd8151db0d96685619e15e0e422"
+  },
+  "14a607709de542682e69ebd0494019b1": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T05:15:00.283000+00:00",
+    "end_time": "2025-06-27T22:55:00.283000+00:00",
+    "cached_at": "2025-06-29T15:17:08.431196+00:00",
+    "data_points": 951,
+    "cache_key": "14a607709de542682e69ebd0494019b1"
+  },
+  "f5019efbe5fe1cfa246c404dd7b83c7b": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:10:00.592000+00:00",
+    "end_time": "2025-06-27T21:50:00.592000+00:00",
+    "cached_at": "2025-06-29T15:32:02.315935+00:00",
+    "data_points": 951,
+    "cache_key": "f5019efbe5fe1cfa246c404dd7b83c7b"
+  },
+  "68107e0d2e8073b810b15b41b1f569fc": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T05:10:00.592000+00:00",
+    "end_time": "2025-06-27T22:50:00.592000+00:00",
+    "cached_at": "2025-06-29T15:32:02.539219+00:00",
+    "data_points": 951,
+    "cache_key": "68107e0d2e8073b810b15b41b1f569fc"
+  },
+  "aaf3192e6198c8b76352dadc473d5385": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:15:00.365000+00:00",
+    "end_time": "2025-06-27T21:55:00.365000+00:00",
+    "cached_at": "2025-06-29T15:52:41.066460+00:00",
+    "data_points": 951,
+    "cache_key": "aaf3192e6198c8b76352dadc473d5385"
+  },
+  "a6969f664d869ce6ced7f7e39e812773": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T05:15:00.365000+00:00",
+    "end_time": "2025-06-27T22:55:00.365000+00:00",
+    "cached_at": "2025-06-29T15:52:41.288672+00:00",
+    "data_points": 951,
+    "cache_key": "a6969f664d869ce6ced7f7e39e812773"
+  },
+  "af2670cee934f23432d84e943ebfaf85": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:15:00.872000+00:00",
+    "end_time": "2025-06-27T21:55:00.872000+00:00",
+    "cached_at": "2025-06-29T15:56:04.697297+00:00",
+    "data_points": 951,
+    "cache_key": "af2670cee934f23432d84e943ebfaf85"
+  },
+  "64b3523fa85c552304448b48041e4d04": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T05:15:00.872000+00:00",
+    "end_time": "2025-06-27T22:55:00.872000+00:00",
+    "cached_at": "2025-06-29T15:56:04.914997+00:00",
+    "data_points": 951,
+    "cache_key": "64b3523fa85c552304448b48041e4d04"
+  },
+  "c6d24690ab2d7e2dcbfffb164ccf0c4c": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:15:00.757000+00:00",
+    "end_time": "2025-06-27T21:55:00.757000+00:00",
+    "cached_at": "2025-06-29T16:00:16.951743+00:00",
+    "data_points": 951,
+    "cache_key": "c6d24690ab2d7e2dcbfffb164ccf0c4c"
+  },
+  "dfc2460e1125e09103b2d79b73051545": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T05:15:00.757000+00:00",
+    "end_time": "2025-06-27T22:55:00.757000+00:00",
+    "cached_at": "2025-06-29T16:00:17.189464+00:00",
+    "data_points": 951,
+    "cache_key": "dfc2460e1125e09103b2d79b73051545"
+  },
+  "f1298487086ba42fc8033b923aa2cc77": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:15:00.971000+00:00",
+    "end_time": "2025-06-27T21:55:00.971000+00:00",
+    "cached_at": "2025-06-29T16:23:43.786089+00:00",
+    "data_points": 951,
+    "cache_key": "f1298487086ba42fc8033b923aa2cc77"
+  },
+  "25f6b7ebccb9142f9f75bbd712d6dc35": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T05:15:00.971000+00:00",
+    "end_time": "2025-06-27T22:55:00.971000+00:00",
+    "cached_at": "2025-06-29T16:23:44.013719+00:00",
+    "data_points": 951,
+    "cache_key": "25f6b7ebccb9142f9f75bbd712d6dc35"
+  },
+  "7bd9fb249a10e6509ac2243360402005": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:25:00.971000+00:00",
+    "end_time": "2025-06-27T22:05:00.971000+00:00",
+    "cached_at": "2025-06-29T16:27:05.422723+00:00",
+    "data_points": 951,
+    "cache_key": "7bd9fb249a10e6509ac2243360402005"
+  },
+  "e86b425d58d397ced70cd996450a2326": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T05:25:00.971000+00:00",
+    "end_time": "2025-06-27T23:05:00.971000+00:00",
+    "cached_at": "2025-06-29T16:27:05.641269+00:00",
+    "data_points": 951,
+    "cache_key": "e86b425d58d397ced70cd996450a2326"
   }
 }

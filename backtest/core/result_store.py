@@ -17,10 +17,31 @@ import uuid
 logger = logging.getLogger(__name__)
 
 
+def convert_numpy_types(obj):
+    """Convert numpy types to native Python types for JSON serialization"""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    elif isinstance(obj, pd.Timestamp):
+        return obj.to_pydatetime().isoformat()
+    elif hasattr(obj, 'isoformat'):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_numpy_types(item) for item in obj]
+    return obj
+
+
 @dataclass
 class BacktestResult:
     """Complete result from a single backtest run"""
-    # Configuration
+    # Configuration (required fields first)
     config: Any  # BacktestConfig
     
     # Entry analysis
@@ -33,74 +54,59 @@ class BacktestResult:
     
     # Metadata
     runtime_seconds: float
+    
+    # Optional fields with defaults (must come after required fields)
+    historical_bars: Optional[pd.DataFrame] = None  # Historical bars used
+    bars_for_storage: Optional[pd.DataFrame] = None  # Prepared 75 bars
     result_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert result to dictionary for storage/display"""
+        """Convert to dictionary for storage"""
+        # Handle entry_time which might be a pandas Timestamp
+        entry_time = self.config.entry_time
+        if isinstance(entry_time, pd.Timestamp):
+            entry_time_str = entry_time.to_pydatetime().isoformat()
+        elif hasattr(entry_time, 'isoformat'):
+            entry_time_str = entry_time.isoformat()
+        else:
+            entry_time_str = str(entry_time)
         
-        def serialize_value(obj):
-            """Convert non-serializable objects to JSON-compatible format"""
-            if isinstance(obj, (pd.Timestamp, datetime)):
-                return obj.isoformat()
-            elif isinstance(obj, pd.DataFrame):
-                # Convert DataFrame to dict with ISO timestamps
-                df_dict = obj.to_dict('records')
-                # Convert any timestamps in the records
-                for record in df_dict:
-                    for key, value in record.items():
-                        if isinstance(value, (pd.Timestamp, datetime)):
-                            record[key] = value.isoformat()
-                        elif isinstance(value, (np.integer, np.floating, np.bool_)):
-                            record[key] = value.item()  # Convert numpy types to Python types
-                return df_dict
-            elif isinstance(obj, np.ndarray):
-                return obj.tolist()
-            elif isinstance(obj, np.integer):
-                return int(obj)
-            elif isinstance(obj, np.floating):
-                return float(obj)
-            elif isinstance(obj, np.bool_):
-                return bool(obj)
-            elif isinstance(obj, dict):
-                return {k: serialize_value(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [serialize_value(item) for item in obj]
-            else:
-                return obj
-        
-        return {
+        # Convert all values to ensure JSON serialization
+        return convert_numpy_types({
+            'result_id': self.result_id,
+            'timestamp': self.timestamp.isoformat(),
             'config': {
                 'symbol': self.config.symbol,
-                'entry_time': self.config.entry_time.isoformat(),
+                'entry_time': entry_time_str,
                 'direction': self.config.direction,
                 'historical_lookback_hours': self.config.historical_lookback_hours,
                 'forward_bars': self.config.forward_bars,
-                'enabled_calculations': self.config.enabled_calculations
+                'store_to_supabase': getattr(self.config, 'store_to_supabase', False)
             },
             'entry_signals': [
-                {
-                    'name': signal.name,
-                    'timestamp': signal.timestamp.isoformat(),
-                    'direction': signal.direction,
-                    'strength': signal.strength,
-                    'confidence': signal.confidence,
-                    'metadata': serialize_value(signal.metadata)
-                }
-                for signal in self.entry_signals
+                convert_numpy_types(signal.to_dict()) for signal in self.entry_signals
             ],
-            'aggregated_signal': serialize_value(self.aggregated_signal),
-            'forward_analysis': serialize_value(self.forward_analysis),
-            'runtime_seconds': self.runtime_seconds,
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }
+            'aggregated_signal': convert_numpy_types(self.aggregated_signal),
+            'forward_analysis': convert_numpy_types(self.forward_analysis),
+            'runtime_seconds': float(self.runtime_seconds)
+        })
         
     def get_summary(self) -> Dict[str, Any]:
         """Get summary for quick analysis"""
-        return {
+        # Handle entry_time which might be a pandas Timestamp
+        entry_time = self.config.entry_time
+        if isinstance(entry_time, pd.Timestamp):
+            entry_time_str = entry_time.to_pydatetime().isoformat()
+        elif hasattr(entry_time, 'isoformat'):
+            entry_time_str = entry_time.isoformat()
+        else:
+            entry_time_str = str(entry_time)
+        
+        return convert_numpy_types({
             'result_id': self.result_id,
             'symbol': self.config.symbol,
-            'entry_time': self.config.entry_time,
+            'entry_time': entry_time_str,
             'direction': self.config.direction,
             'consensus_direction': self.aggregated_signal.get('consensus_direction'),
             'signal_agreement': self.aggregated_signal.get('agreement_score', 0),
@@ -108,7 +114,7 @@ class BacktestResult:
             'max_favorable_move': self.forward_analysis.get('max_favorable_move', 0),
             'max_adverse_move': self.forward_analysis.get('max_adverse_move', 0),
             'signal_accuracy': self.forward_analysis.get('signal_accuracy', {})
-        }
+        })
 
 
 class BacktestResultStore:
@@ -166,7 +172,7 @@ class BacktestResultStore:
         day_dir = self.daily_dir / date_str
         day_dir.mkdir(exist_ok=True)
         
-        # Store detailed result
+        # Store detailed result (without DataFrames to save space)
         result_file = day_dir / f"{result.result_id}.json"
         with open(result_file, 'w') as f:
             json.dump(result.to_dict(), f, indent=2)
@@ -175,6 +181,16 @@ class BacktestResultStore:
         if not result.forward_data.empty:
             data_file = day_dir / f"{result.result_id}_forward.parquet"
             result.forward_data.to_parquet(data_file)
+            
+        # Optionally store historical bars if available
+        if result.historical_bars is not None and not result.historical_bars.empty:
+            hist_file = day_dir / f"{result.result_id}_historical.parquet"
+            result.historical_bars.to_parquet(hist_file)
+            
+        # Optionally store prepared bars if available
+        if result.bars_for_storage is not None and not result.bars_for_storage.empty:
+            bars_file = day_dir / f"{result.result_id}_bars_storage.parquet"
+            result.bars_for_storage.to_parquet(bars_file)
             
         # Update summary
         self._update_summary(result)
@@ -225,6 +241,18 @@ class BacktestResultStore:
                         forward_data = pd.read_parquet(data_file)
                     else:
                         forward_data = pd.DataFrame()
+                        
+                    # Load historical bars if exists
+                    hist_file = day_dir / f"{result_id}_historical.parquet"
+                    historical_bars = None
+                    if hist_file.exists():
+                        historical_bars = pd.read_parquet(hist_file)
+                        
+                    # Load prepared bars if exists
+                    bars_file = day_dir / f"{result_id}_bars_storage.parquet"
+                    bars_for_storage = None
+                    if bars_file.exists():
+                        bars_for_storage = pd.read_parquet(bars_file)
                         
                     # Reconstruct result (simplified - would need proper deserialization)
                     return data
@@ -399,7 +427,7 @@ class BacktestResultStore:
         """Get store statistics"""
         total_files = sum(1 for _ in self.daily_dir.glob('**/*.json'))
         total_size = sum(
-            f.stat().st_size for f in self.daily_dir.glob('**/*')
+            f.stat().st_size for f in self.daily_dir.glob('**/*') if f.is_file()
         ) / (1024 * 1024)  # MB
         
         return {

@@ -55,15 +55,22 @@ class BacktestEngine:
     Manages the complete backtest lifecycle from data loading to result storage.
     """
     
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, data_manager=None):
         """
         Initialize backtest engine.
         
         Args:
             config_path: Path to JSON configuration file
+            data_manager: Optional data manager instance (defaults to BacktestDataManager)
         """
         self.config_path = config_path
-        self.data_manager = BacktestDataManager()
+        
+        # Use provided data manager or create default
+        if data_manager is not None:
+            self.data_manager = data_manager
+        else:
+            self.data_manager = BacktestDataManager()
+            
         self.result_store = BacktestResultStore()
         self.signal_aggregator = SignalAggregator()
         

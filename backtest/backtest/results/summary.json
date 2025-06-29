@@ -34,5 +34,21 @@
     "max_favorable_move": 0,
     "max_adverse_move": 0,
     "signal_accuracy": {}
+  },
+  {
+    "result_id": "23acc443-878d-4191-a53d-5a516dca6577",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27 13:35:00.297000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "NEUTRAL",
+    "signal_agreement": 50.0,
+    "final_pnl": 6.573920441273656,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "signal_accuracy": {
+      "consensus_matched_user": false,
+      "profitable": "True",
+      "signal_aligned_with_outcome": false
+    }
   }
 ]

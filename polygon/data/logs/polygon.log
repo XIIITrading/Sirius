@@ -14723,3 +14723,48 @@
 2025-06-28 21:52:56 - polygon.websocket - INFO - Authentication successful
 2025-06-28 21:52:56 - polygon.websocket - INFO - WebSocket connected and authenticated successfully
 2025-06-28 21:52:56 - polygon.websocket - INFO - Subscribed to 6 channels for 3 symbols
+2025-06-29 14:17:04 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-29 14:38:18 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-29 14:38:40 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-29 14:38:41 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-29 14:38:42 - polygon.storage - INFO - Saved 908 rows for CRCL 1min (0.04 MB)
+2025-06-29 14:38:42 - polygon.fetcher - INFO - Filled 32 small gaps in data
+2025-06-29 14:38:42 - polygon.fetcher - INFO - Returned 951 rows for CRCL 1min
+2025-06-29 14:38:42 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-29 14:38:42 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-29 14:38:42 - polygon.storage - INFO - Saved 908 rows for CRCL 1min (0.04 MB)
+2025-06-29 14:38:42 - polygon.fetcher - INFO - Filled 32 small gaps in data
+2025-06-29 14:38:42 - polygon.fetcher - INFO - Returned 951 rows for CRCL 1min
+2025-06-29 14:43:02 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-29 14:43:15 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-29 14:43:15 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-29 14:43:16 - polygon.storage - INFO - Saved 908 rows for CRCL 1min (0.04 MB)
+2025-06-29 14:43:16 - polygon.fetcher - INFO - Filled 32 small gaps in data
+2025-06-29 14:43:16 - polygon.fetcher - INFO - Returned 951 rows for CRCL 1min
+2025-06-29 14:43:16 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-29 14:43:16 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-29 14:43:16 - polygon.storage - INFO - Saved 908 rows for CRCL 1min (0.04 MB)
+2025-06-29 14:43:16 - polygon.fetcher - INFO - Filled 32 small gaps in data
+2025-06-29 14:43:16 - polygon.fetcher - INFO - Returned 951 rows for CRCL 1min
+2025-06-29 14:44:24 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-29 14:45:14 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-29 14:45:14 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-29 14:45:14 - polygon.storage - INFO - Saved 908 rows for CRCL 1min (0.04 MB)
+2025-06-29 14:45:14 - polygon.fetcher - INFO - Filled 32 small gaps in data
+2025-06-29 14:45:14 - polygon.fetcher - INFO - Returned 951 rows for CRCL 1min
+2025-06-29 14:45:14 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-29 14:45:14 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-29 14:45:15 - polygon.storage - INFO - Saved 908 rows for CRCL 1min (0.04 MB)
+2025-06-29 14:45:15 - polygon.fetcher - INFO - Filled 32 small gaps in data
+2025-06-29 14:45:15 - polygon.fetcher - INFO - Returned 951 rows for CRCL 1min
+2025-06-29 14:49:53 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-29 14:50:07 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-29 14:50:07 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-29 14:50:08 - polygon.storage - INFO - Saved 908 rows for CRCL 1min (0.04 MB)
+2025-06-29 14:50:08 - polygon.fetcher - INFO - Filled 32 small gaps in data
+2025-06-29 14:50:08 - polygon.fetcher - INFO - Returned 951 rows for CRCL 1min
+2025-06-29 14:50:08 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
+2025-06-29 14:50:08 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-29 14:50:08 - polygon.storage - INFO - Saved 908 rows for CRCL 1min (0.04 MB)
+2025-06-29 14:50:08 - polygon.fetcher - INFO - Filled 32 small gaps in data
+2025-06-29 14:50:08 - polygon.fetcher - INFO - Returned 951 rows for CRCL 1min

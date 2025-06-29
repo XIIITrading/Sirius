@@ -22,7 +22,6 @@ load_dotenv(env_path)
 
 # Verify environment variables are loaded
 print(f"Loading .env from: {env_path}")
-print(f"SUPABASE_URL exists: {'SUPABASE_URL' in os.environ}")
 print(f"POLYGON_API_KEY exists: {'POLYGON_API_KEY' in os.environ}")
 
 # Fix imports for running from backtest directory
@@ -37,7 +36,7 @@ from PyQt6.QtGui import QFont, QColor
 
 # Import core components with relative imports
 from core.engine import BacktestEngine, BacktestConfig
-from core.data_manager import BacktestDataManager
+from data.polygon_data_manager import PolygonDataManager
 from core.result_store import BacktestResultStore
 from adapters.dummy_adapter import DummyAdapter
 from adapters.indicators.m1_ema_back_adapter import M1EMABackAdapter
@@ -106,23 +105,32 @@ class BacktestDashboard(QMainWindow):
         self.engine = None
         self.worker = None
         self.registered_adapters = []  # Track registered adapter names
+        self.data_manager = None
         self.init_engine()
         self.init_ui()
         self.apply_dark_theme()
         
     def init_engine(self):
-        """Initialize backtest engine with real data"""
+        """Initialize backtest engine with Polygon data"""
         try:
-            # Create engine - it will use BacktestDataManager which connects to Supabase
-            self.engine = BacktestEngine()
-            logger.info("Backtest engine initialized with Supabase data manager")
+            # Create Polygon data manager
+            self.data_manager = PolygonDataManager(
+                memory_cache_size=100,
+                file_cache_hours=24,
+                extend_window_bars=500
+            )
+            logger.info("Polygon data manager initialized with caching enabled")
+            
+            # Create engine with Polygon data manager
+            self.engine = BacktestEngine(data_manager=self.data_manager)
+            logger.info("Backtest engine initialized with Polygon data manager")
             
         except Exception as e:
             logger.error(f"Failed to initialize engine: {e}")
             # Show error dialog
             QMessageBox.critical(None, "Initialization Error", 
                                f"Failed to initialize backtest engine:\n{str(e)}\n\n"
-                               "Please check your .env file has SUPABASE_URL and SUPABASE_KEY")
+                               "Please check your .env file has POLYGON_API_KEY")
             raise
         
         # Register real adapters
@@ -144,7 +152,7 @@ class BacktestDashboard(QMainWindow):
             
     def init_ui(self):
         """Initialize the UI"""
-        self.setWindowTitle("Modular Backtest System - Real Data")
+        self.setWindowTitle("Modular Backtest System - Polygon Data")
         self.setGeometry(100, 100, 1400, 800)
         
         # Central widget
@@ -218,6 +226,11 @@ class BacktestDashboard(QMainWindow):
         self.run_button = QPushButton("Run Backtest")
         self.run_button.clicked.connect(self.run_backtest)
         layout.addWidget(self.run_button)
+        
+        # Cache stats button
+        self.cache_button = QPushButton("Cache Stats")
+        self.cache_button.clicked.connect(self.show_cache_stats)
+        layout.addWidget(self.cache_button)
         
         layout.addStretch()
         
@@ -519,6 +532,38 @@ class BacktestDashboard(QMainWindow):
         self.run_button.setEnabled(True)
         self.status_bar.setVisible(False)
         self.status_label.setText("Backtest complete")
+        
+    def show_cache_stats(self):
+        """Show cache statistics"""
+        if self.data_manager:
+            stats = self.data_manager.get_cache_stats()
+            
+            msg = "=== Cache Statistics ===\n\n"
+            
+            # Memory cache
+            mem = stats['memory_cache']
+            msg += f"Memory Cache:\n"
+            msg += f"  Hits: {mem['hits']}\n"
+            msg += f"  Misses: {mem['misses']}\n"
+            msg += f"  Hit Rate: {mem['hit_rate']:.1f}%\n"
+            msg += f"  Cached Items: {mem['cached_items']}\n\n"
+            
+            # File cache
+            file = stats['file_cache']
+            msg += f"File Cache:\n"
+            msg += f"  Total Files: {file['total_files']}\n"
+            msg += f"  Total Size: {file['total_size_mb']:.2f} MB\n"
+            msg += f"  Metadata Entries: {file['metadata_entries']}\n\n"
+            
+            # API stats
+            api = stats['api_stats']
+            msg += f"API Statistics:\n"
+            msg += f"  API Calls: {api['api_calls']}\n"
+            msg += f"  Cache Hits: {api['cache_hits']}\n"
+            msg += f"  Total Requests: {api['total_requests']}\n"
+            msg += f"  Overall Hit Rate: {api['cache_hit_rate']:.1f}%"
+            
+            QMessageBox.information(self, "Cache Statistics", msg)
 
 
 def run_gui():
@@ -534,8 +579,11 @@ def run_gui():
 
 def run_cli(args):
     """Run backtest from command line"""
-    # Create engine
-    engine = BacktestEngine()
+    # Create data manager
+    data_manager = PolygonDataManager()
+    
+    # Create engine with data manager
+    engine = BacktestEngine(data_manager=data_manager)
     
     # Register adapters
     m1_ema_adapter = M1EMABackAdapter()
@@ -584,8 +632,17 @@ def run_cli(args):
         # Save to file if requested
         if args.output:
             with open(args.output, 'w') as f:
-                json.dump(result.to_dict(), f, indent=2, default=str)
+                # Remove the default=str parameter as we're handling serialization in to_dict()
+                json.dump(result.to_dict(), f, indent=2)
             print(f"\nResults saved to {args.output}")
+            
+        # Show cache stats
+        print("\n=== Cache Statistics ===")
+        stats = data_manager.get_cache_stats()
+        api_stats = stats['api_stats']
+        print(f"API Calls: {api_stats['api_calls']}")
+        print(f"Cache Hits: {api_stats['cache_hits']}")
+        print(f"Cache Hit Rate: {api_stats['cache_hit_rate']:.1f}%")
             
     except Exception as e:
         print(f"Error: {e}")

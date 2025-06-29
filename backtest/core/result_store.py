@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 import pandas as pd
+import numpy as np
 import json
 import logging
 import uuid
@@ -36,23 +37,62 @@ class BacktestResult:
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for storage"""
+        """Convert result to dictionary for storage/display"""
+        
+        def serialize_value(obj):
+            """Convert non-serializable objects to JSON-compatible format"""
+            if isinstance(obj, (pd.Timestamp, datetime)):
+                return obj.isoformat()
+            elif isinstance(obj, pd.DataFrame):
+                # Convert DataFrame to dict with ISO timestamps
+                df_dict = obj.to_dict('records')
+                # Convert any timestamps in the records
+                for record in df_dict:
+                    for key, value in record.items():
+                        if isinstance(value, (pd.Timestamp, datetime)):
+                            record[key] = value.isoformat()
+                        elif isinstance(value, (np.integer, np.floating, np.bool_)):
+                            record[key] = value.item()  # Convert numpy types to Python types
+                return df_dict
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.bool_):
+                return bool(obj)
+            elif isinstance(obj, dict):
+                return {k: serialize_value(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [serialize_value(item) for item in obj]
+            else:
+                return obj
+        
         return {
-            'result_id': self.result_id,
-            'timestamp': self.timestamp.isoformat(),
             'config': {
                 'symbol': self.config.symbol,
                 'entry_time': self.config.entry_time.isoformat(),
                 'direction': self.config.direction,
                 'historical_lookback_hours': self.config.historical_lookback_hours,
-                'forward_bars': self.config.forward_bars
+                'forward_bars': self.config.forward_bars,
+                'enabled_calculations': self.config.enabled_calculations
             },
             'entry_signals': [
-                signal.to_dict() for signal in self.entry_signals
+                {
+                    'name': signal.name,
+                    'timestamp': signal.timestamp.isoformat(),
+                    'direction': signal.direction,
+                    'strength': signal.strength,
+                    'confidence': signal.confidence,
+                    'metadata': serialize_value(signal.metadata)
+                }
+                for signal in self.entry_signals
             ],
-            'aggregated_signal': self.aggregated_signal,
-            'forward_analysis': self.forward_analysis,
-            'runtime_seconds': self.runtime_seconds
+            'aggregated_signal': serialize_value(self.aggregated_signal),
+            'forward_analysis': serialize_value(self.forward_analysis),
+            'runtime_seconds': self.runtime_seconds,
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         
     def get_summary(self) -> Dict[str, Any]:
@@ -368,4 +408,3 @@ class BacktestResultStore:
             'storage_size_mb': round(total_size, 2),
             'daily_directories': len(list(self.daily_dir.iterdir()))
         }
-    

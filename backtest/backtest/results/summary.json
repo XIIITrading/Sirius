@@ -1,0 +1,38 @@
+[
+  {
+    "result_id": "63a7d4ef-9e5a-4f73-8c0a-d84117ade44a",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27 13:05:00.159000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "NEUTRAL",
+    "signal_agreement": 100.0,
+    "final_pnl": 0,
+    "max_favorable_move": 0,
+    "max_adverse_move": 0,
+    "signal_accuracy": {}
+  },
+  {
+    "result_id": "20864866-cd82-43e1-bae6-069184945430",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27 13:40:00.643000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "NEUTRAL",
+    "signal_agreement": 100.0,
+    "final_pnl": 0,
+    "max_favorable_move": 0,
+    "max_adverse_move": 0,
+    "signal_accuracy": {}
+  },
+  {
+    "result_id": "d926c159-ca1f-4c42-b303-5b4bd6858d39",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27 13:35:00+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "NEUTRAL",
+    "signal_agreement": 100.0,
+    "final_pnl": 0,
+    "max_favorable_move": 0,
+    "max_adverse_move": 0,
+    "signal_accuracy": {}
+  }
+]

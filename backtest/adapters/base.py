@@ -1,78 +1,56 @@
 # backtest/adapters/base.py
 """
-Base adapter interface for wrapping live calculations in backtest framework.
-Provides standardized interface for all calculation adapters.
+Base adapter interface for wrapping calculations.
+Provides standardized interface without modifying original calculations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List, Union
 from datetime import datetime, timezone
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Any, Union
 import pandas as pd
 import logging
+
+from core.signal_aggregator import StandardSignal
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class StandardSignal:
-    """Standardized signal format for all calculations"""
-    name: str                          # Calculation name
-    timestamp: datetime                # Signal timestamp (UTC)
-    direction: str                     # 'BULLISH', 'BEARISH', 'NEUTRAL'
-    strength: float                    # 0-100 signal strength
-    confidence: float                  # 0-100 confidence level
-    bull_score: int = 0               # -2 to +2 for compatibility
-    bear_score: int = 0               # -2 to +2 for compatibility
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for storage"""
-        return {
-            'name': self.name,
-            'timestamp': self.timestamp.isoformat(),
-            'direction': self.direction,
-            'strength': self.strength,
-            'confidence': self.confidence,
-            'bull_score': self.bull_score,
-            'bear_score': self.bear_score,
-            'metadata': self.metadata
-        }
-
-
 class CalculationAdapter(ABC):
     """
-    Base adapter for wrapping live calculations for backtesting.
-    Each calculation type (trend, volume, order flow) will have its own adapter.
+    Abstract base adapter for calculation integration.
+    Wraps existing calculations without modification.
     """
     
-    def __init__(self, calculation_class: Any, config: Dict[str, Any], name: str):
+    def __init__(self, calculation_class: type, config: Optional[Dict] = None, name: str = ""):
         """
-        Initialize adapter with live calculation class.
+        Initialize adapter.
         
         Args:
-            calculation_class: The live calculation class to wrap
-            config: Configuration parameters for the calculation
-            name: Friendly name for this calculation
+            calculation_class: The calculation class to wrap
+            config: Configuration for the calculation
+            name: Human-readable name
         """
         self.calculation_class = calculation_class
-        self.config = config
+        self.config = config or {}
         self.name = name
         self.calculation = None
-        self.is_initialized = False
-        self.signal_history: List[StandardSignal] = []
-        self.requires_trades = False  # Override in subclasses that need tick data
-        self.warmup_periods = 0  # Override with calculation's warmup requirement
+        self.last_signal = None
+        self.symbol = None
+        
+        # Requirements flags
+        self.requires_trades = False
+        self.requires_quotes = False
+        self.warmup_periods = 0
         
     def initialize(self, symbol: str) -> None:
-        """Initialize the calculation instance"""
+        """Initialize the calculation for a specific symbol"""
+        self.symbol = symbol
         try:
-            self.calculation = self.calculation_class(**self.config)
-            if hasattr(self.calculation, 'initialize_symbol'):
-                self.calculation.initialize_symbol(symbol)
-            if hasattr(self.calculation, 'warmup_periods'):
-                self.warmup_periods = self.calculation.warmup_periods
-            self.is_initialized = True
+            # Create calculation instance
+            if self.config:
+                self.calculation = self.calculation_class(**self.config)
+            else:
+                self.calculation = self.calculation_class()
             logger.info(f"Initialized {self.name} for {symbol}")
         except Exception as e:
             logger.error(f"Failed to initialize {self.name}: {e}")
@@ -81,21 +59,21 @@ class CalculationAdapter(ABC):
     @abstractmethod
     def feed_historical_data(self, data: pd.DataFrame, symbol: str) -> None:
         """
-        Feed historical bar data to prime the calculation.
+        Feed historical bar data to warm up the calculation.
         
         Args:
-            data: DataFrame with OHLCV data, index is UTC datetime
+            data: DataFrame with OHLCV data (UTC timezone index)
             symbol: Stock symbol
         """
         pass
         
     @abstractmethod
-    def process_bar(self, bar_data: Dict[str, Any], symbol: str) -> Optional[StandardSignal]:
+    def process_bar(self, bar_data: Dict, symbol: str) -> Optional[StandardSignal]:
         """
-        Process a single bar and return standardized signal.
+        Process a new bar and return signal if generated.
         
         Args:
-            bar_data: Dict with keys: timestamp, open, high, low, close, volume
+            bar_data: Dict with 'timestamp', 'open', 'high', 'low', 'close', 'volume'
             symbol: Stock symbol
             
         Returns:
@@ -103,80 +81,116 @@ class CalculationAdapter(ABC):
         """
         pass
         
-    def process_trades(self, trades: List[Dict[str, Any]], symbol: str) -> Optional[StandardSignal]:
+    def process_trades(self, trades: List[Dict], symbol: str) -> Optional[StandardSignal]:
         """
-        Process tick/trade data if calculation requires it.
-        Override in subclasses that use tick data.
+        Process trade data (for calculations that need it).
+        Override in adapters that use trade data.
         
         Args:
             trades: List of trade dictionaries
             symbol: Stock symbol
             
         Returns:
-            StandardSignal if generated, None otherwise
+            StandardSignal if generated
         """
         return None
         
-    def process_quotes(self, quotes: List[Dict[str, Any]], symbol: str) -> Optional[StandardSignal]:
+    def process_quotes(self, quotes: List[Dict], symbol: str) -> Optional[StandardSignal]:
         """
-        Process quote data if calculation requires it.
-        Override in subclasses that use quote data.
+        Process quote data (for calculations that need it).
+        Override in adapters that use quote data.
         
         Args:
             quotes: List of quote dictionaries
             symbol: Stock symbol
             
         Returns:
-            StandardSignal if generated, None otherwise
+            StandardSignal if generated
         """
         return None
-        
-    def get_latest_signal(self) -> Optional[StandardSignal]:
-        """Get the most recent signal"""
-        return self.signal_history[-1] if self.signal_history else None
         
     def get_signal_at_time(self, timestamp: datetime) -> Optional[StandardSignal]:
-        """Get signal at or before specific time"""
-        for signal in reversed(self.signal_history):
-            if signal.timestamp <= timestamp:
-                return signal
-        return None
+        """
+        Get the signal at a specific time.
+        Returns the last signal if available.
         
-    def _create_neutral_signal(self, timestamp: datetime) -> StandardSignal:
-        """Create a neutral signal when no direction detected"""
-        return StandardSignal(
+        Args:
+            timestamp: Time to get signal for (UTC)
+            
+        Returns:
+            StandardSignal or None
+        """
+        return self.last_signal
+        
+    def _create_signal(self, direction: str, strength: float, 
+                      confidence: float, metadata: Dict[str, Any],
+                      timestamp: Optional[datetime] = None) -> StandardSignal:
+        """
+        Helper to create a standardized signal.
+        
+        Args:
+            direction: 'BULLISH', 'BEARISH', or 'NEUTRAL'
+            strength: 0-100
+            confidence: 0-100
+            metadata: Additional calculation-specific data
+            timestamp: Signal timestamp (defaults to now)
+            
+        Returns:
+            StandardSignal instance
+        """
+        if timestamp is None:
+            timestamp = datetime.now(timezone.utc)
+            
+        signal = StandardSignal(
             name=self.name,
             timestamp=timestamp,
-            direction='NEUTRAL',
-            strength=0.0,
-            confidence=0.0,
-            metadata={}
+            direction=direction,
+            strength=strength,
+            confidence=confidence,
+            metadata=metadata
         )
         
-    def _map_signal_direction(self, raw_signal: Any) -> str:
-        """
-        Map calculation-specific signal to standard direction.
-        Override if calculation uses different signal format.
-        """
-        # Handle common signal formats
-        if hasattr(raw_signal, 'signal'):
-            signal_text = raw_signal.signal.upper()
-            if 'BUY' in signal_text or 'BULL' in signal_text:
-                return 'BULLISH'
-            elif 'SELL' in signal_text or 'BEAR' in signal_text:
-                return 'BEARISH'
-                
-        # Handle bull/bear score format
-        if hasattr(raw_signal, 'bull_score') and hasattr(raw_signal, 'bear_score'):
-            if raw_signal.bull_score > raw_signal.bear_score:
-                return 'BULLISH'
-            elif raw_signal.bear_score > raw_signal.bull_score:
-                return 'BEARISH'
-                
-        return 'NEUTRAL'
+        self.last_signal = signal
+        return signal
         
+    def _create_neutral_signal(self, timestamp: Optional[datetime] = None) -> StandardSignal:
+        """Create a neutral signal when no clear direction"""
+        return self._create_signal(
+            direction='NEUTRAL',
+            strength=50.0,
+            confidence=50.0,
+            metadata={'reason': 'No clear signal'},
+            timestamp=timestamp
+        )
+        
+    def _map_signal_direction(self, original_signal: str) -> str:
+        """
+        Map calculation-specific signals to standard format.
+        
+        Args:
+            original_signal: Signal from calculation (e.g., 'LONG', 'UP', 'BUY')
+            
+        Returns:
+            Standardized direction: 'BULLISH', 'BEARISH', or 'NEUTRAL'
+        """
+        # Common mappings
+        bullish_terms = ['BULLISH', 'LONG', 'BUY', 'UP', 'UPTREND', 'POSITIVE']
+        bearish_terms = ['BEARISH', 'SHORT', 'SELL', 'DOWN', 'DOWNTREND', 'NEGATIVE']
+        
+        signal_upper = original_signal.upper()
+        
+        if signal_upper in bullish_terms:
+            return 'BULLISH'
+        elif signal_upper in bearish_terms:
+            return 'BEARISH'
+        else:
+            return 'NEUTRAL'
+            
     def reset(self) -> None:
-        """Reset adapter state for new backtest"""
-        self.signal_history.clear()
-        self.is_initialized = False
-        self.calculation = None
+        """Reset the adapter and calculation state"""
+        self.last_signal = None
+        if hasattr(self.calculation, 'reset'):
+            self.calculation.reset()
+        else:
+            # Reinitialize if no reset method
+            self.initialize(self.symbol)

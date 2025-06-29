@@ -1,0 +1,60 @@
+{
+  "result_id": "63a7d4ef-9e5a-4f73-8c0a-d84117ade44a",
+  "timestamp": "2025-06-29T13:05:48.322408+00:00",
+  "config": {
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:05:00.159000+00:00",
+    "direction": "SHORT",
+    "historical_lookback_hours": 2,
+    "forward_bars": 60
+  },
+  "entry_signals": [
+    {
+      "name": "1-Min EMA Crossover",
+      "timestamp": "2025-06-27T13:05:00.159000+00:00",
+      "direction": "NEUTRAL",
+      "strength": 50.0,
+      "confidence": 50.0,
+      "metadata": {
+        "reason": "No clear signal"
+      }
+    }
+  ],
+  "aggregated_signal": {
+    "consensus_direction": "NEUTRAL",
+    "agreement_score": 100.0,
+    "vote_breakdown": {
+      "BULLISH": 0,
+      "BEARISH": 0,
+      "NEUTRAL": 1
+    },
+    "category_consensus": {
+      "trend": "NO_DATA",
+      "order_flow": "NO_DATA",
+      "volume": "NO_DATA",
+      "market_structure": "NO_DATA"
+    },
+    "average_strength": 0,
+    "average_confidence": 0,
+    "total_calculations": 15,
+    "participating_calculations": 1,
+    "signals": [
+      {
+        "name": "1-Min EMA Crossover",
+        "timestamp": "2025-06-27T13:05:00.159000+00:00",
+        "direction": "NEUTRAL",
+        "strength": 50.0,
+        "confidence": 50.0,
+        "metadata": {
+          "reason": "No clear signal"
+        }
+      }
+    ]
+  },
+  "forward_analysis": {
+    "error": "No forward data available",
+    "max_favorable_move": 0,
+    "max_adverse_move": 0
+  },
+  "runtime_seconds": 1.110134
+}

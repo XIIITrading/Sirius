@@ -14,10 +14,10 @@ import logging
 from pathlib import Path
 import json
 
-from ..adapters.base import CalculationAdapter, StandardSignal
-from .data_manager import BacktestDataManager
-from .result_store import BacktestResultStore, BacktestResult
-from .signal_aggregator import SignalAggregator
+from adapters.base import CalculationAdapter, StandardSignal
+from core.data_manager import BacktestDataManager
+from core.result_store import BacktestResultStore, BacktestResult
+from core.signal_aggregator import SignalAggregator
 
 logger = logging.getLogger(__name__)
 

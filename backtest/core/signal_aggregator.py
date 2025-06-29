@@ -1,226 +1,159 @@
 # backtest/core/signal_aggregator.py
 """
-Signal aggregation using point & call system.
-Combines multiple calculation signals into consensus.
+Signal aggregation using Point & Call voting system.
+Implements democratic voting where each calculation gets one vote.
 """
 
-from typing import List, Dict, Any
-from collections import Counter
-import numpy as np
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Any, Tuple
+from dataclasses import dataclass
 import logging
-
-from ..adapters.base import StandardSignal
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass 
+class StandardSignal:
+    """Standardized signal format from all calculations"""
+    name: str                    # Calculation name
+    timestamp: datetime          # UTC timestamp
+    direction: str              # 'BULLISH', 'BEARISH', 'NEUTRAL'
+    strength: float            # 0-100
+    confidence: float          # 0-100
+    metadata: Dict[str, Any]   # Calculation-specific data
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for storage"""
+        return {
+            'name': self.name,
+            'timestamp': self.timestamp.isoformat(),
+            'direction': self.direction,
+            'strength': self.strength,
+            'confidence': self.confidence,
+            'metadata': self.metadata
+        }
+
+
 class SignalAggregator:
     """
-    Aggregates signals from multiple calculations using point & call system.
-    Provides consensus direction and confidence metrics.
+    Aggregates signals using Point & Call voting system.
+    Each calculation gets 1 vote regardless of strength/confidence.
     """
     
     def __init__(self):
-        """Initialize signal aggregator"""
-        self.aggregation_history = []
+        """Initialize aggregator"""
+        self.calculation_categories = {
+            'trend': ['Statistical Trend 1min', 'Statistical Trend 5min', 'Statistical Trend 15min'],
+            'order_flow': ['Bid/Ask Imbalance', 'Trade Size Distribution', 'Cumulative Delta', 'Micro Momentum'],
+            'volume': ['Tick Flow', 'Volume Analysis 1min', 'Market Context', 'Session Profile', 'Cluster Analyzer'],
+            'market_structure': ['HVN Engine', 'Volume Profile', 'Ranking Engine']
+        }
         
     def aggregate_signals(self, signals: List[StandardSignal]) -> Dict[str, Any]:
         """
-        Aggregate multiple signals into consensus.
+        Aggregate signals using democratic voting.
         
         Args:
-            signals: List of StandardSignal from various calculations
+            signals: List of signals from all calculations
             
         Returns:
-            Dictionary with aggregation results
+            Dictionary with consensus results
         """
         if not signals:
             return {
                 'consensus_direction': 'NEUTRAL',
-                'bullish_count': 0,
-                'bearish_count': 0,
-                'neutral_count': 0,
-                'total_signals': 0,
                 'agreement_score': 0,
+                'vote_breakdown': {'BULLISH': 0, 'BEARISH': 0, 'NEUTRAL': 0},
+                'category_consensus': {},
                 'average_strength': 0,
                 'average_confidence': 0,
-                'signals_by_category': {}
+                'total_calculations': 0,
+                'participating_calculations': 0
             }
             
-        # Count directions
-        directions = [s.direction for s in signals]
-        direction_counts = Counter(directions)
+        # Count votes
+        vote_counts = {'BULLISH': 0, 'BEARISH': 0, 'NEUTRAL': 0}
+        category_votes = {cat: {'BULLISH': 0, 'BEARISH': 0, 'NEUTRAL': 0} 
+                         for cat in self.calculation_categories}
         
-        bullish_count = direction_counts.get('BULLISH', 0)
-        bearish_count = direction_counts.get('BEARISH', 0)
-        neutral_count = direction_counts.get('NEUTRAL', 0)
-        total_signals = len(signals)
+        # Strength and confidence aggregation (non-neutral only)
+        non_neutral_strengths = []
+        non_neutral_confidences = []
         
-        # Determine consensus (simple majority)
-        if bullish_count > bearish_count and bullish_count > neutral_count:
-            consensus_direction = 'BULLISH'
-        elif bearish_count > bullish_count and bearish_count > neutral_count:
-            consensus_direction = 'BEARISH'
-        else:
-            consensus_direction = 'NEUTRAL'
-            
-        # Calculate agreement score (0-100)
-        if consensus_direction != 'NEUTRAL':
-            agreeing_count = bullish_count if consensus_direction == 'BULLISH' else bearish_count
-            agreement_score = (agreeing_count / total_signals) * 100
-        else:
-            # For neutral, agreement is how many are neutral
-            agreement_score = (neutral_count / total_signals) * 100
-            
-        # Calculate weighted metrics
-        total_strength = sum(s.strength for s in signals if s.direction != 'NEUTRAL')
-        total_confidence = sum(s.confidence for s in signals if s.direction != 'NEUTRAL')
-        non_neutral_count = bullish_count + bearish_count
-        
-        average_strength = total_strength / non_neutral_count if non_neutral_count > 0 else 0
-        average_confidence = total_confidence / non_neutral_count if non_neutral_count > 0 else 0
-        
-        # Group signals by category
-        signals_by_category = self._group_by_category(signals)
-        
-        # Advanced metrics
-        result = {
-            'consensus_direction': consensus_direction,
-            'bullish_count': bullish_count,
-            'bearish_count': bearish_count,
-            'neutral_count': neutral_count,
-            'total_signals': total_signals,
-            'agreement_score': round(agreement_score, 2),
-            'average_strength': round(average_strength, 2),
-            'average_confidence': round(average_confidence, 2),
-            'signals_by_category': signals_by_category,
-            'strong_signals': self._identify_strong_signals(signals),
-            'conflicting_signals': self._identify_conflicts(signals),
-            'weighted_score': self._calculate_weighted_score(signals)
-        }
-        
-        # Store for analysis
-        self.aggregation_history.append({
-            'timestamp': signals[0].timestamp if signals else None,
-            'result': result
-        })
-        
-        return result
-        
-    def _group_by_category(self, signals: List[StandardSignal]) -> Dict[str, Dict]:
-        """Group signals by category (trend, volume, order flow)"""
-        categories = {
-            'trend': [],
-            'volume': [],
-            'order_flow': [],
-            'momentum': [],
-            'market_structure': []
-        }
-        
+        # Process each signal
         for signal in signals:
-            name_lower = signal.name.lower()
+            # Count vote
+            vote_counts[signal.direction] += 1
             
-            if 'trend' in name_lower or 'statistical' in name_lower:
-                categories['trend'].append(signal)
-            elif 'volume' in name_lower or 'tick_flow' in name_lower:
-                categories['volume'].append(signal)
-            elif 'delta' in name_lower or 'bid_ask' in name_lower or 'trade_size' in name_lower:
-                categories['order_flow'].append(signal)
-            elif 'momentum' in name_lower:
-                categories['momentum'].append(signal)
-            else:
-                categories['market_structure'].append(signal)
+            # Track by category
+            category = self._get_signal_category(signal.name)
+            if category:
+                category_votes[category][signal.direction] += 1
                 
-        # Summarize each category
-        result = {}
-        for category, cat_signals in categories.items():
-            if cat_signals:
-                cat_directions = [s.direction for s in cat_signals]
-                cat_counter = Counter(cat_directions)
-                
-                result[category] = {
-                    'total': len(cat_signals),
-                    'bullish': cat_counter.get('BULLISH', 0),
-                    'bearish': cat_counter.get('BEARISH', 0),
-                    'neutral': cat_counter.get('NEUTRAL', 0),
-                    'consensus': max(cat_counter, key=cat_counter.get)
-                }
-                
-        return result
-        
-    def _identify_strong_signals(self, signals: List[StandardSignal]) -> List[Dict]:
-        """Identify particularly strong signals"""
-        strong_signals = []
-        
-        for signal in signals:
-            if signal.strength >= 80 and signal.confidence >= 70:
-                strong_signals.append({
-                    'name': signal.name,
-                    'direction': signal.direction,
-                    'strength': signal.strength,
-                    'confidence': signal.confidence
-                })
-                
-        return strong_signals
-        
-    def _identify_conflicts(self, signals: List[StandardSignal]) -> List[Dict]:
-        """Identify conflicting signals"""
-        conflicts = []
-        
-        # Find signals with opposite directions and high confidence
-        for i, sig1 in enumerate(signals):
-            for sig2 in signals[i+1:]:
-                if (sig1.direction == 'BULLISH' and sig2.direction == 'BEARISH' or
-                    sig1.direction == 'BEARISH' and sig2.direction == 'BULLISH'):
-                    if sig1.confidence >= 60 and sig2.confidence >= 60:
-                        conflicts.append({
-                            'signal1': sig1.name,
-                            'signal2': sig2.name,
-                            'direction1': sig1.direction,
-                            'direction2': sig2.direction,
-                            'confidence1': sig1.confidence,
-                            'confidence2': sig2.confidence
-                        })
-                        
-        return conflicts
-        
-    def _calculate_weighted_score(self, signals: List[StandardSignal]) -> float:
-        """
-        Calculate weighted directional score (-100 to +100).
-        Positive = bullish, Negative = bearish
-        """
-        if not signals:
-            return 0
-            
-        weighted_sum = 0
-        total_weight = 0
-        
-        for signal in signals:
-            # Weight by both strength and confidence
-            weight = (signal.strength / 100) * (signal.confidence / 100)
-            
-            if signal.direction == 'BULLISH':
-                weighted_sum += weight * 100
-            elif signal.direction == 'BEARISH':
-                weighted_sum -= weight * 100
-            # NEUTRAL contributes 0
-            
+            # Collect strength/confidence for non-neutral signals
             if signal.direction != 'NEUTRAL':
-                total_weight += weight
+                non_neutral_strengths.append(signal.strength)
+                non_neutral_confidences.append(signal.confidence)
                 
-        if total_weight > 0:
-            return round(weighted_sum / total_weight, 2)
+        # Determine consensus
+        total_votes = sum(vote_counts.values())
+        consensus_direction = self._determine_consensus(vote_counts)
+        
+        # Calculate agreement score (0-100)
+        if total_votes > 0:
+            max_votes = max(vote_counts.values())
+            agreement_score = (max_votes / total_votes) * 100
         else:
-            return 0
+            agreement_score = 0
             
+        # Average strength and confidence
+        avg_strength = sum(non_neutral_strengths) / len(non_neutral_strengths) if non_neutral_strengths else 0
+        avg_confidence = sum(non_neutral_confidences) / len(non_neutral_confidences) if non_neutral_confidences else 0
+        
+        # Category consensus
+        category_consensus = {}
+        for category, votes in category_votes.items():
+            if sum(votes.values()) > 0:
+                category_consensus[category] = self._determine_consensus(votes)
+            else:
+                category_consensus[category] = 'NO_DATA'
+                
+        return {
+            'consensus_direction': consensus_direction,
+            'agreement_score': round(agreement_score, 1),
+            'vote_breakdown': vote_counts,
+            'category_consensus': category_consensus,
+            'average_strength': round(avg_strength, 1),
+            'average_confidence': round(avg_confidence, 1),
+            'total_calculations': 15,  # Always 15 in our system
+            'participating_calculations': total_votes,
+            'signals': [s.to_dict() for s in signals]  # Include raw signals
+        }
+        
+    def _determine_consensus(self, vote_counts: Dict[str, int]) -> str:
+        """
+        Determine consensus direction from votes.
+        Simple majority wins. Ties go to NEUTRAL.
+        """
+        bull_votes = vote_counts.get('BULLISH', 0)
+        bear_votes = vote_counts.get('BEARISH', 0)
+        neutral_votes = vote_counts.get('NEUTRAL', 0)
+        
+        if bull_votes > bear_votes and bull_votes > neutral_votes:
+            return 'BULLISH'
+        elif bear_votes > bull_votes and bear_votes > neutral_votes:
+            return 'BEARISH'
+        else:
+            return 'NEUTRAL'
+            
+    def _get_signal_category(self, signal_name: str) -> Optional[str]:
+        """Get category for a signal name"""
+        for category, names in self.calculation_categories.items():
+            if signal_name in names:
+                return category
+        return None
+        
     def get_consensus_direction(self, signals: List[StandardSignal]) -> str:
-        """Get just the consensus direction"""
+        """Quick method to just get consensus direction"""
         result = self.aggregate_signals(signals)
         return result['consensus_direction']
-        
-    def get_category_consensus(self, signals: List[StandardSignal], 
-                             category: str) -> str:
-        """Get consensus for specific category"""
-        result = self.aggregate_signals(signals)
-        cat_data = result['signals_by_category'].get(category, {})
-        return cat_data.get('consensus', 'NEUTRAL')

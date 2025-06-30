@@ -1,0 +1,247 @@
+{
+  "result_id": "0a25e18b-5dc1-47d8-9234-cf9c5d6d0cd3",
+  "timestamp": "2025-06-30T18:42:54.284851+00:00",
+  "config": {
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:35:00.052000+00:00",
+    "direction": "SHORT",
+    "historical_lookback_hours": 2,
+    "forward_bars": 60,
+    "store_to_supabase": false
+  },
+  "entry_signals": [
+    {
+      "name": "15-Min EMA Crossover",
+      "timestamp": "2025-06-27T13:35:00.052000+00:00",
+      "direction": "NEUTRAL",
+      "strength": 36.0,
+      "confidence": 36.0,
+      "metadata": {
+        "ema_9": 222.0107715751284,
+        "ema_21": 221.28856421362332,
+        "ema_spread": 0.7222073615050704,
+        "ema_spread_pct": 0.3262076205447595,
+        "price_vs_ema9": "below",
+        "trend_strength": 6.52415241089519,
+        "last_crossover_type": "bullish",
+        "reason": "9 EMA (222.01) > 21 EMA (221.29) | But price (221.40) below 9 EMA | Spread: 0.72 (0.3%) | Recent bullish crossover 0.0m ago",
+        "timeframe": "15-minute"
+      }
+    },
+    {
+      "name": "15-Min Market Structure",
+      "timestamp": "2025-06-27T13:35:00.052000+00:00",
+      "direction": "NEUTRAL",
+      "strength": 50.0,
+      "confidence": 50.0,
+      "metadata": {
+        "reason": "No clear signal"
+      }
+    },
+    {
+      "name": "1-Min EMA Crossover",
+      "timestamp": "2025-06-27T13:35:00.052000+00:00",
+      "direction": "BEARISH",
+      "strength": 21.68867357564174,
+      "confidence": 21.68867357564174,
+      "metadata": {
+        "ema_9": 218.6879216825966,
+        "ema_21": 220.64471990102234,
+        "ema_spread": -1.956798218425746,
+        "ema_spread_pct": -0.9036947323184058,
+        "price_vs_ema9": "below",
+        "trend_strength": 18.073894646368117,
+        "last_crossover_type": "bearish",
+        "reason": "9 EMA (218.69) < 21 EMA (220.64) | Spread: -1.96 (-0.9%) | Recent bearish crossover 0s ago"
+      }
+    },
+    {
+      "name": "1-Min Market Structure",
+      "timestamp": "2025-06-27T13:35:00.052000+00:00",
+      "direction": "BULLISH",
+      "strength": 52.75576989321393,
+      "confidence": 52.75576989321393,
+      "metadata": {
+        "structure_type": "BOS",
+        "current_trend": "BULL",
+        "last_high_fractal": 199.78,
+        "last_low_fractal": 198.6,
+        "last_break_type": "BOS",
+        "last_break_price": 203.77,
+        "fractal_count": 17,
+        "structure_breaks": 13,
+        "trend_changes": 4,
+        "candles_processed": 200,
+        "reason": "BOS: Close above high fractal at 203.21 (break: 0.3%) - Trend continuation",
+        "last_break_time": "2025-06-30T18:42:54.013892+00:00"
+      }
+    },
+    {
+      "name": "5-Min EMA Crossover",
+      "timestamp": "2025-06-27T13:35:00.052000+00:00",
+      "direction": "BEARISH",
+      "strength": 5.410789898455674,
+      "confidence": 5.410789898455674,
+      "metadata": {
+        "ema_9": 221.39387545424464,
+        "ema_21": 221.88204841681184,
+        "ema_spread": -0.4881729625672051,
+        "ema_spread_pct": -0.22544957910231975,
+        "price_vs_ema9": "below",
+        "trend_strength": 4.508991582046395,
+        "last_crossover_type": "bullish",
+        "reason": "9 EMA (221.39) < 21 EMA (221.88) | Spread: -0.49 (-0.2%) | Recent bullish crossover 0.0m ago",
+        "timeframe": "5-minute"
+      }
+    },
+    {
+      "name": "5-Min Market Structure",
+      "timestamp": "2025-06-27T13:35:00.052000+00:00",
+      "direction": "NEUTRAL",
+      "strength": 50.0,
+      "confidence": 50.0,
+      "metadata": {
+        "reason": "No clear signal"
+      }
+    }
+  ],
+  "aggregated_signal": {
+    "consensus_direction": "NEUTRAL",
+    "agreement_score": 50.0,
+    "vote_breakdown": {
+      "BULLISH": 1,
+      "BEARISH": 2,
+      "NEUTRAL": 3
+    },
+    "category_consensus": {
+      "trend": "NO_DATA",
+      "order_flow": "NO_DATA",
+      "volume": "NO_DATA",
+      "market_structure": "NO_DATA"
+    },
+    "average_strength": 26.6,
+    "average_confidence": 26.6,
+    "total_calculations": 15,
+    "participating_calculations": 6,
+    "signals": [
+      {
+        "name": "15-Min EMA Crossover",
+        "timestamp": "2025-06-27T13:35:00.052000+00:00",
+        "direction": "NEUTRAL",
+        "strength": 36.0,
+        "confidence": 36.0,
+        "metadata": {
+          "ema_9": 222.0107715751284,
+          "ema_21": 221.28856421362332,
+          "ema_spread": 0.7222073615050704,
+          "ema_spread_pct": 0.3262076205447595,
+          "price_vs_ema9": "below",
+          "trend_strength": 6.52415241089519,
+          "last_crossover_type": "bullish",
+          "reason": "9 EMA (222.01) > 21 EMA (221.29) | But price (221.40) below 9 EMA | Spread: 0.72 (0.3%) | Recent bullish crossover 0.0m ago",
+          "timeframe": "15-minute"
+        }
+      },
+      {
+        "name": "15-Min Market Structure",
+        "timestamp": "2025-06-27T13:35:00.052000+00:00",
+        "direction": "NEUTRAL",
+        "strength": 50.0,
+        "confidence": 50.0,
+        "metadata": {
+          "reason": "No clear signal"
+        }
+      },
+      {
+        "name": "1-Min EMA Crossover",
+        "timestamp": "2025-06-27T13:35:00.052000+00:00",
+        "direction": "BEARISH",
+        "strength": 21.68867357564174,
+        "confidence": 21.68867357564174,
+        "metadata": {
+          "ema_9": 218.6879216825966,
+          "ema_21": 220.64471990102234,
+          "ema_spread": -1.956798218425746,
+          "ema_spread_pct": -0.9036947323184058,
+          "price_vs_ema9": "below",
+          "trend_strength": 18.073894646368117,
+          "last_crossover_type": "bearish",
+          "reason": "9 EMA (218.69) < 21 EMA (220.64) | Spread: -1.96 (-0.9%) | Recent bearish crossover 0s ago"
+        }
+      },
+      {
+        "name": "1-Min Market Structure",
+        "timestamp": "2025-06-27T13:35:00.052000+00:00",
+        "direction": "BULLISH",
+        "strength": 52.75576989321393,
+        "confidence": 52.75576989321393,
+        "metadata": {
+          "structure_type": "BOS",
+          "current_trend": "BULL",
+          "last_high_fractal": 199.78,
+          "last_low_fractal": 198.6,
+          "last_break_type": "BOS",
+          "last_break_price": 203.77,
+          "fractal_count": 17,
+          "structure_breaks": 13,
+          "trend_changes": 4,
+          "candles_processed": 200,
+          "reason": "BOS: Close above high fractal at 203.21 (break: 0.3%) - Trend continuation",
+          "last_break_time": "2025-06-30T18:42:54.013892+00:00"
+        }
+      },
+      {
+        "name": "5-Min EMA Crossover",
+        "timestamp": "2025-06-27T13:35:00.052000+00:00",
+        "direction": "BEARISH",
+        "strength": 5.410789898455674,
+        "confidence": 5.410789898455674,
+        "metadata": {
+          "ema_9": 221.39387545424464,
+          "ema_21": 221.88204841681184,
+          "ema_spread": -0.4881729625672051,
+          "ema_spread_pct": -0.22544957910231975,
+          "price_vs_ema9": "below",
+          "trend_strength": 4.508991582046395,
+          "last_crossover_type": "bullish",
+          "reason": "9 EMA (221.39) < 21 EMA (221.88) | Spread: -0.49 (-0.2%) | Recent bullish crossover 0.0m ago",
+          "timeframe": "5-minute"
+        }
+      },
+      {
+        "name": "5-Min Market Structure",
+        "timestamp": "2025-06-27T13:35:00.052000+00:00",
+        "direction": "NEUTRAL",
+        "strength": 50.0,
+        "confidence": 50.0,
+        "metadata": {
+          "reason": "No clear signal"
+        }
+      }
+    ]
+  },
+  "forward_analysis": {
+    "entry_price": 215.3403,
+    "exit_price": 201.184,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "final_pnl": 6.573920441273656,
+    "time_to_max_favorable": "2025-06-27T14:27:00+00:00",
+    "time_to_max_adverse": "2025-06-27T13:36:00+00:00",
+    "bars_analyzed": 60,
+    "volume_profile": {
+      "total": 9505809.0,
+      "average": 158430.15,
+      "at_extremes": {
+        "at_high": 120602.0,
+        "at_low": 138154.0
+      }
+    },
+    "signal_accuracy": {
+      "consensus_matched_user": false,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
+  },
+  "runtime_seconds": 1.12458
+}

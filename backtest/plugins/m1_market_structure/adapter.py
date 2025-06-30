@@ -72,6 +72,9 @@ class M1MarketStructureBackAdapter(CalculationAdapter):
         # Initialize aggregator
         self.aggregator = M1MarketStructureAggregator()
         
+        # Debug mode flag
+        self.debug_mode = logger.isEnabledFor(logging.DEBUG)
+        
         logger.info(f"M1MarketStructureBackAdapter initialized with fractal_length={fractal_length}, "
                    f"buffer_size={buffer_size}, min_candles={min_candles_required}")
     
@@ -93,7 +96,7 @@ class M1MarketStructureBackAdapter(CalculationAdapter):
     
     def feed_historical_data(self, data: pd.DataFrame, symbol: str) -> None:
         """
-        Feed historical bar data from shared cache.
+        Feed historical bar data from shared cache with detailed debugging.
         Note: 'data' parameter is legacy, we use self.data_cache
         """
         if not self.data_cache:
@@ -119,13 +122,24 @@ class M1MarketStructureBackAdapter(CalculationAdapter):
             logger.error("No entry_time in data cache")
             return
         
-        logger.info(f"Processing {len(bars)} historical 1-minute bars for {symbol}")
+        # DEBUG: Log data range and entry time
+        if self.debug_mode:
+            logger.info(f"\n{'='*80}")
+            logger.info(f"M1 MARKET STRUCTURE ADAPTER DEBUG - {symbol}")
+            logger.info(f"Entry time: {entry_time}")
+            logger.info(f"Data range: {bars.index[0]} to {bars.index[-1]}")
+            logger.info(f"Total bars available: {len(bars)}")
+            logger.info(f"{'='*80}")
         
         # Convert to candle format and process
         candles = []
+        candles_processed = 0
+        
         for timestamp, row in bars.iterrows():
             # Stop at entry time to prevent look-ahead
             if timestamp >= entry_time:
+                if self.debug_mode:
+                    logger.debug(f"Stopping at entry time: {timestamp} >= {entry_time}")
                 break
                 
             # Ensure timestamp is UTC
@@ -145,18 +159,55 @@ class M1MarketStructureBackAdapter(CalculationAdapter):
                 'n': int(row.get('transactions', 0))
             }
             candles.append(candle_dict)
+            candles_processed += 1
+            
+            # DEBUG: Log every 10th candle
+            if self.debug_mode and candles_processed % 10 == 0:
+                logger.debug(f"Processed {candles_processed} candles, last: {timestamp} "
+                            f"OHLC: {row['open']:.2f}/{row['high']:.2f}/{row['low']:.2f}/{row['close']:.2f}")
         
-        logger.info(f"Prepared {len(candles)} candles for processing")
+        logger.info(f"Prepared {len(candles)} candles for processing (stopped before entry)")
+        
+        # DEBUG: Show last 5 candles
+        if self.debug_mode and len(candles) >= 5:
+            logger.info("\nLast 5 candles before entry:")
+            for i in range(-5, 0):
+                c = candles[i]
+                logger.info(f"  {c['t'].strftime('%H:%M:%S')}: "
+                           f"O:{c['o']:.2f} H:{c['h']:.2f} L:{c['l']:.2f} C:{c['c']:.2f}")
         
         # Process historical candles
+        logger.info("\nProcessing historical candles...")
         signal = self.calculation.process_historical_candles(symbol, candles)
         
         if signal:
             self.last_signal = self._convert_market_structure_signal(signal)
-            logger.info(f"Historical processing complete, last signal: {self.last_signal.direction} "
-                       f"({signal.structure_type})")
+            
+            if self.debug_mode:
+                logger.info(f"\nHistorical processing complete:")
+                logger.info(f"  Last signal: {self.last_signal.direction}")
+                logger.info(f"  Structure type: {self.last_signal.metadata.get('structure_type')}")
+                logger.info(f"  Current trend: {self.last_signal.metadata.get('current_trend')}")
+                logger.info(f"  Last high fractal: {self.last_signal.metadata.get('last_high_fractal')}")
+                logger.info(f"  Last low fractal: {self.last_signal.metadata.get('last_low_fractal')}")
+                logger.info(f"  Reason: {self.last_signal.metadata.get('reason')}")
+                
+                # DEBUG: Get analyzer state
+                if hasattr(self.calculation, 'get_statistics'):
+                    stats = self.calculation.get_statistics()
+                    logger.info(f"\nAnalyzer statistics:")
+                    logger.info(f"  Candles processed: {stats.get('candles_processed', 0)}")
+                    logger.info(f"  Signals generated: {stats.get('signals_generated', 0)}")
+                    logger.info(f"  Current trends: {stats.get('current_trends', {})}")
         else:
-            logger.info("Historical processing complete, no signal generated")
+            logger.warning("Historical processing complete, no signal generated")
+            # Try to get current state anyway
+            if self.debug_mode and hasattr(self.calculation, 'get_current_analysis'):
+                current = self.calculation.get_current_analysis(symbol)
+                if current:
+                    logger.info(f"\nCurrent analysis shows:")
+                    logger.info(f"  Trend: {current.signal}")
+                    logger.info(f"  Metrics: {current.metrics}")
     
     def process_bar(self, bar_data: Dict, symbol: str) -> Optional[StandardSignal]:
         """Process a single bar (not used in backtest mode with shared cache)"""
@@ -230,6 +281,14 @@ class M1MarketStructureBackAdapter(CalculationAdapter):
     
     def get_signal_at_time(self, timestamp: datetime) -> Optional[StandardSignal]:
         """Get the signal at entry time"""
+        if self.debug_mode:
+            logger.debug(f"Getting signal at time: {timestamp}")
+            if self.last_signal:
+                logger.debug(f"  Returning last signal: {self.last_signal.direction}")
+                logger.debug(f"  Metadata: {self.last_signal.metadata}")
+            else:
+                logger.debug("  No signal available")
+                
         if self.last_signal:
             # Update timestamp to requested time
             return StandardSignal(

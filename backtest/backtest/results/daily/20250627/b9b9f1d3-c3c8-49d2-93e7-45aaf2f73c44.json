@@ -1,0 +1,101 @@
+{
+  "result_id": "b9b9f1d3-c3c8-49d2-93e7-45aaf2f73c44",
+  "timestamp": "2025-06-30T18:40:33.646257+00:00",
+  "config": {
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:35:00.598000+00:00",
+    "direction": "SHORT",
+    "historical_lookback_hours": 2,
+    "forward_bars": 60,
+    "store_to_supabase": false
+  },
+  "entry_signals": [
+    {
+      "name": "1-Min Market Structure",
+      "timestamp": "2025-06-27T13:35:00.598000+00:00",
+      "direction": "BEARISH",
+      "strength": 61.399808245445875,
+      "confidence": 61.399808245445875,
+      "metadata": {
+        "structure_type": "BOS",
+        "current_trend": "BEAR",
+        "last_high_fractal": 224.4999,
+        "last_low_fractal": 222.0,
+        "last_break_type": "BOS",
+        "last_break_price": 216.5331,
+        "fractal_count": 15,
+        "structure_breaks": 14,
+        "trend_changes": 4,
+        "candles_processed": 171,
+        "reason": "BOS: Close below low fractal at 219.03 (break: 1.1%) - Trend continuation",
+        "last_break_time": "2025-06-30T18:40:33.639042+00:00"
+      }
+    }
+  ],
+  "aggregated_signal": {
+    "consensus_direction": "BEARISH",
+    "agreement_score": 100.0,
+    "vote_breakdown": {
+      "BULLISH": 0,
+      "BEARISH": 1,
+      "NEUTRAL": 0
+    },
+    "category_consensus": {
+      "trend": "NO_DATA",
+      "order_flow": "NO_DATA",
+      "volume": "NO_DATA",
+      "market_structure": "NO_DATA"
+    },
+    "average_strength": 61.4,
+    "average_confidence": 61.4,
+    "total_calculations": 15,
+    "participating_calculations": 1,
+    "signals": [
+      {
+        "name": "1-Min Market Structure",
+        "timestamp": "2025-06-27T13:35:00.598000+00:00",
+        "direction": "BEARISH",
+        "strength": 61.399808245445875,
+        "confidence": 61.399808245445875,
+        "metadata": {
+          "structure_type": "BOS",
+          "current_trend": "BEAR",
+          "last_high_fractal": 224.4999,
+          "last_low_fractal": 222.0,
+          "last_break_type": "BOS",
+          "last_break_price": 216.5331,
+          "fractal_count": 15,
+          "structure_breaks": 14,
+          "trend_changes": 4,
+          "candles_processed": 171,
+          "reason": "BOS: Close below low fractal at 219.03 (break: 1.1%) - Trend continuation",
+          "last_break_time": "2025-06-30T18:40:33.639042+00:00"
+        }
+      }
+    ]
+  },
+  "forward_analysis": {
+    "entry_price": 215.3403,
+    "exit_price": 201.184,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "final_pnl": 6.573920441273656,
+    "time_to_max_favorable": "2025-06-27T14:27:00+00:00",
+    "time_to_max_adverse": "2025-06-27T13:36:00+00:00",
+    "bars_analyzed": 60,
+    "volume_profile": {
+      "total": 9505809.0,
+      "average": 158430.15,
+      "at_extremes": {
+        "at_high": 120602.0,
+        "at_low": 138154.0
+      }
+    },
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
+  },
+  "runtime_seconds": 0.094352
+}

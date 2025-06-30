@@ -23,6 +23,7 @@ try:
     SUPABASE_AVAILABLE = True
 except ImportError:
     SUPABASE_AVAILABLE = False
+    logger = logging.getLogger(__name__)
     logger.warning("Supabase storage module not available")
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,9 @@ class BacktestEngine:
         # Store plugin registry reference
         self.plugin_registry = plugin_registry
         
+        # Add debug mode flag
+        self.debug_mode = False
+        
         # Initialize Supabase storage if available and enabled
         self.supabase_storage = None
         self.supabase_enabled = False
@@ -123,6 +127,15 @@ class BacktestEngine:
         
         if config_path:
             self._load_config(config_path)
+    
+    def enable_debug_mode(self):
+        """Enable debug mode for detailed logging"""
+        self.debug_mode = True
+        logger.setLevel(logging.DEBUG)
+        # Also enable debug for all calculation adapters
+        for adapter in self.adapters.values():
+            if hasattr(adapter, 'debug_mode'):
+                adapter.debug_mode = True
             
     def _load_config(self, config_path: str) -> None:
         """Load configuration from JSON file"""
@@ -255,6 +268,19 @@ class BacktestEngine:
             BacktestResult with analysis and performance metrics
         """
         start_time = datetime.now(timezone.utc)
+        
+        # Debug mode logging
+        if self.debug_mode:
+            logger.info(f"\n{'='*80}")
+            logger.info(f"BACKTEST ENGINE DEBUG MODE")
+            logger.info(f"Symbol: {config.symbol}")
+            logger.info(f"Entry time: {config.entry_time}")
+            logger.info(f"Direction: {config.direction}")
+            logger.info(f"Lookback hours: {config.historical_lookback_hours}")
+            logger.info(f"Forward bars: {config.forward_bars}")
+            logger.info(f"Enabled calculations: {config.enabled_calculations or 'ALL'}")
+            logger.info(f"{'='*80}\n")
+        
         logger.info(f"Starting backtest for {config.symbol} at {config.entry_time}")
         
         # Log storage configuration
@@ -288,13 +314,54 @@ class BacktestEngine:
             # 6. Get entry signals from all calculations
             entry_signals = await self._get_entry_signals(config)
             
+            # Debug logging for entry signals
+            if self.debug_mode:
+                logger.info(f"\nEntry signals collected ({len(entry_signals)} total):")
+                for sig in entry_signals:
+                    logger.info(f"  {sig.name}:")
+                    logger.info(f"    Direction: {sig.direction}")
+                    logger.info(f"    Strength: {sig.strength}%")
+                    logger.info(f"    Confidence: {sig.confidence}%")
+                    if 'structure_type' in sig.metadata:
+                        logger.info(f"    Structure: {sig.metadata['structure_type']}")
+                        logger.info(f"    Trend: {sig.metadata.get('current_trend')}")
+                        logger.info(f"    Reason: {sig.metadata.get('reason')}")
+            
             # 7. Aggregate signals using point & call system
             aggregated_signal = self.signal_aggregator.aggregate_signals(entry_signals)
+            
+            # Debug logging for aggregated signal
+            if self.debug_mode:
+                logger.info(f"\nAggregated Signal:")
+                # Safely access keys that may or may not exist
+                if isinstance(aggregated_signal, dict):
+                    logger.info(f"  Final direction: {aggregated_signal.get('direction', 'N/A')}")
+                    logger.info(f"  Total points: {aggregated_signal.get('total_points', 0)}")
+                    logger.info(f"  Confidence: {aggregated_signal.get('confidence', 0)}%")
+                    if 'point_breakdown' in aggregated_signal:
+                        logger.info("  Point breakdown:")
+                        for calc, points in aggregated_signal['point_breakdown'].items():
+                            logger.info(f"    {calc}: {points} points")
+                    # Log all available keys for debugging
+                    logger.info(f"  Available keys: {list(aggregated_signal.keys())}")
+                else:
+                    logger.info(f"  Signal type: {type(aggregated_signal)}")
+                    logger.info(f"  Signal value: {aggregated_signal}")
             
             # 8. Simulate forward price movement
             forward_analysis = await self._analyze_forward_movement(
                 config, forward_data, entry_signals
             )
+            
+            # Debug logging for forward analysis
+            if self.debug_mode:
+                logger.info(f"\nForward Analysis Results:")
+                logger.info(f"  Entry price: ${forward_analysis['entry_price']:.2f}")
+                logger.info(f"  Exit price: ${forward_analysis['exit_price']:.2f}")
+                logger.info(f"  Max favorable move: {forward_analysis['max_favorable_move']:.2f}%")
+                logger.info(f"  Max adverse move: {forward_analysis['max_adverse_move']:.2f}%")
+                logger.info(f"  Final P&L: {forward_analysis['final_pnl']:.2f}%")
+                logger.info(f"  Signal accuracy: {forward_analysis['signal_accuracy']}")
             
             # 9. Prepare bars for storage (even if not auto-storing, prepare for manual push)
             bars_for_storage = None

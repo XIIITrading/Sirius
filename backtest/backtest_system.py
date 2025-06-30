@@ -30,7 +30,8 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QDateTimeEdit, QComboBox,
     QGroupBox, QSplitter, QTextEdit, QProgressBar, QMessageBox,
-    QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox
+    QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox,
+    QDialog, QDialogButtonBox, QSpinBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QDateTime
 from PyQt6.QtGui import QFont, QColor
@@ -174,6 +175,80 @@ class PushWorker(QThread):
             loop.close()
 
 
+class MarketStructureDebugDialog(QDialog):
+    """Dialog for market structure debug settings"""
+    
+    def __init__(self, parent=None, symbol="", entry_time=None):
+        super().__init__(parent)
+        self.setWindowTitle("Market Structure Debug Settings")
+        self.setModal(True)
+        self.resize(400, 300)
+        
+        layout = QVBoxLayout(self)
+        
+        # Symbol
+        symbol_layout = QHBoxLayout()
+        symbol_layout.addWidget(QLabel("Symbol:"))
+        self.symbol_input = QLineEdit(symbol)
+        symbol_layout.addWidget(self.symbol_input)
+        layout.addLayout(symbol_layout)
+        
+        # Entry time
+        time_layout = QHBoxLayout()
+        time_layout.addWidget(QLabel("Entry Time:"))
+        self.time_input = QDateTimeEdit()
+        if entry_time:
+            self.time_input.setDateTime(QDateTime.fromSecsSinceEpoch(int(entry_time.timestamp())))
+        else:
+            self.time_input.setDateTime(QDateTime.currentDateTimeUtc())
+        self.time_input.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.time_input.setCalendarPopup(True)
+        time_layout.addWidget(self.time_input)
+        layout.addLayout(time_layout)
+        
+        # Lookback hours
+        lookback_layout = QHBoxLayout()
+        lookback_layout.addWidget(QLabel("Lookback Hours:"))
+        self.lookback_spin = QSpinBox()
+        self.lookback_spin.setMinimum(1)
+        self.lookback_spin.setMaximum(24)
+        self.lookback_spin.setValue(2)
+        lookback_layout.addWidget(self.lookback_spin)
+        layout.addLayout(lookback_layout)
+        
+        # Fractal length
+        fractal_layout = QHBoxLayout()
+        fractal_layout.addWidget(QLabel("Fractal Length:"))
+        self.fractal_spin = QSpinBox()
+        self.fractal_spin.setMinimum(2)
+        self.fractal_spin.setMaximum(10)
+        self.fractal_spin.setValue(5)
+        fractal_layout.addWidget(self.fractal_spin)
+        layout.addLayout(fractal_layout)
+        
+        # Timeframe selection
+        timeframe_layout = QHBoxLayout()
+        timeframe_layout.addWidget(QLabel("Timeframe:"))
+        self.timeframe_combo = QComboBox()
+        self.timeframe_combo.addItems(["1-Min", "5-Min", "15-Min"])
+        timeframe_layout.addWidget(self.timeframe_combo)
+        layout.addLayout(timeframe_layout)
+        
+        # Save results checkbox
+        self.save_checkbox = QCheckBox("Save debug results to file")
+        self.save_checkbox.setChecked(False)
+        layout.addWidget(self.save_checkbox)
+        
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | 
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+
 class BacktestDashboard(QMainWindow):
     """Main dashboard window for backtesting"""
     
@@ -311,6 +386,12 @@ class BacktestDashboard(QMainWindow):
         self.store_supabase_checkbox.setChecked(False)  # Default to off
         layout.addWidget(self.store_supabase_checkbox)
         
+        # Debug mode checkbox
+        self.debug_checkbox = QCheckBox("Debug Mode")
+        self.debug_checkbox.setChecked(False)
+        self.debug_checkbox.setToolTip("Enable detailed logging for troubleshooting")
+        layout.addWidget(self.debug_checkbox)
+        
         # Run button
         self.run_button = QPushButton("Run Backtest")
         self.run_button.clicked.connect(self.run_backtest)
@@ -333,6 +414,19 @@ class BacktestDashboard(QMainWindow):
             }
         """)
         layout.addWidget(self.push_button)
+        
+        # Debug button
+        self.debug_button = QPushButton("Debug Market Structure")
+        self.debug_button.clicked.connect(self.debug_market_structure)
+        self.debug_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e67e22;
+            }
+            QPushButton:hover {
+                background-color: #f39c12;
+            }
+        """)
+        layout.addWidget(self.debug_button)
         
         # Cache stats button
         self.cache_button = QPushButton("Cache Stats")
@@ -457,7 +551,7 @@ class BacktestDashboard(QMainWindow):
                 background-color: #4a4a4a;
                 color: #888888;
             }
-            QLineEdit, QComboBox, QDateTimeEdit {
+            QLineEdit, QComboBox, QDateTimeEdit, QSpinBox {
                 background-color: #2b2b2b;
                 border: 1px solid #444;
                 padding: 5px;
@@ -520,6 +614,29 @@ class BacktestDashboard(QMainWindow):
         selected_adapter = self.adapter_combo.currentText()
         store_to_supabase = self.store_supabase_checkbox.isChecked()
         
+        # Enable debug mode if checked
+        if self.debug_checkbox.isChecked():
+            self.engine.enable_debug_mode()
+            # Also set up console logging
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.DEBUG)
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            console_handler.setFormatter(formatter)
+            
+            # Get root logger and set level
+            root_logger = logging.getLogger()
+            root_logger.setLevel(logging.DEBUG)
+            
+            # Remove existing handlers to avoid duplicates
+            for handler in root_logger.handlers[:]:
+                if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
+                    root_logger.removeHandler(handler)
+            
+            root_logger.addHandler(console_handler)
+        else:
+            # Reset logging level
+            logging.getLogger().setLevel(logging.INFO)
+        
         # Determine which calculations to run
         if selected_adapter == "All Calculations":
             # Empty list means run all registered adapters
@@ -553,6 +670,9 @@ class BacktestDashboard(QMainWindow):
         
         if store_to_supabase:
             status_msg += " (will auto-store to Supabase)"
+        
+        if self.debug_checkbox.isChecked():
+            status_msg += " [DEBUG MODE]"
         
         self.status_label.setText(status_msg + "...")
         
@@ -632,6 +752,12 @@ class BacktestDashboard(QMainWindow):
                     key_metrics.append(f"EMA9: {metadata['ema_9']:.2f}")
                 if 'ema_21' in metadata:
                     key_metrics.append(f"EMA21: {metadata['ema_21']:.2f}")
+                if 'structure_type' in metadata:
+                    key_metrics.append(f"Type: {metadata['structure_type']}")
+                if 'last_high_fractal' in metadata and metadata['last_high_fractal']:
+                    key_metrics.append(f"H: {metadata['last_high_fractal']:.2f}")
+                if 'last_low_fractal' in metadata and metadata['last_low_fractal']:
+                    key_metrics.append(f"L: {metadata['last_low_fractal']:.2f}")
                 metadata_str = ", ".join(key_metrics) if key_metrics else str(metadata)
                 
             self.signals_table.setItem(i, 4, QTableWidgetItem(metadata_str))
@@ -726,6 +852,84 @@ class BacktestDashboard(QMainWindow):
             self.status_label.setText("Backtest failed")
         else:
             self.status_label.setText("Backtest complete")
+    
+    def debug_market_structure(self):
+        """Open debug window for market structure"""
+        # Get current values
+        symbol = self.symbol_input.text().strip().upper()
+        entry_time = self.datetime_input.dateTime().toPyDateTime()
+        
+        # Show dialog for debug settings
+        dialog = MarketStructureDebugDialog(self, symbol, entry_time)
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Get values from dialog
+            symbol = dialog.symbol_input.text().strip().upper()
+            entry_time = dialog.time_input.dateTime().toPyDateTime()
+            entry_time = entry_time.replace(tzinfo=timezone.utc)
+            lookback_hours = dialog.lookback_spin.value()
+            fractal_length = dialog.fractal_spin.value()
+            timeframe = dialog.timeframe_combo.currentText()
+            save_results = dialog.save_checkbox.isChecked()
+            
+            # Update status
+            self.status_label.setText(f"Running {timeframe} market structure debug for {symbol}...")
+            
+            # Run debug in separate thread to avoid blocking UI
+            import threading
+            
+            def run_debug():
+                try:
+                    # Create new event loop for thread
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    # Import appropriate debugger based on timeframe
+                    if timeframe == "1-Min":
+                        from debug.debug_m1_market_structure import M1MarketStructureDebugger
+                        debugger = M1MarketStructureDebugger(
+                            symbol=symbol,
+                            entry_time=entry_time,
+                            lookback_minutes=int(lookback_hours * 60),
+                            fractal_length=fractal_length
+                        )
+                    elif timeframe == "5-Min":
+                        from debug.debug_m5_market_structure import M5MarketStructureDebugger
+                        debugger = M5MarketStructureDebugger(
+                            symbol=symbol,
+                            entry_time=entry_time,
+                            lookback_minutes=int(lookback_hours * 60),
+                            fractal_length=min(fractal_length, 3)  # Max 3 for 5-min
+                        )
+                    elif timeframe == "15-Min":
+                        from debug.debug_m15_market_structure import M15MarketStructureDebugger
+                        debugger = M15MarketStructureDebugger(
+                            symbol=symbol,
+                            entry_time=entry_time,
+                            lookback_minutes=int(lookback_hours * 60),
+                            fractal_length=min(fractal_length, 2)  # Max 2 for 15-min
+                        )
+                    
+                    # Run debug
+                    results = loop.run_until_complete(debugger.run_debug())
+                    
+                    # Save results if requested
+                    if save_results:
+                        output_path = debugger.save_debug_report(results)
+                        logger.info(f"Debug results saved to: {output_path}")
+                    
+                    # Update status on completion
+                    self.status_label.setText(f"Debug complete for {symbol} ({timeframe})")
+                    
+                except Exception as e:
+                    logger.error(f"Debug error: {e}", exc_info=True)
+                    self.status_label.setText(f"Debug error: {str(e)}")
+                finally:
+                    loop.close()
+            
+            # Start debug thread
+            debug_thread = threading.Thread(target=run_debug)
+            debug_thread.start()
         
     def show_cache_stats(self):
         """Show cache statistics"""

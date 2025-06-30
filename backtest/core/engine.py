@@ -157,6 +157,7 @@ class BacktestEngine:
     async def _collect_data_requirements(self, config: BacktestConfig) -> Dict[str, Any]:
         """
         Collect data requirements from all active adapters.
+        Simplified since plugins handle their own aggregation.
         
         Returns:
             Aggregated requirements for data fetching
@@ -164,8 +165,7 @@ class BacktestEngine:
         requirements = {
             'max_lookback_minutes': 0,
             'needs_trades': False,
-            'needs_quotes': False,
-            'timeframes': set()
+            'needs_quotes': False
         }
         
         # Filter adapters based on enabled calculations
@@ -179,14 +179,13 @@ class BacktestEngine:
             if hasattr(adapter, 'get_data_requirements'):
                 adapter_reqs = adapter.get_data_requirements()
                 
-                # Bar requirements
+                # Bar requirements - we only care about lookback now
                 if adapter_reqs.get('bars'):
                     bar_reqs = adapter_reqs['bars']
                     requirements['max_lookback_minutes'] = max(
                         requirements['max_lookback_minutes'],
                         bar_reqs.get('lookback_minutes', 0)
                     )
-                    requirements['timeframes'].add(bar_reqs.get('timeframe', '1min'))
                 
                 # Trade/quote requirements
                 if adapter_reqs.get('trades'):
@@ -194,15 +193,13 @@ class BacktestEngine:
                 if adapter_reqs.get('quotes'):
                     requirements['needs_quotes'] = True
         
-        # Always include 1min as base timeframe
-        requirements['timeframes'].add('1min')
-        
         return requirements
     
     async def _fetch_all_required_data(self, symbol: str, requirements: Dict[str, Any],
                                       start_time: datetime, end_time: datetime) -> Dict[str, Any]:
         """
         Fetch all required data based on aggregated requirements.
+        Simplified - only fetches 1-minute bars, plugins handle aggregation.
         
         Returns:
             Shared data cache for all adapters
@@ -214,7 +211,7 @@ class BacktestEngine:
             'entry_time': end_time  # data_end is entry_time for historical
         }
         
-        # Always fetch 1-minute bars as base
+        # Always fetch 1-minute bars as base - plugins will aggregate as needed
         data_cache['1min_bars'] = await self.data_manager.load_bars(
             symbol=symbol,
             start_time=start_time,
@@ -222,13 +219,6 @@ class BacktestEngine:
             timeframe='1min',
             use_cache=True
         )
-        
-        # Aggregate to other timeframes if needed
-        if '5min' in requirements['timeframes'] and not data_cache['1min_bars'].empty:
-            data_cache['5min_bars'] = self._aggregate_bars(data_cache['1min_bars'], '5min')
-        
-        if '15min' in requirements['timeframes'] and not data_cache['1min_bars'].empty:
-            data_cache['15min_bars'] = self._aggregate_bars(data_cache['1min_bars'], '15min')
         
         # Fetch trades if needed
         if requirements['needs_trades']:
@@ -253,44 +243,6 @@ class BacktestEngine:
             data_cache['quotes'] = []
         
         return data_cache
-    
-    def _aggregate_bars(self, bars_1min: pd.DataFrame, target_timeframe: str) -> pd.DataFrame:
-        """
-        Aggregate 1-minute bars to higher timeframe.
-        
-        Args:
-            bars_1min: 1-minute bar data
-            target_timeframe: Target timeframe (5min, 15min, etc)
-            
-        Returns:
-            Aggregated DataFrame
-        """
-        # Map timeframe to pandas frequency
-        freq_map = {
-            '5min': '5T',
-            '15min': '15T',
-            '30min': '30T',
-            '1hour': '1H',
-            'hour': '1H'
-        }
-        
-        freq = freq_map.get(target_timeframe, '5T')
-        
-        # Aggregate using pandas resample
-        agg_rules = {
-            'open': 'first',
-            'high': 'max',
-            'low': 'min',
-            'close': 'last',
-            'volume': 'sum'
-        }
-        
-        aggregated = bars_1min.resample(freq).agg(agg_rules)
-        
-        # Remove any rows with all NaN values
-        aggregated = aggregated.dropna(how='all')
-        
-        return aggregated
             
     async def run_backtest(self, config: BacktestConfig) -> 'BacktestResult':
         """

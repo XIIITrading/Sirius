@@ -1,7 +1,7 @@
-# modules/calculations/indicators/ema_crossover.py
+# modules/calculations/indicators/m15_ema.py
 """
-Module: EMA Crossover Analysis
-Purpose: Detect trend direction using 9/21 EMA crossover on 1-minute charts
+Module: EMA Crossover Analysis - 15 Minute
+Purpose: Detect trend direction using 9/21 EMA crossover on 15-minute charts
 Features: Real-time and historical data processing, hybrid EMA calculation
 Output: BULL/BEAR/NEUTRAL signals based on EMA position and price location
 Time Handling: All timestamps in UTC
@@ -43,7 +43,7 @@ def ensure_utc(dt: datetime) -> datetime:
 
 @dataclass
 class Candle:
-    """1-minute candle data"""
+    """15-minute candle data"""
     timestamp: datetime
     open: float
     high: float
@@ -81,22 +81,22 @@ class VolumeSignal:
     reason: str  # Human-readable explanation
 
 
-class EMAAnalyzer:
+class EMAAnalyzer15M:
     """
-    EMA crossover analyzer for 1-minute trend detection
+    EMA crossover analyzer for 15-minute trend detection
     All timestamps are in UTC.
     """
     
     def __init__(self, 
-                 buffer_size: int = 100,  # Number of candles to maintain
+                 buffer_size: int = 40,   # 40 candles = 10 hours
                  ema_short: int = 9,      # Short EMA period
                  ema_long: int = 21,      # Long EMA period
                  min_candles_required: int = 21):  # Minimum for valid signal
         """
-        Initialize EMA analyzer
+        Initialize EMA analyzer for 15-minute bars
         
         Args:
-            buffer_size: Number of recent candles to maintain
+            buffer_size: Number of recent candles to maintain (default 40 = 10 hours)
             ema_short: Short EMA period (default 9)
             ema_long: Long EMA period (default 21)
             min_candles_required: Minimum candles needed for analysis
@@ -105,6 +105,7 @@ class EMAAnalyzer:
         self.ema_short = ema_short
         self.ema_long = ema_long
         self.min_candles_required = max(min_candles_required, ema_long)
+        self.timeframe = "15-minute"
         
         # Data storage
         self.candles: Dict[str, Deque[Candle]] = {}
@@ -118,8 +119,8 @@ class EMAAnalyzer:
         self.candles_processed = 0
         self.signals_generated = 0
         
-        logger.info(f"EMA Analyzer initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        logger.info(f"Settings: buffer={buffer_size}, EMA periods={ema_short}/{ema_long}, "
+        logger.info(f"EMA Analyzer (15-min) initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        logger.info(f"Settings: buffer={buffer_size} (≈{buffer_size*15/60:.1f} hours), EMA periods={ema_short}/{ema_long}, "
                    f"min_candles={min_candles_required}")
     
     def _validate_timestamp(self, timestamp: datetime, source: str) -> datetime:
@@ -135,7 +136,7 @@ class EMAAnalyzer:
     def process_candle(self, symbol: str, candle_data: Dict, 
                       is_complete: bool = True) -> Optional[VolumeSignal]:
         """
-        Process incoming candle and generate signal if conditions met
+        Process incoming 15-minute candle and generate signal if conditions met
         
         Args:
             symbol: Ticker symbol
@@ -149,12 +150,12 @@ class EMAAnalyzer:
         if symbol not in self.candles:
             self.candles[symbol] = deque(maxlen=self.buffer_size)
             self.current_emas[symbol] = {}
-            logger.info(f"Initialized buffers for {symbol}")
+            logger.info(f"Initialized buffers for {symbol} (15-min)")
         
         # Handle incomplete candles (for real-time updates)
         if not is_complete:
             self.incomplete_candles[symbol] = candle_data
-            logger.debug(f"{symbol}: Received incomplete candle")
+            logger.debug(f"{symbol}: Received incomplete 15-min candle")
             return None
         
         # Extract candle info and ensure UTC
@@ -183,7 +184,7 @@ class EMAAnalyzer:
         self.candles[symbol].append(candle)
         self.candles_processed += 1
         
-        logger.info(f"{symbol}: Processed candle at {timestamp.strftime('%H:%M:%S UTC')} "
+        logger.info(f"{symbol}: Processed 15-min candle at {timestamp.strftime('%H:%M:%S UTC')} "
                    f"Close: {candle.close:.2f}, Volume: {candle.volume:,.0f}")
         
         # Calculate EMAs
@@ -196,12 +197,12 @@ class EMAAnalyzer:
                 logger.info(f"{symbol}: Generated {signal.signal} signal with strength {signal.strength:.0f}")
             return signal
         else:
-            logger.debug(f"{symbol}: Need {self.min_candles_required - len(self.candles[symbol])} more candles")
+            logger.debug(f"{symbol}: Need {self.min_candles_required - len(self.candles[symbol])} more 15-min candles")
             return None
     
     def process_historical_candles(self, symbol: str, candles: List[Dict]) -> Optional[VolumeSignal]:
         """
-        Process a list of historical candles
+        Process a list of historical 15-minute candles
         
         Args:
             symbol: Ticker symbol
@@ -210,7 +211,7 @@ class EMAAnalyzer:
         Returns:
             Final signal after processing all candles
         """
-        logger.info(f"{symbol}: Processing {len(candles)} historical candles")
+        logger.info(f"{symbol}: Processing {len(candles)} historical 15-minute candles")
         
         final_signal = None
         for candle_data in candles:
@@ -232,7 +233,7 @@ class EMAAnalyzer:
         # Check if we need full recalculation
         if symbol not in self.current_emas or not self.current_emas[symbol]:
             # Full calculation
-            logger.debug(f"{symbol}: Performing full EMA calculation")
+            logger.debug(f"{symbol}: Performing full EMA calculation (15-min)")
             ema_9 = self._calculate_ema_full(closes, self.ema_short)
             ema_21 = self._calculate_ema_full(closes, self.ema_long)
             
@@ -262,7 +263,7 @@ class EMAAnalyzer:
                 self.ema_long
             )
             
-            logger.debug(f"{symbol}: EMA Update - 9: {self.current_emas[symbol]['ema_9']:.2f}, "
+            logger.debug(f"{symbol}: EMA Update (15-min) - 9: {self.current_emas[symbol]['ema_9']:.2f}, "
                         f"21: {self.current_emas[symbol]['ema_21']:.2f}")
     
     def _calculate_ema_full(self, prices: List[float], period: int) -> List[float]:
@@ -409,11 +410,12 @@ class EMAAnalyzer:
         # Add spread information
         reasons.append(f"Spread: {metrics.ema_spread:.2f} ({metrics.ema_spread_pct:.1f}%)")
         
-        # Add crossover info if recent
+        # Add crossover info if recent (within 75 minutes for 15-min bars)
         if metrics.last_crossover_time:
             time_since = datetime.now(timezone.utc) - metrics.last_crossover_time
-            if time_since.total_seconds() < 300:  # Within 5 minutes
-                reasons.append(f"Recent {metrics.last_crossover_type} crossover {time_since.seconds}s ago")
+            if time_since.total_seconds() < 4500:  # Within 75 minutes (5 bars)
+                minutes_ago = time_since.total_seconds() / 60
+                reasons.append(f"Recent {metrics.last_crossover_type} crossover {minutes_ago:.1f}m ago")
                 strength = min(100, strength * 1.2)  # Boost strength for recent crossover
         
         reason = " | ".join(reasons)
@@ -431,7 +433,7 @@ class EMAAnalyzer:
         if prev_bull != curr_bull:
             crossover_type = 'bullish' if curr_bull else 'bearish'
             self.last_crossover[symbol] = (datetime.now(timezone.utc), crossover_type)
-            logger.info(f"{symbol}: {crossover_type.upper()} crossover detected!")
+            logger.info(f"{symbol}: {crossover_type.upper()} crossover detected on 15-min chart!")
     
     def get_current_analysis(self, symbol: str) -> Optional[VolumeSignal]:
         """Get current analysis for a symbol without new data"""
@@ -443,6 +445,7 @@ class EMAAnalyzer:
     def get_statistics(self) -> Dict:
         """Get analyzer statistics"""
         return {
+            'timeframe': self.timeframe,
             'candles_processed': self.candles_processed,
             'signals_generated': self.signals_generated,
             'active_symbols': list(self.candles.keys()),
@@ -452,8 +455,8 @@ class EMAAnalyzer:
 
 
 # ============= TEST FUNCTION =============
-async def test_ema_analyzer():
-    """Test EMA analyzer with real-time websocket data"""
+async def test_ema_analyzer_15m():
+    """Test EMA analyzer with real-time 15-minute websocket data"""
     import sys
     import os
     
@@ -466,18 +469,18 @@ async def test_ema_analyzer():
     
     from polygon import PolygonWebSocketClient, PolygonClient
     
-    print("=== EMA CROSSOVER ANALYZER TEST ===")
-    print("Analyzing 9/21 EMA crossover on 1-minute charts")
+    print("=== EMA CROSSOVER ANALYZER TEST (15-MINUTE) ===")
+    print("Analyzing 9/21 EMA crossover on 15-minute charts")
     print(f"Current UTC time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
     
     # Test configuration
     TEST_SYMBOLS = ['AAPL', 'TSLA', 'SPY']
-    TEST_DURATION = 300  # 5 minutes
+    TEST_DURATION = 1800  # 30 minutes (to catch at least 2 candles)
     USE_HISTORICAL = True  # Load historical data first
     
     # Create analyzer
-    analyzer = EMAAnalyzer(
-        buffer_size=100,
+    analyzer = EMAAnalyzer15M(
+        buffer_size=40,  # 40 15-min candles = 10 hours
         ema_short=9,
         ema_long=21,
         min_candles_required=21
@@ -488,25 +491,25 @@ async def test_ema_analyzer():
     
     # Load historical data if requested
     if USE_HISTORICAL:
-        print("Loading historical 1-minute candles...")
+        print("Loading historical 15-minute candles...")
         rest_client = PolygonClient()
         
         for symbol in TEST_SYMBOLS:
-            # Get last 100 1-minute candles
+            # Get last 40 15-minute candles (10 hours)
             end_time = datetime.now(timezone.utc)
-            start_time = end_time - timedelta(minutes=100)
+            start_time = end_time - timedelta(hours=12)
             
             try:
                 candles = rest_client.get_candles(
                     symbol=symbol,
                     timespan='minute',
-                    multiplier=1,
+                    multiplier=15,  # 15-minute candles
                     from_=start_time,
                     to=end_time
                 )
                 
                 if candles:
-                    print(f"\n{symbol}: Loading {len(candles)} historical candles")
+                    print(f"\n{symbol}: Loading {len(candles)} historical 15-min candles")
                     signal = analyzer.process_historical_candles(symbol, candles)
                     
                     if signal:
@@ -519,10 +522,10 @@ async def test_ema_analyzer():
     
     # Handle real-time candles
     async def handle_candle(data: Dict):
-        """Process incoming candle data"""
+        """Process incoming 15-minute candle data"""
         symbol = data['symbol']
         
-        # Check if this is a complete 1-minute candle
+        # Check if this is a complete 15-minute candle
         # In real implementation, you'd track candle completion
         is_complete = data.get('complete', True)
         
@@ -550,7 +553,7 @@ async def test_ema_analyzer():
             
             # Display key metrics
             m = signal.metrics
-            print(f"\nMetrics:")
+            print(f"\nMetrics (15-min):")
             print(f"  • 9 EMA: {m['ema_9']:.2f}")
             print(f"  • 21 EMA: {m['ema_21']:.2f}")
             print(f"  • EMA Spread: {m['ema_spread']:.2f} ({m['ema_spread_pct']:.2f}%)")
@@ -570,17 +573,20 @@ async def test_ema_analyzer():
         await ws_client.connect()
         print("✓ Connected and authenticated")
         
-        # Subscribe to 1-minute aggregates
-        print(f"\nSubscribing to 1-minute candles for: {', '.join(TEST_SYMBOLS)}")
+        # Subscribe to aggregates
+        print(f"\nSubscribing to 15-minute candles for: {', '.join(TEST_SYMBOLS)}")
+        
+        # For 15-minute aggregates, we need to use A.* with appropriate filtering
         await ws_client.subscribe(
             symbols=TEST_SYMBOLS,
-            channels=['AM'],  # 1-minute aggregates
+            channels=['A'],  # Aggregate channel
             callback=handle_candle
         )
         print("✓ Subscribed successfully")
+        print("Note: Real-time 15-minute candles will appear at :00, :15, :30, :45")
         
         print(f"\n⏰ Running for {TEST_DURATION} seconds...")
-        print("Waiting for 1-minute candles...\n")
+        print("Waiting for 15-minute candles...\n")
         
         # Create listen task
         listen_task = asyncio.create_task(ws_client.listen())
@@ -592,15 +598,15 @@ async def test_ema_analyzer():
         while time.time() - start_time < TEST_DURATION:
             await asyncio.sleep(1)
             
-            # Print stats every 60 seconds
-            if time.time() - last_stats_time >= 60:
+            # Print stats every 300 seconds (5 minutes)
+            if time.time() - last_stats_time >= 300:
                 stats = analyzer.get_statistics()
-                print(f"\n📊 Stats: {stats['candles_processed']} candles, "
+                print(f"\n📊 Stats: {stats['candles_processed']} 15-min candles, "
                       f"{stats['signals_generated']} signals")
                 
                 # Show current EMAs
                 if stats['current_emas']:
-                    print("Current EMAs:")
+                    print("Current EMAs (15-min):")
                     for sym, emas in stats['current_emas'].items():
                         if emas:
                             print(f"  {sym}: 9 EMA={emas['ema_9']:.2f}, "
@@ -618,6 +624,7 @@ async def test_ema_analyzer():
         # Final summary
         stats = analyzer.get_statistics()
         print(f"\n📊 Final Statistics:")
+        print(f"  • Timeframe: {stats['timeframe']}")
         print(f"  • Total candles processed: {stats['candles_processed']}")
         print(f"  • Signals generated: {stats['signals_generated']}")
         print(f"  • Symbols tracked: {', '.join(stats['active_symbols'])}")
@@ -635,7 +642,7 @@ async def test_ema_analyzer():
             print(f"  • Neutral: {len(neutral_signals)} ({len(neutral_signals)/len(signal_history)*100:.0f}%)")
             
             # Show current positions
-            print(f"\n📍 Current Positions:")
+            print(f"\n📍 Current Positions (15-min):")
             for symbol in TEST_SYMBOLS:
                 current = analyzer.get_current_analysis(symbol)
                 if current:
@@ -656,8 +663,8 @@ async def test_ema_analyzer():
 
 
 if __name__ == "__main__":
-    print(f"Starting EMA Analyzer at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    print("This module detects trend using 9/21 EMA crossover on 1-minute charts")
+    print(f"Starting EMA Analyzer (15-minute) at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print("This module detects trend using 9/21 EMA crossover on 15-minute charts")
     print("All timestamps are in UTC\n")
     
-    asyncio.run(test_ema_analyzer())
+    asyncio.run(test_ema_analyzer_15m())

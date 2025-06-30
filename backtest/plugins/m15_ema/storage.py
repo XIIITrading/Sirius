@@ -1,6 +1,6 @@
-# backtest/plugins/m5_ema/storage.py
+# backtest/plugins/m15_ema/storage.py
 """
-Storage handler for M5 EMA calculation results.
+Storage handler for M15 EMA calculation results.
 Handles Supabase storage operations.
 """
 
@@ -10,13 +10,13 @@ from typing import Dict, Any
 logger = logging.getLogger(__name__)
 
 
-class M5EMAStorage:
-    """Handles storage operations for M5 EMA results"""
+class M15EMAStorage:
+    """Handles storage operations for M15 EMA results"""
     
     @staticmethod
     def prepare_storage_data(uid: str, signal_data: Dict) -> Dict[str, Any]:
         """
-        Prepare data for storage in bt_m5_ema table.
+        Prepare data for storage in bt_m15_ema table.
         
         Args:
             uid: Unique identifier for the backtest
@@ -48,7 +48,7 @@ class M5EMAStorage:
     @staticmethod
     async def store(supabase_client, uid: str, signal_data: Dict) -> bool:
         """
-        Store M5 EMA results to Supabase.
+        Store M15 EMA results to Supabase.
         
         Args:
             supabase_client: Initialized Supabase client
@@ -60,18 +60,18 @@ class M5EMAStorage:
         """
         try:
             # Prepare data
-            storage_data = M5EMAStorage.prepare_storage_data(uid, signal_data)
+            storage_data = M15EMAStorage.prepare_storage_data(uid, signal_data)
             
             # Upsert to handle re-runs
-            response = supabase_client.table('bt_m5_ema').upsert(storage_data).execute()
+            response = supabase_client.table('bt_m15_ema').upsert(storage_data).execute()
             
             if response.data:
-                logger.debug(f"Successfully stored M5 EMA results for {uid}")
+                logger.debug(f"Successfully stored M15 EMA results for {uid}")
                 return True
             else:
-                logger.error(f"Failed to store M5 EMA results for {uid}: No data returned")
+                logger.error(f"Failed to store M15 EMA results for {uid}: No data returned")
                 return False
                 
         except Exception as e:
-            logger.error(f"Error storing M5 EMA results for {uid}: {e}")
+            logger.error(f"Error storing M15 EMA results for {uid}: {e}")
             return False

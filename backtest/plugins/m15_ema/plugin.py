@@ -1,27 +1,27 @@
-# backtest/plugins/m5_ema/plugin.py
+# backtest/plugins/m15_ema/plugin.py
 """
-M5 EMA Crossover Plugin
-Complete self-contained plugin for 5-minute EMA crossover analysis.
+M15 EMA Crossover Plugin
+Complete self-contained plugin for 15-minute EMA crossover analysis.
 """
 
 from typing import Dict, Any, Type
 from plugins.base_plugin import BacktestPlugin
-from .adapter import M5EMABackAdapter
-from .storage import M5EMAStorage
+from .adapter import M15EMABackAdapter
+from .storage import M15EMAStorage
 
 
-class M5EMAPlugin(BacktestPlugin):
-    """Plugin for 5-minute EMA crossover calculation"""
+class M15EMAPlugin(BacktestPlugin):
+    """Plugin for 15-minute EMA crossover calculation"""
     
     # ==================== METADATA ====================
     
     @property
     def name(self) -> str:
-        return "5-Min EMA Crossover"
+        return "15-Min EMA Crossover"
     
     @property
     def adapter_name(self) -> str:
-        return "m5_ema_crossover"
+        return "m15_ema_crossover"
     
     @property
     def version(self) -> str:
@@ -31,19 +31,19 @@ class M5EMAPlugin(BacktestPlugin):
     
     @property
     def adapter_class(self) -> Type:
-        return M5EMABackAdapter
+        return M15EMABackAdapter
     
     def get_adapter_config(self) -> Dict[str, Any]:
-        """Configuration for M5 EMA adapter"""
+        """Configuration for M15 EMA adapter"""
         return {
-            'buffer_size': 50  # Number of 5-minute candles to maintain
+            'buffer_size': 40  # Number of 15-minute candles to maintain
         }
     
     # ==================== STORAGE ====================
     
     @property
     def storage_table(self) -> str:
-        return "bt_m5_ema"
+        return "bt_m15_ema"
     
     def get_storage_mapping(self, signal_data: Dict) -> Dict[str, Any]:
         """Convert signal data to storage format"""
@@ -63,7 +63,7 @@ class M5EMAPlugin(BacktestPlugin):
         }
     
     async def store_results(self, supabase_client, uid: str, signal_data: Dict) -> bool:
-        """Store M5 EMA results to Supabase"""
+        """Store M15 EMA results to Supabase"""
         # Validate signal data
         if not self.validate_signal_data(signal_data):
             self.handle_storage_error(
@@ -76,8 +76,8 @@ class M5EMAPlugin(BacktestPlugin):
         signal_data_clean = self.convert_numpy_types(signal_data)
         
         # Delegate to storage handler
-        return await M5EMAStorage.store(supabase_client, uid, signal_data_clean)
+        return await M15EMAStorage.store(supabase_client, uid, signal_data_clean)
 
 
 # Export plugin instance
-plugin = M5EMAPlugin()
+plugin = M15EMAPlugin()

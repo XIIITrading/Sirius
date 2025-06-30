@@ -1,7 +1,7 @@
--- backtest/plugins/m5_ema/schema.sql
--- Table schema for M5 EMA calculation results
+-- backtest/plugins/m15_ema/schema.sql
+-- Table schema for M15 EMA calculation results
 
-CREATE TABLE public.bt_m5_ema (
+CREATE TABLE public.bt_m15_ema (
   uid character varying(50) not null,
   signal_direction character varying(20) null,
   signal_strength numeric(5, 2) null,
@@ -13,6 +13,6 @@ CREATE TABLE public.bt_m5_ema (
   price_vs_ema9 character varying(20) null,
   trend_strength numeric(5, 2) null,
   reason text null,
-  constraint bt_m5_ema_pkey primary key (uid),
-  constraint bt_m5_ema_uid_fkey foreign key (uid) references bt_index (uid) on delete cascade
+  constraint bt_m15_ema_pkey primary key (uid),
+  constraint bt_m15_ema_uid_fkey foreign key (uid) references bt_index (uid) on delete cascade
 ) tablespace pg_default;

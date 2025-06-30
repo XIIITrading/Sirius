@@ -263,7 +263,7 @@ class PolygonHVNBridge:
             symbol=symbol,
             last_calculation=datetime.now(),
             hvn_result=hvn_result,
-            recent_bars=df.tail(100),  # Only keep recent bars for display/analysis
+            recent_bars=df, # Keep all the bars pulled for calculation to display
             current_price=current_price,
             last_update=datetime.now(),
             end_datetime=end_date.to_pydatetime() if isinstance(end_date, pd.Timestamp) else end_date,  # Convert back to datetime

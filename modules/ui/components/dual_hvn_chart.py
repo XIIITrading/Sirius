@@ -2,7 +2,7 @@
 """
 Module: Dual HVN Chart Component
 Purpose: Reusable component showing two vertically stacked HVN charts
-         with different lookback periods (7 and 28 days)
+         with configurable lookback periods and display bars
 UI Framework: PyQt6 with PyQtGraph
 Note: All times are in UTC
 """
@@ -16,7 +16,7 @@ from typing import Optional, Dict, Any
 import logging
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                           QSplitter, QGroupBox, QSizePolicy)
+                           QSplitter, QGroupBox, QSizePolicy, QLineEdit)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QColor
 import pyqtgraph as pg
@@ -55,11 +55,17 @@ class ChartDataWorker(QThread):
     error_occurred = pyqtSignal(str)
     progress_update = pyqtSignal(str)
     
-    def __init__(self, ticker: str, lookback_days_hvn: int, data_days: int = 5):
+    def __init__(self, ticker: str, lookback_days_hvn: int, display_bars: int = 390):
+        """
+        Args:
+            ticker: Stock symbol
+            lookback_days_hvn: Days for HVN calculation
+            display_bars: Number of bars to display (390 = ~5 days of 15min bars)
+        """
         super().__init__()
         self.ticker = ticker
         self.lookback_days_hvn = lookback_days_hvn
-        self.data_days = data_days
+        self.display_bars = display_bars
         
     def run(self):
         try:
@@ -83,7 +89,7 @@ class ChartDataWorker(QThread):
                 'ticker': self.ticker,
                 'lookback_days': self.lookback_days_hvn,
                 'state': state,
-                'data_days': self.data_days
+                'display_bars': self.display_bars
             }
             
             self.data_ready.emit(result)
@@ -138,7 +144,7 @@ class CandlestickItem(pg.GraphicsObject):
 class DualHVNChart(QWidget):
     """
     Reusable dual HVN chart component.
-    Shows two vertically stacked charts with different lookback periods.
+    Shows two vertically stacked charts with configurable lookback periods.
     """
     
     # Signals
@@ -146,13 +152,33 @@ class DualHVNChart(QWidget):
     loading_finished = pyqtSignal()
     error_occurred = pyqtSignal(str)
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, lookback_periods=None, display_bars=390):
+        """
+        Initialize the dual HVN chart.
+        
+        Args:
+            parent: Parent widget
+            lookback_periods: List of two integers for lookback periods [period1, period2]
+                            Default is [7, 28]
+            display_bars: Number of bars to display (default: 390 = ~5 days of 15min bars)
+                         - 78 bars = ~1 day (6.5 hours)
+                         - 390 bars = ~5 days
+                         - 1092 bars = ~14 days
+        """
         super().__init__(parent)
+        
+        # Set configurable parameters
+        self.lookback_periods = lookback_periods or [7, 28]
+        self.display_bars = display_bars
+        
+        # Validate lookback periods
+        if len(self.lookback_periods) != 2:
+            raise ValueError("lookback_periods must contain exactly 2 values")
         
         self.ticker = None
         self.chart_data = {
-            '7_day': None,
-            '28_day': None
+            f'{self.lookback_periods[0]}_day': None,
+            f'{self.lookback_periods[1]}_day': None
         }
         self.workers = []
         
@@ -168,13 +194,13 @@ class DualHVNChart(QWidget):
         self.splitter = QSplitter(Qt.Orientation.Vertical)
         self.splitter.setChildrenCollapsible(False)
         
-        # Create chart widgets
-        self.chart_7day = self.create_chart_widget("7-Day HVN Lookback")
-        self.chart_28day = self.create_chart_widget("28-Day HVN Lookback")
+        # Create chart widgets with dynamic titles
+        self.chart_1 = self.create_chart_widget(f"{self.lookback_periods[0]}-Day HVN Lookback")
+        self.chart_2 = self.create_chart_widget(f"{self.lookback_periods[1]}-Day HVN Lookback")
         
         # Add to splitter
-        self.splitter.addWidget(self.chart_7day['container'])
-        self.splitter.addWidget(self.chart_28day['container'])
+        self.splitter.addWidget(self.chart_1['container'])
+        self.splitter.addWidget(self.chart_2['container'])
         
         # Set equal sizes initially
         self.splitter.setSizes([400, 400])
@@ -245,6 +271,36 @@ class DualHVNChart(QWidget):
             'volume_plot': volume_plot
         }
     
+    def update_parameters(self, lookback_periods=None, display_bars=None):
+        """
+        Update chart parameters. Requires reloading the ticker.
+        
+        Args:
+            lookback_periods: New lookback periods [period1, period2]
+            display_bars: New number of bars to display
+        """
+        if lookback_periods is not None:
+            if len(lookback_periods) != 2:
+                raise ValueError("lookback_periods must contain exactly 2 values")
+            self.lookback_periods = lookback_periods
+            
+            # Update chart titles
+            self.chart_1['container'].setTitle(f"{self.lookback_periods[0]}-Day HVN Lookback")
+            self.chart_2['container'].setTitle(f"{self.lookback_periods[1]}-Day HVN Lookback")
+            
+            # Update chart data keys
+            self.chart_data = {
+                f'{self.lookback_periods[0]}_day': None,
+                f'{self.lookback_periods[1]}_day': None
+            }
+        
+        if display_bars is not None:
+            self.display_bars = display_bars
+        
+        # Reload current ticker if one is loaded
+        if self.ticker:
+            self.load_ticker(self.ticker)
+    
     def load_ticker(self, ticker: str):
         """
         Load data for a specific ticker.
@@ -265,32 +321,48 @@ class DualHVNChart(QWidget):
         self.clear_charts()
         
         # Update labels
-        self.chart_7day['info_label'].setText(f"Loading {self.ticker}...")
-        self.chart_28day['info_label'].setText(f"Loading {self.ticker}...")
+        self.chart_1['info_label'].setText(f"Loading {self.ticker}...")
+        self.chart_2['info_label'].setText(f"Loading {self.ticker}...")
         
         # Emit loading signal
         self.loading_started.emit()
         
         # Start workers for both lookback periods
-        worker_7day = ChartDataWorker(self.ticker, lookback_days_hvn=7)
-        worker_7day.data_ready.connect(lambda data: self.on_data_ready(data, '7_day'))
-        worker_7day.error_occurred.connect(lambda err: self.on_error(err, '7_day'))
-        worker_7day.progress_update.connect(
-            lambda msg: self.chart_7day['info_label'].setText(msg)
+        worker_1 = ChartDataWorker(
+            self.ticker, 
+            lookback_days_hvn=self.lookback_periods[0],
+            display_bars=self.display_bars
+        )
+        worker_1.data_ready.connect(
+            lambda data: self.on_data_ready(data, f'{self.lookback_periods[0]}_day')
+        )
+        worker_1.error_occurred.connect(
+            lambda err: self.on_error(err, f'{self.lookback_periods[0]}_day')
+        )
+        worker_1.progress_update.connect(
+            lambda msg: self.chart_1['info_label'].setText(msg)
         )
         
-        worker_28day = ChartDataWorker(self.ticker, lookback_days_hvn=28)
-        worker_28day.data_ready.connect(lambda data: self.on_data_ready(data, '28_day'))
-        worker_28day.error_occurred.connect(lambda err: self.on_error(err, '28_day'))
-        worker_28day.progress_update.connect(
-            lambda msg: self.chart_28day['info_label'].setText(msg)
+        worker_2 = ChartDataWorker(
+            self.ticker, 
+            lookback_days_hvn=self.lookback_periods[1],
+            display_bars=self.display_bars
+        )
+        worker_2.data_ready.connect(
+            lambda data: self.on_data_ready(data, f'{self.lookback_periods[1]}_day')
+        )
+        worker_2.error_occurred.connect(
+            lambda err: self.on_error(err, f'{self.lookback_periods[1]}_day')
+        )
+        worker_2.progress_update.connect(
+            lambda msg: self.chart_2['info_label'].setText(msg)
         )
         
-        self.workers = [worker_7day, worker_28day]
+        self.workers = [worker_1, worker_2]
         
         # Start workers
-        worker_7day.start()
-        worker_28day.start()
+        worker_1.start()
+        worker_2.start()
     
     def clear_workers(self):
         """Stop and clear any running workers."""
@@ -302,17 +374,21 @@ class DualHVNChart(QWidget):
     
     def clear_charts(self):
         """Clear all chart data."""
-        for chart_key in ['7_day', '28_day']:
-            chart = self.chart_7day if chart_key == '7_day' else self.chart_28day
-            chart['price_plot'].clear()
-            chart['volume_plot'].clear()
+        self.chart_1['price_plot'].clear()
+        self.chart_1['volume_plot'].clear()
+        self.chart_2['price_plot'].clear()
+        self.chart_2['volume_plot'].clear()
     
     def on_data_ready(self, data: dict, chart_key: str):
         """Handle data ready from worker."""
         self.chart_data[chart_key] = data
         
-        # Update appropriate chart
-        chart = self.chart_7day if chart_key == '7_day' else self.chart_28day
+        # Determine which chart to update
+        if chart_key == f'{self.lookback_periods[0]}_day':
+            chart = self.chart_1
+        else:
+            chart = self.chart_2
+            
         self.update_chart(chart, data)
         
         # Check if both charts are loaded
@@ -321,7 +397,11 @@ class DualHVNChart(QWidget):
     
     def on_error(self, error_msg: str, chart_key: str):
         """Handle error from worker."""
-        chart = self.chart_7day if chart_key == '7_day' else self.chart_28day
+        if chart_key == f'{self.lookback_periods[0]}_day':
+            chart = self.chart_1
+        else:
+            chart = self.chart_2
+            
         chart['info_label'].setText(f"Error: {error_msg}")
         chart['info_label'].setStyleSheet("color: #ef4444; padding: 2px;")
         
@@ -331,27 +411,32 @@ class DualHVNChart(QWidget):
         """Update a single chart with data."""
         state = data['state']
         lookback_days = data['lookback_days']
+        display_bars = data['display_bars']
         
         # Clear previous items
         chart_dict['price_plot'].clear()
         chart_dict['volume_plot'].clear()
         
-        # Get recent data (5 days for display)
+        # Get ALL available data
         all_data = state.recent_bars
         if all_data.empty:
             chart_dict['info_label'].setText("No data available")
             return
-            
-        # Filter to last 5 days of data
-        cutoff_date = all_data.index[-1] - timedelta(days=data['data_days'])
-        display_data = all_data[all_data.index > cutoff_date].copy()
+        
+        # Use ALL data for the chart (don't limit it)
+        display_data = all_data.copy()
         
         # Update info label
         start_time = display_data.index[0].strftime('%Y-%m-%d %H:%M UTC')
         end_time = display_data.index[-1].strftime('%Y-%m-%d %H:%M UTC')
+        
+        # Calculate time span
+        time_span = display_data.index[-1] - display_data.index[0]
+        approx_days = time_span.total_seconds() / 86400
+        
         chart_dict['info_label'].setText(
             f"{state.symbol} | {start_time} to {end_time} | "
-            f"{len(display_data)} bars | Current: ${state.current_price:.2f}"
+            f"{len(display_data)} bars (~{approx_days:.1f} days) | Current: ${state.current_price:.2f}"
         )
         chart_dict['info_label'].setStyleSheet("color: #10b981; padding: 2px;")
         
@@ -421,11 +506,31 @@ class DualHVNChart(QWidget):
         )
         chart_dict['price_plot'].addItem(price_line)
         
-        # Set axis ranges
-        chart_dict['price_plot'].setXRange(0, len(display_data))
-        y_min = display_data['low'].min() * 0.998
-        y_max = display_data['high'].max() * 1.002
+        # Set initial view range to show only the requested bars
+        # But all data is still there for scrolling
+        total_bars = len(display_data)
+        if total_bars > display_bars:
+            # Show the most recent 'display_bars' bars
+            start_x = total_bars - display_bars
+            end_x = total_bars
+        else:
+            # Show all available bars
+            start_x = 0
+            end_x = total_bars
+        
+        # Set the initial view
+        chart_dict['price_plot'].setXRange(start_x, end_x)
+        
+        # Set Y range based on visible data
+        visible_data = display_data.iloc[start_x:end_x] if total_bars > display_bars else display_data
+        y_min = visible_data['low'].min() * 0.998
+        y_max = visible_data['high'].max() * 1.002
         chart_dict['price_plot'].setYRange(y_min, y_max)
+        
+        # Enable mouse interaction for scrolling/zooming
+        chart_dict['price_plot'].enableAutoRange()
+        chart_dict['price_plot'].setMouseEnabled(x=True, y=True)
+        
         chart_dict['volume_plot'].setXRange(0, 50)
     
     def resizeEvent(self, event):
@@ -441,13 +546,13 @@ class DualHVNChart(QWidget):
         else:
             volume_width = 100
             
-        self.chart_7day['volume_plot'].setMaximumWidth(volume_width)
-        self.chart_28day['volume_plot'].setMaximumWidth(volume_width)
+        self.chart_1['volume_plot'].setMaximumWidth(volume_width)
+        self.chart_2['volume_plot'].setMaximumWidth(volume_width)
 
 
 # ============= STANDALONE TEST SCRIPT =============
 if __name__ == "__main__":
-    from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton
+    from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QSpinBox, QLineEdit
     
     class TestWindow(QMainWindow):
         def __init__(self):
@@ -460,6 +565,9 @@ if __name__ == "__main__":
                 QMainWindow {
                     background-color: #1a1a1a;
                 }
+                QLabel {
+                    color: #ffffff;
+                }
             """)
             
             # Create central widget
@@ -470,6 +578,8 @@ if __name__ == "__main__":
             # Test controls
             controls = QHBoxLayout()
             
+            # Ticker input
+            controls.addWidget(QLabel("Ticker:"))
             self.ticker_input = QLineEdit("TSLA")
             self.ticker_input.setMaximumWidth(100)
             self.ticker_input.setStyleSheet("""
@@ -481,7 +591,63 @@ if __name__ == "__main__":
                     color: #ffffff;
                 }
             """)
+            controls.addWidget(self.ticker_input)
             
+            # Lookback period controls
+            controls.addWidget(QLabel("Lookback 1:"))
+            self.lookback1_spin = QSpinBox()
+            self.lookback1_spin.setRange(3, 60)
+            self.lookback1_spin.setValue(14)
+            self.lookback1_spin.setStyleSheet("""
+                QSpinBox {
+                    background-color: #2a2a2a;
+                    border: 1px solid #444444;
+                    border-radius: 3px;
+                    padding: 5px;
+                    color: #ffffff;
+                }
+            """)
+            controls.addWidget(self.lookback1_spin)
+            
+            controls.addWidget(QLabel("Lookback 2:"))
+            self.lookback2_spin = QSpinBox()
+            self.lookback2_spin.setRange(5, 90)
+            self.lookback2_spin.setValue(28)
+            self.lookback2_spin.setStyleSheet("""
+                QSpinBox {
+                    background-color: #2a2a2a;
+                    border: 1px solid #444444;
+                    border-radius: 3px;
+                    padding: 5px;
+                    color: #ffffff;
+                }
+            """)
+            controls.addWidget(self.lookback2_spin)
+            
+            # Display bars control
+            controls.addWidget(QLabel("Display Bars:"))
+            self.bars_spin = QSpinBox()
+            self.bars_spin.setRange(78, 2340)  # 1 day to 30 days
+            self.bars_spin.setValue(1092)  # Default 14 days
+            self.bars_spin.setSingleStep(78)  # Increment by 1 day
+            self.bars_spin.setStyleSheet("""
+                QSpinBox {
+                    background-color: #2a2a2a;
+                    border: 1px solid #444444;
+                    border-radius: 3px;
+                    padding: 5px;
+                    color: #ffffff;
+                }
+            """)
+            controls.addWidget(self.bars_spin)
+            
+            # Info label for bars
+            self.bars_info = QLabel("(~14 days)")
+            self.bars_info.setStyleSheet("color: #9ca3af;")
+            controls.addWidget(self.bars_info)
+            self.bars_spin.valueChanged.connect(self.update_bars_info)
+            
+            # Load button
             load_btn = QPushButton("Load Ticker")
             load_btn.setStyleSheet("""
                 QPushButton {
@@ -497,16 +663,35 @@ if __name__ == "__main__":
                 }
             """)
             load_btn.clicked.connect(self.load_ticker)
-            
-            controls.addWidget(QLabel("Ticker:"))
-            controls.addWidget(self.ticker_input)
             controls.addWidget(load_btn)
+            
+            # Update parameters button
+            update_btn = QPushButton("Update Parameters")
+            update_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #f59e0b;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                    color: #000000;
+                }
+                QPushButton:hover {
+                    background-color: #d97706;
+                }
+            """)
+            update_btn.clicked.connect(self.update_parameters)
+            controls.addWidget(update_btn)
+            
             controls.addStretch()
             
             layout.addLayout(controls)
             
-            # Add dual chart
-            self.dual_chart = DualHVNChart()
+            # Add dual chart with custom initial parameters
+            self.dual_chart = DualHVNChart(
+                lookback_periods=[14, 28],
+                display_bars=1092  # 14 days worth of bars
+            )
             self.dual_chart.loading_started.connect(
                 lambda: print("Loading started...")
             )
@@ -519,13 +704,34 @@ if __name__ == "__main__":
             
             layout.addWidget(self.dual_chart)
         
+        def update_bars_info(self, value):
+            """Update the bars info label."""
+            days = value / 78  # 78 bars per day
+            self.bars_info.setText(f"(~{days:.1f} days)")
+        
         def load_ticker(self):
             ticker = self.ticker_input.text().strip()
             if ticker:
                 print(f"Loading ticker: {ticker}")
                 self.dual_chart.load_ticker(ticker)
+        
+        def update_parameters(self):
+            lookback1 = self.lookback1_spin.value()
+            lookback2 = self.lookback2_spin.value()
+            display_bars = self.bars_spin.value()
+            
+            print(f"Updating parameters: Lookback periods=[{lookback1}, {lookback2}], Display bars={display_bars}")
+            self.dual_chart.update_parameters(
+                lookback_periods=[lookback1, lookback2],
+                display_bars=display_bars
+            )
     
     print("=== Testing Dual HVN Chart Component ===\n")
+    print("Bar count reference (15-minute bars):")
+    print("- 78 bars = ~1 trading day")
+    print("- 390 bars = ~5 trading days")
+    print("- 1092 bars = ~14 trading days")
+    print("- 1560 bars = ~20 trading days\n")
     
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
@@ -538,7 +744,9 @@ if __name__ == "__main__":
     window = TestWindow()
     window.show()
     
-    print("Test window opened. Try loading different tickers.")
-    print("Both charts should display with different HVN lookback periods.")
+    print("Test window opened with configurable parameters.")
+    print("- Adjust lookback periods and display bars")
+    print("- Click 'Update Parameters' to apply changes")
+    print("- Both charts will reload with new settings")
     
     sys.exit(app.exec())

@@ -19320,3 +19320,257 @@
 2025-06-30 12:37:50 - polygon.fetcher - INFO - Returned 958 rows from cache
 2025-06-30 12:37:50 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-23 to 2025-06-24
 2025-06-30 12:37:50 - polygon.fetcher - INFO - Returned 958 rows from cache
+2025-06-30 12:48:07 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:48:07 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:48:07 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:48:07 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:48:07 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:48:07 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:48:07 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:48:07 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:48:07 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:07 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:07 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:07 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:08 - polygon.fetcher - WARNING - Failed to save to cache: Failed to save data: Failed to read parquet file: Could not open Parquet input source '<Buffer>': Parquet magic bytes not found in footer. Either the file is corrupted or this is not a parquet file. (operation=read, path=C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data\parquet\symbols\TSLA\TSLA_15min.parquet) (operation=write, path=C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data\parquet\symbols\TSLA\TSLA_15min.parquet)
+2025-06-30 12:48:08 - polygon.fetcher - WARNING - Failed to save to cache: Failed to save data: Failed to read parquet file: Could not open Parquet input source '<Buffer>': Parquet magic bytes not found in footer. Either the file is corrupted or this is not a parquet file. (operation=read, path=C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data\parquet\symbols\TSLA\TSLA_15min.parquet) (operation=write, path=C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data\parquet\symbols\TSLA\TSLA_15min.parquet)
+2025-06-30 12:48:08 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:48:08 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:48:08 - polygon.fetcher - INFO - Returned 1216 rows for TSLA 15min
+2025-06-30 12:48:08 - polygon.fetcher - INFO - Returned 1216 rows for TSLA 15min
+2025-06-30 12:48:08 - polygon.storage - INFO - Saved 1748 rows for TSLA 15min (0.09 MB)
+2025-06-30 12:48:08 - polygon.storage - INFO - Saved 1748 rows for TSLA 15min (0.09 MB)
+2025-06-30 12:48:08 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:48:08 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:48:08 - polygon.fetcher - INFO - Returned 576 rows for TSLA 15min
+2025-06-30 12:48:08 - polygon.fetcher - INFO - Returned 576 rows for TSLA 15min
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:18 - polygon.storage - INFO - Saved 4960 rows for INTC 15min (0.19 MB)
+2025-06-30 12:48:18 - polygon.storage - INFO - Saved 4960 rows for INTC 15min (0.19 MB)
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Returned 576 rows for INTC 15min
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Returned 576 rows for INTC 15min
+2025-06-30 12:48:18 - polygon.storage - INFO - Saved 4960 rows for INTC 15min (0.19 MB)
+2025-06-30 12:48:18 - polygon.storage - INFO - Saved 4960 rows for INTC 15min (0.19 MB)
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Returned 1216 rows for INTC 15min
+2025-06-30 12:48:18 - polygon.fetcher - INFO - Returned 1216 rows for INTC 15min
+2025-06-30 12:48:22 - polygon.fetcher - INFO - Fetching NKE 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:48:22 - polygon.fetcher - INFO - Fetching NKE 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:48:22 - polygon.fetcher - INFO - Fetching NKE 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:48:22 - polygon.fetcher - INFO - Fetching NKE 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:48:22 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:22 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:22 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:22 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:48:22 - polygon.storage - INFO - Saved 7483 rows for NKE 15min (0.30 MB)
+2025-06-30 12:48:22 - polygon.storage - INFO - Saved 7483 rows for NKE 15min (0.30 MB)
+2025-06-30 12:48:22 - polygon.storage - INFO - Saved 7483 rows for NKE 15min (0.30 MB)
+2025-06-30 12:48:22 - polygon.storage - INFO - Saved 7483 rows for NKE 15min (0.30 MB)
+2025-06-30 12:48:23 - polygon.fetcher - INFO - Filled 25 small gaps in data
+2025-06-30 12:48:23 - polygon.fetcher - INFO - Filled 25 small gaps in data
+2025-06-30 12:48:23 - polygon.fetcher - INFO - Returned 575 rows for NKE 15min
+2025-06-30 12:48:23 - polygon.fetcher - INFO - Returned 575 rows for NKE 15min
+2025-06-30 12:48:23 - polygon.fetcher - INFO - Filled 60 small gaps in data
+2025-06-30 12:48:23 - polygon.fetcher - INFO - Filled 60 small gaps in data
+2025-06-30 12:48:23 - polygon.fetcher - INFO - Returned 1203 rows for NKE 15min
+2025-06-30 12:48:23 - polygon.fetcher - INFO - Returned 1203 rows for NKE 15min
+2025-06-30 12:49:16 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:49:16 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:49:16 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:49:17 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:49:17 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:49:17 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:49:17 - polygon.fetcher - WARNING - Failed to save to cache: Failed to save data: Failed to read parquet file: Could not open Parquet input source '<Buffer>': Parquet file size is 4 bytes, smaller than the minimum file footer (8 bytes) (operation=read, path=C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data\parquet\symbols\TSLA\TSLA_15min.parquet) (operation=write, path=C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data\parquet\symbols\TSLA\TSLA_15min.parquet)
+2025-06-30 12:49:17 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:49:17 - polygon.fetcher - INFO - Returned 576 rows for TSLA 15min
+2025-06-30 12:49:17 - polygon.storage - INFO - Saved 1748 rows for TSLA 15min (0.09 MB)
+2025-06-30 12:49:17 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:49:17 - polygon.fetcher - INFO - Returned 1216 rows for TSLA 15min
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:51:46 - polygon.storage - INFO - Saved 4960 rows for INTC 15min (0.19 MB)
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Returned 1216 rows for INTC 15min
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Returned 1216 rows for INTC 15min
+2025-06-30 12:51:46 - polygon.storage - INFO - Saved 4960 rows for INTC 15min (0.19 MB)
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Returned 576 rows for INTC 15min
+2025-06-30 12:51:46 - polygon.fetcher - INFO - Returned 576 rows for INTC 15min
+2025-06-30 12:54:59 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:54:59 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:54:59 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:54:59 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:54:59 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:54:59 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:54:59 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:54:59 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:54:59 - polygon.storage - INFO - Saved 1748 rows for TSLA 15min (0.09 MB)
+2025-06-30 12:54:59 - polygon.storage - INFO - Saved 1748 rows for TSLA 15min (0.09 MB)
+2025-06-30 12:54:59 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:54:59 - polygon.fetcher - INFO - Returned 576 rows for TSLA 15min
+2025-06-30 12:54:59 - polygon.storage - INFO - Saved 1748 rows for TSLA 15min (0.09 MB)
+2025-06-30 12:54:59 - polygon.storage - INFO - Saved 1748 rows for TSLA 15min (0.09 MB)
+2025-06-30 12:54:59 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:54:59 - polygon.fetcher - INFO - Returned 1216 rows for TSLA 15min
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Fetching INTC 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:56:07 - polygon.storage - INFO - Saved 4960 rows for INTC 15min (0.19 MB)
+2025-06-30 12:56:07 - polygon.storage - INFO - Saved 4960 rows for INTC 15min (0.19 MB)
+2025-06-30 12:56:07 - polygon.storage - INFO - Saved 4960 rows for INTC 15min (0.19 MB)
+2025-06-30 12:56:07 - polygon.storage - INFO - Saved 4960 rows for INTC 15min (0.19 MB)
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Returned 1216 rows for INTC 15min
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Returned 1216 rows for INTC 15min
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Returned 576 rows for INTC 15min
+2025-06-30 12:56:07 - polygon.fetcher - INFO - Returned 576 rows for INTC 15min
+2025-06-30 12:56:13 - polygon.fetcher - INFO - Fetching AMZN 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:56:13 - polygon.fetcher - INFO - Fetching AMZN 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:56:13 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:56:13 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:56:13 - polygon.storage - INFO - Saved 5256 rows for AMZN 15min (0.24 MB)
+2025-06-30 12:56:13 - polygon.storage - INFO - Saved 5256 rows for AMZN 15min (0.24 MB)
+2025-06-30 12:56:13 - polygon.storage - INFO - Saved 5256 rows for AMZN 15min (0.24 MB)
+2025-06-30 12:56:13 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:56:13 - polygon.storage - INFO - Saved 5256 rows for AMZN 15min (0.24 MB)
+2025-06-30 12:56:13 - polygon.fetcher - INFO - Returned 576 rows for AMZN 15min
+2025-06-30 12:56:13 - polygon.fetcher - INFO - Filled 16 small gaps in data
+2025-06-30 12:56:13 - polygon.fetcher - INFO - Returned 1216 rows for AMZN 15min
+2025-06-30 12:59:01 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:59:01 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 12:59:01 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 12:59:01 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 12:59:01 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:59:01 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 12:59:02 - polygon.storage - INFO - Saved 1748 rows for TSLA 15min (0.09 MB)
+2025-06-30 12:59:02 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 12:59:02 - polygon.fetcher - INFO - Returned 576 rows for TSLA 15min
+2025-06-30 12:59:02 - polygon.storage - INFO - Saved 1748 rows for TSLA 15min (0.09 MB)
+2025-06-30 12:59:02 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 12:59:02 - polygon.fetcher - INFO - Returned 1216 rows for TSLA 15min
+2025-06-30 13:07:01 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 13:07:01 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 13:07:01 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 13:07:01 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-06-30 13:07:01 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 13:07:01 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 13:07:01 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:07:01 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:07:01 - polygon.storage - INFO - Saved 1749 rows for TSLA 15min (0.09 MB)
+2025-06-30 13:07:01 - polygon.storage - INFO - Saved 1749 rows for TSLA 15min (0.09 MB)
+2025-06-30 13:07:01 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 13:07:01 - polygon.fetcher - INFO - Returned 1216 rows for TSLA 15min
+2025-06-30 13:07:01 - polygon.storage - INFO - Saved 1749 rows for TSLA 15min (0.09 MB)
+2025-06-30 13:07:01 - polygon.storage - INFO - Saved 1749 rows for TSLA 15min (0.09 MB)
+2025-06-30 13:07:01 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 13:07:01 - polygon.fetcher - INFO - Returned 576 rows for TSLA 15min
+2025-06-30 13:07:38 - polygon.fetcher - INFO - Fetching NKE 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 13:07:38 - polygon.fetcher - INFO - Fetching NKE 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 13:07:38 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:07:38 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:07:38 - polygon.storage - INFO - Saved 7484 rows for NKE 15min (0.30 MB)
+2025-06-30 13:07:38 - polygon.storage - INFO - Saved 7484 rows for NKE 15min (0.30 MB)
+2025-06-30 13:07:38 - polygon.storage - INFO - Saved 7484 rows for NKE 15min (0.30 MB)
+2025-06-30 13:07:38 - polygon.storage - INFO - Saved 7484 rows for NKE 15min (0.30 MB)
+2025-06-30 13:07:38 - polygon.fetcher - INFO - Filled 25 small gaps in data
+2025-06-30 13:07:38 - polygon.fetcher - INFO - Returned 575 rows for NKE 15min
+2025-06-30 13:07:39 - polygon.fetcher - INFO - Filled 60 small gaps in data
+2025-06-30 13:07:39 - polygon.fetcher - INFO - Returned 1203 rows for NKE 15min
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Fetching AMZN 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Fetching AMZN 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Fetching AMZN 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Fetching AMZN 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:07:54 - polygon.storage - INFO - Saved 5257 rows for AMZN 15min (0.24 MB)
+2025-06-30 13:07:54 - polygon.storage - INFO - Saved 5257 rows for AMZN 15min (0.24 MB)
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Filled 16 small gaps in data
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Filled 16 small gaps in data
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Returned 1216 rows for AMZN 15min
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Returned 1216 rows for AMZN 15min
+2025-06-30 13:07:54 - polygon.storage - INFO - Saved 5257 rows for AMZN 15min (0.24 MB)
+2025-06-30 13:07:54 - polygon.storage - INFO - Saved 5257 rows for AMZN 15min (0.24 MB)
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Returned 576 rows for AMZN 15min
+2025-06-30 13:07:54 - polygon.fetcher - INFO - Returned 576 rows for AMZN 15min
+2025-06-30 13:08:04 - polygon.fetcher - INFO - Fetching AVGO 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 13:08:04 - polygon.fetcher - INFO - Fetching AVGO 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 13:08:04 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:08:04 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:08:04 - polygon.storage - INFO - Saved 1287 rows for AVGO 15min (0.06 MB)
+2025-06-30 13:08:04 - polygon.storage - INFO - Saved 1287 rows for AVGO 15min (0.06 MB)
+2025-06-30 13:08:04 - polygon.storage - INFO - Saved 1287 rows for AVGO 15min (0.06 MB)
+2025-06-30 13:08:04 - polygon.storage - INFO - Saved 1287 rows for AVGO 15min (0.06 MB)
+2025-06-30 13:08:04 - polygon.fetcher - INFO - Filled 16 small gaps in data
+2025-06-30 13:08:04 - polygon.fetcher - INFO - Returned 576 rows for AVGO 15min
+2025-06-30 13:08:04 - polygon.fetcher - INFO - Filled 25 small gaps in data
+2025-06-30 13:08:04 - polygon.fetcher - INFO - Returned 1215 rows for AVGO 15min
+2025-06-30 13:08:11 - polygon.fetcher - INFO - Fetching UBER 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 13:08:11 - polygon.fetcher - INFO - Fetching UBER 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 13:08:11 - polygon.fetcher - INFO - Fetching UBER 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 13:08:11 - polygon.fetcher - INFO - Fetching UBER 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:08:12 - polygon.fetcher - WARNING - Failed to save to cache: Failed to save data: Failed to read parquet file: Invalid column metadata (corrupt file?) (operation=read, path=C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data\parquet\symbols\UBER\UBER_15min.parquet) (operation=write, path=C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data\parquet\symbols\UBER\UBER_15min.parquet)
+2025-06-30 13:08:12 - polygon.fetcher - WARNING - Failed to save to cache: Failed to save data: Failed to read parquet file: Invalid column metadata (corrupt file?) (operation=read, path=C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data\parquet\symbols\UBER\UBER_15min.parquet) (operation=write, path=C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data\parquet\symbols\UBER\UBER_15min.parquet)
+2025-06-30 13:08:12 - polygon.storage - INFO - Saved 1234 rows for UBER 15min (0.06 MB)
+2025-06-30 13:08:12 - polygon.storage - INFO - Saved 1234 rows for UBER 15min (0.06 MB)
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Filled 27 small gaps in data
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Filled 27 small gaps in data
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Returned 571 rows for UBER 15min
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Returned 571 rows for UBER 15min
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Filled 45 small gaps in data
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Filled 45 small gaps in data
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Returned 1206 rows for UBER 15min
+2025-06-30 13:08:12 - polygon.fetcher - INFO - Returned 1206 rows for UBER 15min
+2025-06-30 13:08:17 - polygon.fetcher - INFO - Fetching PLTR 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 13:08:17 - polygon.fetcher - INFO - Fetching PLTR 15min data from 2025-06-02 to 2025-06-30
+2025-06-30 13:08:17 - polygon.fetcher - INFO - Fetching PLTR 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 13:08:17 - polygon.fetcher - INFO - Fetching PLTR 15min data from 2025-06-16 to 2025-06-30
+2025-06-30 13:08:17 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:08:17 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:08:17 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:08:17 - polygon.fetcher - INFO - Partial cache hit, fetching 1 missing ranges
+2025-06-30 13:08:18 - polygon.storage - INFO - Saved 1749 rows for PLTR 15min (0.09 MB)
+2025-06-30 13:08:18 - polygon.storage - INFO - Saved 1749 rows for PLTR 15min (0.09 MB)
+2025-06-30 13:08:18 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 13:08:18 - polygon.fetcher - INFO - Filled 15 small gaps in data
+2025-06-30 13:08:18 - polygon.fetcher - INFO - Returned 1216 rows for PLTR 15min
+2025-06-30 13:08:18 - polygon.fetcher - INFO - Returned 1216 rows for PLTR 15min
+2025-06-30 13:08:18 - polygon.storage - INFO - Saved 1749 rows for PLTR 15min (0.09 MB)
+2025-06-30 13:08:18 - polygon.storage - INFO - Saved 1749 rows for PLTR 15min (0.09 MB)
+2025-06-30 13:08:18 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 13:08:18 - polygon.fetcher - INFO - Filled 7 small gaps in data
+2025-06-30 13:08:18 - polygon.fetcher - INFO - Returned 576 rows for PLTR 15min
+2025-06-30 13:08:18 - polygon.fetcher - INFO - Returned 576 rows for PLTR 15min

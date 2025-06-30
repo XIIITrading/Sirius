@@ -350,17 +350,19 @@ class ScannerResultsViewer(QMainWindow):
         self.chart_info.setStyleSheet("color: #9ca3af; padding: 5px; font-size: 14px;")
         layout.addWidget(self.chart_info)
         
-        # Dual HVN Chart
-        self.dual_chart = DualHVNChart()
+        # Dual HVN Chart with custom parameters
+        # 1092 bars = approximately 14 days of 15-minute bars
+        self.dual_chart = DualHVNChart(
+            lookback_periods=[14, 28],
+            display_bars=1092  # 14 days * 6.5 hours * 4 bars/hour ≈ 1092 bars
+        )
         self.dual_chart.loading_started.connect(self.on_chart_loading_started)
         self.dual_chart.loading_finished.connect(self.on_chart_loading_finished)
         self.dual_chart.error_occurred.connect(self.on_chart_error)
         
         layout.addWidget(self.dual_chart)
         
-        # Set minimum width
         widget.setMinimumWidth(800)
-        
         return widget
         
     def on_date_mode_changed(self, mode):

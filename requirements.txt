@@ -32,6 +32,7 @@ numba
 # ===== Additional Dependencies =====
 python-dateutil             # Better date handling
 pytz                        # Timezone support
+qasync                      # For async QT support
 
 #====Anthropic====#
 anthropic

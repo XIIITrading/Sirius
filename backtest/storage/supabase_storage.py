@@ -2,6 +2,7 @@
 """
 Supabase storage module for backtest results.
 Handles UID generation, bar storage, and result persistence.
+Uses plugin-based storage for calculation results.
 """
 
 import os
@@ -49,17 +50,19 @@ class BacktestStorageResult:
 class BacktestStorage:
     """
     Manages storage of backtest results to Supabase.
-    Handles UID generation, bar data storage, and result persistence.
+    Delegates calculation-specific storage to plugins.
     """
     
     def __init__(self, supabase_url: Optional[str] = None, 
-                 supabase_key: Optional[str] = None):
+                 supabase_key: Optional[str] = None,
+                 plugin_registry: Optional[Any] = None):
         """
         Initialize storage with Supabase connection.
         
         Args:
             supabase_url: Supabase project URL
             supabase_key: Supabase anon/service key
+            plugin_registry: Registry of loaded plugins
         """
         # Get credentials from environment if not provided
         self.supabase_url = supabase_url or os.getenv('SUPABASE_URL')
@@ -71,12 +74,15 @@ class BacktestStorage:
         # Initialize Supabase client
         self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
         
+        # Plugin registry for delegating storage
+        self.plugin_registry = plugin_registry
+        
         # Track statistics
         self.storage_operations = 0
         self.successful_stores = 0
         self.failed_stores = 0
         
-        logger.info("Initialized Supabase backtest storage")
+        logger.info("Initialized Supabase backtest storage with plugin support")
     
     def generate_uid(self, config: 'BacktestConfig') -> str:
         """
@@ -128,7 +134,7 @@ class BacktestStorage:
             # 2. Store bar data
             bars_stored = await self._store_bt_bars(uid, bars_df, config.entry_time)
             
-            # 3. Store calculation results (only for mapped calculations)
+            # 3. Store calculation results using plugins
             calculations_stored = 0
             for signal in results.entry_signals:
                 if await self._store_calculation_result(uid, signal):
@@ -269,7 +275,7 @@ class BacktestStorage:
     
     async def _store_calculation_result(self, uid: str, signal: 'StandardSignal') -> bool:
         """
-        Store calculation-specific results.
+        Store calculation-specific results using plugin storage.
         
         Args:
             uid: Unique identifier
@@ -278,49 +284,38 @@ class BacktestStorage:
         Returns:
             True if stored successfully, False otherwise
         """
-        # Get table name
-        table_name = self._get_calculation_table_name(signal.name)
-        
-        # Skip if no table mapping exists
-        if not table_name:
-            logger.debug(f"Skipping storage for unmapped calculation: {signal.name}")
+        if not self.plugin_registry:
+            logger.warning("No plugin registry available, skipping calculation storage")
             return False
         
-        # Store based on table name
-        if table_name == 'bt_m1_ema':
-            # Store M1 EMA specific data - convert all numpy types
-            ema_data = convert_numpy_types({
-                'uid': uid,
-                'signal_direction': signal.direction,
-                'signal_strength': float(signal.strength),
-                'signal_confidence': float(signal.confidence),
-                'ema_9': float(signal.metadata.get('ema_9', 0)),
-                'ema_21': float(signal.metadata.get('ema_21', 0)),
-                'ema_spread': float(signal.metadata.get('ema_spread', 0)),
-                'ema_spread_pct': float(signal.metadata.get('ema_spread_pct', 0)),
-                'price_vs_ema9': signal.metadata.get('price_vs_ema9', 'unknown'),
-                'trend_strength': float(signal.metadata.get('trend_strength', 0)),
-                'reason': signal.metadata.get('reason', '')
-            })
-            
-            # Upsert the data
-            response = self.supabase.table(table_name).upsert(ema_data).execute()
-            
-            if not response.data:
-                logger.error(f"Failed to store {signal.name} results for {uid}")
-                return False
+        # Find plugin by calculation name
+        plugin = self.plugin_registry.get_plugin_by_calculation_name(signal.name)
+        
+        if not plugin:
+            logger.debug(f"No plugin found for calculation: {signal.name}")
+            return False
+        
+        # Convert signal to dict format for plugin
+        signal_data = {
+            'name': signal.name,
+            'timestamp': signal.timestamp,
+            'direction': signal.direction,
+            'strength': signal.strength,
+            'confidence': signal.confidence,
+            'metadata': signal.metadata
+        }
+        
+        # Delegate storage to plugin
+        try:
+            success = await plugin.store_results(self.supabase, uid, signal_data)
+            if success:
+                logger.debug(f"Stored {signal.name} results via plugin")
             else:
-                logger.debug(f"Stored {signal.name} results for {uid}")
-                return True
-        
-        # Add more calculation-specific storage as you develop new calculations
-        # elif table_name == 'bt_rsi_divergence':
-        #     rsi_data = convert_numpy_types({...})
-        #     response = self.supabase.table(table_name).upsert(rsi_data).execute()
-        #     return bool(response.data)
-        
-        else:
-            logger.warning(f"Table {table_name} exists but no storage implementation yet")
+                logger.warning(f"Plugin failed to store {signal.name} results")
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error in plugin storage for {signal.name}: {e}")
             return False
     
     async def _store_aggregated_results(self, uid: str, aggregated_signal: Dict[str, Any],
@@ -363,32 +358,14 @@ class BacktestStorage:
     
     def _get_calculation_table_name(self, signal_name: str) -> Optional[str]:
         """
-        Map signal name to table name.
-        
-        Args:
-            signal_name: Name of the calculation/signal
-            
-        Returns:
-            Table name if mapping exists, None otherwise
+        Get table name from plugin registry.
+        Replaces hardcoded mapping.
         """
-        # Map calculation names to table names (real calculations only)
-        table_map = {
-            '1-Min EMA Crossover': 'bt_m1_ema',
-            'm1_ema_crossover': 'bt_m1_ema',
-            # Add more mappings as you add calculations:
-            # 'RSI Divergence': 'bt_rsi_divergence',
-            # 'Volume Profile': 'bt_volume_profile',
-            # 'MACD Signal': 'bt_macd',
-            # etc.
-        }
-        
-        # Return mapped name or None if not found
-        mapped_name = table_map.get(signal_name)
-        if not mapped_name:
-            logger.warning(f"No table mapping for calculation '{signal_name}'")
-            logger.info(f"To store this calculation, add mapping to _get_calculation_table_name() and create the table")
-        
-        return mapped_name
+        if not self.plugin_registry:
+            return None
+            
+        plugin = self.plugin_registry.get_plugin_by_calculation_name(signal_name)
+        return plugin.storage_table if plugin else None
     
     async def check_uid_exists(self, uid: str) -> bool:
         """Check if a UID already exists in the database"""

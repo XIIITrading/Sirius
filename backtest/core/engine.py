@@ -66,30 +66,28 @@ class BacktestEngine:
     
     def __init__(self, config_path: Optional[str] = None, 
                  data_manager: Optional[Any] = None,
-                 enable_supabase_storage: bool = True):
+                 enable_supabase_storage: bool = True,
+                 plugin_registry: Optional[Any] = None):
         """
         Initialize backtest engine.
         
         Args:
             config_path: Path to JSON configuration file
-            data_manager: Optional data manager (uses default if None)
+            data_manager: Optional data manager (uses PolygonDataManager if None)
             enable_supabase_storage: Whether to enable Supabase storage
+            plugin_registry: Registry of loaded plugins
         """
         self.config_path = config_path
         
-        # Initialize data manager - support both old and new
+        # Initialize data manager - only use PolygonDataManager
         if data_manager:
             self.data_manager = data_manager
+            logger.info("Using provided data manager")
         else:
-            # Try to use PolygonDataManager first, fall back to BacktestDataManager
-            try:
-                from data.polygon_data_manager import PolygonDataManager
-                self.data_manager = PolygonDataManager()
-                logger.info("Using PolygonDataManager")
-            except ImportError:
-                from core.data_manager import BacktestDataManager
-                self.data_manager = BacktestDataManager()
-                logger.info("Using BacktestDataManager")
+            # Only use PolygonDataManager - no fallback
+            from data.polygon_data_manager import PolygonDataManager
+            self.data_manager = PolygonDataManager()
+            logger.info("Using PolygonDataManager")
         
         # Initialize local result store
         from core.result_store import BacktestResultStore
@@ -98,15 +96,20 @@ class BacktestEngine:
         # Initialize signal aggregator
         self.signal_aggregator = SignalAggregator()
         
+        # Store plugin registry reference
+        self.plugin_registry = plugin_registry
+        
         # Initialize Supabase storage if available and enabled
         self.supabase_storage = None
         self.supabase_enabled = False
         
         if enable_supabase_storage and SUPABASE_AVAILABLE:
             try:
-                self.supabase_storage = BacktestStorage()
+                self.supabase_storage = BacktestStorage(
+                    plugin_registry=plugin_registry
+                )
                 self.supabase_enabled = True
-                logger.info("Supabase storage initialized and enabled")
+                logger.info("Supabase storage initialized with plugin support")
             except Exception as e:
                 logger.error(f"Failed to initialize Supabase storage: {e}")
                 logger.info("Continuing with local storage only")
@@ -150,6 +153,144 @@ class BacktestEngine:
         """Register multiple adapters at once"""
         for name, adapter in adapters.items():
             self.register_adapter(name, adapter)
+    
+    async def _collect_data_requirements(self, config: BacktestConfig) -> Dict[str, Any]:
+        """
+        Collect data requirements from all active adapters.
+        
+        Returns:
+            Aggregated requirements for data fetching
+        """
+        requirements = {
+            'max_lookback_minutes': 0,
+            'needs_trades': False,
+            'needs_quotes': False,
+            'timeframes': set()
+        }
+        
+        # Filter adapters based on enabled calculations
+        active_adapters = {
+            name: adapter for name, adapter in self.adapters.items()
+            if not config.enabled_calculations or name in config.enabled_calculations
+        }
+        
+        # Collect requirements from each adapter
+        for name, adapter in active_adapters.items():
+            if hasattr(adapter, 'get_data_requirements'):
+                adapter_reqs = adapter.get_data_requirements()
+                
+                # Bar requirements
+                if adapter_reqs.get('bars'):
+                    bar_reqs = adapter_reqs['bars']
+                    requirements['max_lookback_minutes'] = max(
+                        requirements['max_lookback_minutes'],
+                        bar_reqs.get('lookback_minutes', 0)
+                    )
+                    requirements['timeframes'].add(bar_reqs.get('timeframe', '1min'))
+                
+                # Trade/quote requirements
+                if adapter_reqs.get('trades'):
+                    requirements['needs_trades'] = True
+                if adapter_reqs.get('quotes'):
+                    requirements['needs_quotes'] = True
+        
+        # Always include 1min as base timeframe
+        requirements['timeframes'].add('1min')
+        
+        return requirements
+    
+    async def _fetch_all_required_data(self, symbol: str, requirements: Dict[str, Any],
+                                      start_time: datetime, end_time: datetime) -> Dict[str, Any]:
+        """
+        Fetch all required data based on aggregated requirements.
+        
+        Returns:
+            Shared data cache for all adapters
+        """
+        data_cache = {
+            'symbol': symbol,
+            'data_start': start_time,
+            'data_end': end_time,
+            'entry_time': end_time  # data_end is entry_time for historical
+        }
+        
+        # Always fetch 1-minute bars as base
+        data_cache['1min_bars'] = await self.data_manager.load_bars(
+            symbol=symbol,
+            start_time=start_time,
+            end_time=end_time,
+            timeframe='1min',
+            use_cache=True
+        )
+        
+        # Aggregate to other timeframes if needed
+        if '5min' in requirements['timeframes'] and not data_cache['1min_bars'].empty:
+            data_cache['5min_bars'] = self._aggregate_bars(data_cache['1min_bars'], '5min')
+        
+        if '15min' in requirements['timeframes'] and not data_cache['1min_bars'].empty:
+            data_cache['15min_bars'] = self._aggregate_bars(data_cache['1min_bars'], '15min')
+        
+        # Fetch trades if needed
+        if requirements['needs_trades']:
+            data_cache['trades'] = await self.data_manager.load_trades(
+                symbol=symbol,
+                start_time=start_time,
+                end_time=end_time,
+                use_cache=True
+            )
+        else:
+            data_cache['trades'] = []
+        
+        # Fetch quotes if needed
+        if requirements['needs_quotes']:
+            data_cache['quotes'] = await self.data_manager.load_quotes(
+                symbol=symbol,
+                start_time=start_time,
+                end_time=end_time,
+                use_cache=True
+            )
+        else:
+            data_cache['quotes'] = []
+        
+        return data_cache
+    
+    def _aggregate_bars(self, bars_1min: pd.DataFrame, target_timeframe: str) -> pd.DataFrame:
+        """
+        Aggregate 1-minute bars to higher timeframe.
+        
+        Args:
+            bars_1min: 1-minute bar data
+            target_timeframe: Target timeframe (5min, 15min, etc)
+            
+        Returns:
+            Aggregated DataFrame
+        """
+        # Map timeframe to pandas frequency
+        freq_map = {
+            '5min': '5T',
+            '15min': '15T',
+            '30min': '30T',
+            '1hour': '1H',
+            'hour': '1H'
+        }
+        
+        freq = freq_map.get(target_timeframe, '5T')
+        
+        # Aggregate using pandas resample
+        agg_rules = {
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last',
+            'volume': 'sum'
+        }
+        
+        aggregated = bars_1min.resample(freq).agg(agg_rules)
+        
+        # Remove any rows with all NaN values
+        aggregated = aggregated.dropna(how='all')
+        
+        return aggregated
             
     async def run_backtest(self, config: BacktestConfig) -> 'BacktestResult':
         """
@@ -171,31 +312,43 @@ class BacktestEngine:
             logger.info("Supabase storage is DISABLED for this backtest")
         
         try:
-            # 1. Load historical data
-            historical_data = await self._load_historical_data(config)
+            # 1. Collect data requirements from all adapters
+            requirements = await self._collect_data_requirements(config)
             
-            # 2. Load forward data (60 bars after entry)
+            # 2. Calculate data window based on requirements
+            data_start = config.entry_time - timedelta(
+                minutes=max(requirements['max_lookback_minutes'], 
+                           config.historical_lookback_hours * 60)
+            )
+            data_end = config.entry_time
+            
+            # 3. Fetch all required data once
+            shared_data_cache = await self._fetch_all_required_data(
+                config.symbol, requirements, data_start, data_end
+            )
+            
+            # 4. Load forward data (60 bars after entry)
             forward_data = await self._load_forward_data(config)
             
-            # 3. Initialize adapters with historical data
-            await self._initialize_adapters(config.symbol, historical_data, config)
+            # 5. Initialize adapters with shared data cache
+            await self._initialize_adapters(config.symbol, shared_data_cache, config)
             
-            # 4. Get entry signals from all calculations
+            # 6. Get entry signals from all calculations
             entry_signals = await self._get_entry_signals(config)
             
-            # 5. Aggregate signals using point & call system
+            # 7. Aggregate signals using point & call system
             aggregated_signal = self.signal_aggregator.aggregate_signals(entry_signals)
             
-            # 6. Simulate forward price movement
+            # 8. Simulate forward price movement
             forward_analysis = await self._analyze_forward_movement(
                 config, forward_data, entry_signals
             )
             
-            # 7. Prepare bars for storage (even if not auto-storing, prepare for manual push)
+            # 9. Prepare bars for storage (even if not auto-storing, prepare for manual push)
             bars_for_storage = None
             if self.supabase_enabled:
                 try:
-                    historical_bars = historical_data.get('bars_1min', pd.DataFrame())
+                    historical_bars = shared_data_cache.get('1min_bars', pd.DataFrame())
                     if not historical_bars.empty and not forward_data.empty:
                         bars_for_storage = prepare_bars_for_storage(
                             historical_bars, 
@@ -206,7 +359,7 @@ class BacktestEngine:
                 except Exception as e:
                     logger.warning(f"Could not prepare bars for storage: {e}")
             
-            # 8. Create result with all data including bars
+            # 10. Create result with all data including bars
             from core.result_store import BacktestResult
             result = BacktestResult(
                 config=config,
@@ -215,16 +368,16 @@ class BacktestEngine:
                 forward_data=forward_data,
                 forward_analysis=forward_analysis,
                 runtime_seconds=(datetime.now(timezone.utc) - start_time).total_seconds(),
-                historical_bars=historical_data.get('bars_1min'),  # Store for manual push
+                historical_bars=shared_data_cache.get('1min_bars'),  # Store for manual push
                 bars_for_storage=bars_for_storage  # Pre-prepared 75 bars
             )
             
-            # 9. Store result locally (always)
+            # 11. Store result locally (always)
             self.result_store.store_result(result)
             
-            # 10. Store to Supabase if enabled
+            # 12. Store to Supabase if enabled
             if config.store_to_supabase and self.supabase_enabled:
-                await self._store_to_supabase(config, historical_data, forward_data, result)
+                await self._store_to_supabase(config, shared_data_cache, forward_data, result)
             
             # Update tracking
             self.backtest_count += 1
@@ -265,7 +418,7 @@ class BacktestEngine:
                 bars_to_store = result.bars_for_storage
             else:
                 # Prepare bars if not already done
-                historical_bars = historical_data.get('bars_1min', pd.DataFrame())
+                historical_bars = historical_data.get('1min_bars', pd.DataFrame())
                 bars_to_store = prepare_bars_for_storage(
                     historical_bars, 
                     forward_data, 
@@ -289,44 +442,6 @@ class BacktestEngine:
             logger.error(f"Error storing to Supabase: {e}")
             # Don't fail the backtest if storage fails
             # The local storage already succeeded
-            
-    async def _load_historical_data(self, config: BacktestConfig) -> Dict[str, pd.DataFrame]:
-        """Load historical data for calculations"""
-        end_time = config.entry_time
-        start_time = end_time - timedelta(hours=config.historical_lookback_hours)
-        
-        logger.info(f"Loading historical data from {start_time} to {end_time}")
-        
-        data = {}
-        
-        # Load 1-minute bars
-        data['bars_1min'] = await self.data_manager.load_bars(
-            symbol=config.symbol,
-            start_time=start_time,
-            end_time=end_time,
-            timeframe='1min',
-            use_cache=config.use_cached_data
-        )
-        
-        # Load trade data if needed
-        if config.fetch_trades and self._any_adapter_needs_trades():
-            data['trades'] = await self.data_manager.load_trades(
-                symbol=config.symbol,
-                start_time=start_time,
-                end_time=end_time,
-                use_cache=config.use_cached_data
-            )
-            
-        # Load quote data if needed
-        if config.fetch_quotes and self._any_adapter_needs_quotes():
-            data['quotes'] = await self.data_manager.load_quotes(
-                symbol=config.symbol,
-                start_time=start_time,
-                end_time=end_time,
-                use_cache=config.use_cached_data
-            )
-            
-        return data
         
     async def _load_forward_data(self, config: BacktestConfig) -> pd.DataFrame:
         """Load forward-looking data for analysis"""
@@ -343,22 +458,26 @@ class BacktestEngine:
             use_cache=config.use_cached_data
         )
         
-    async def _initialize_adapters(self, symbol: str, historical_data: Dict[str, Any], 
+    async def _initialize_adapters(self, symbol: str, shared_data_cache: Dict[str, Any], 
                                   config: BacktestConfig) -> None:
-        """Initialize all adapters with historical data"""
+        """Initialize all adapters with shared data cache"""
         # Filter adapters based on enabled calculations
         active_adapters = {
             name: adapter for name, adapter in self.adapters.items()
             if not config.enabled_calculations or name in config.enabled_calculations
         }
         
-        logger.info(f"Initializing {len(active_adapters)} adapters")
+        logger.info(f"Initializing {len(active_adapters)} adapters with shared data cache")
         
         # Initialize each adapter
         init_tasks = []
         for name, adapter in active_adapters.items():
+            # Set shared data cache
+            if hasattr(adapter, 'set_data_cache'):
+                adapter.set_data_cache(shared_data_cache)
+            
             init_tasks.append(self._initialize_single_adapter(
-                name, adapter, symbol, historical_data
+                name, adapter, symbol, shared_data_cache
             ))
             
         await asyncio.gather(*init_tasks)
@@ -370,17 +489,9 @@ class BacktestEngine:
             # Initialize calculation
             adapter.initialize(symbol)
             
-            # Feed historical bar data
-            if 'bars_1min' in historical_data and not historical_data['bars_1min'].empty:
-                adapter.feed_historical_data(historical_data['bars_1min'], symbol)
-                
-            # Feed trade data if adapter needs it
-            if adapter.requires_trades and 'trades' in historical_data:
-                # Process trades in chunks
-                trades = historical_data['trades']
-                for i in range(0, len(trades), 1000):
-                    chunk = trades[i:i+1000]
-                    adapter.process_trades(chunk, symbol)
+            # Feed historical data
+            # Pass empty DataFrame as adapter will use shared cache
+            adapter.feed_historical_data(pd.DataFrame(), symbol)
                     
             logger.info(f"Initialized {name}")
             

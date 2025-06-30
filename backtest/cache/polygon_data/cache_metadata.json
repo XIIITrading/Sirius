@@ -196,5 +196,77 @@
     "cached_at": "2025-06-29T16:27:05.641269+00:00",
     "data_points": 951,
     "cache_key": "e86b425d58d397ced70cd996450a2326"
+  },
+  "119eb25de1a73a48f4130722be0c8822": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:15:00.428000+00:00",
+    "end_time": "2025-06-27T21:55:00.428000+00:00",
+    "cached_at": "2025-06-30T12:26:36.326345+00:00",
+    "data_points": 951,
+    "cache_key": "119eb25de1a73a48f4130722be0c8822"
+  },
+  "5a4f65037b592e53c1b09e7b8675ee5b": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T05:15:00.428000+00:00",
+    "end_time": "2025-06-27T22:55:00.428000+00:00",
+    "cached_at": "2025-06-30T12:26:36.574293+00:00",
+    "data_points": 951,
+    "cache_key": "5a4f65037b592e53c1b09e7b8675ee5b"
+  },
+  "519b1a15662d089396039128d486b6a3": {
+    "symbol": "TSLA",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T03:10:05.133000+00:00",
+    "end_time": "2025-06-23T21:50:05.133000+00:00",
+    "cached_at": "2025-06-30T12:30:52.649234+00:00",
+    "data_points": 960,
+    "cache_key": "519b1a15662d089396039128d486b6a3"
+  },
+  "054a74ec3e9b3f8751dd7e75711a76ab": {
+    "symbol": "TSLA",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T05:10:05.133000+00:00",
+    "end_time": "2025-06-23T22:50:05.133000+00:00",
+    "cached_at": "2025-06-30T12:30:52.675955+00:00",
+    "data_points": 958,
+    "cache_key": "054a74ec3e9b3f8751dd7e75711a76ab"
+  },
+  "263ecbcb9feb92ff4b17a0ad1653bff0": {
+    "symbol": "TSLA",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T03:10:55.932000+00:00",
+    "end_time": "2025-06-23T21:50:55.932000+00:00",
+    "cached_at": "2025-06-30T12:37:14.841138+00:00",
+    "data_points": 958,
+    "cache_key": "263ecbcb9feb92ff4b17a0ad1653bff0"
+  },
+  "80d67753356f3c3c271181ea6c6d3591": {
+    "symbol": "TSLA",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T05:10:55.932000+00:00",
+    "end_time": "2025-06-23T22:50:55.932000+00:00",
+    "cached_at": "2025-06-30T12:37:14.859958+00:00",
+    "data_points": 958,
+    "cache_key": "80d67753356f3c3c271181ea6c6d3591"
+  },
+  "27c5ebdd7d8ca43c8b3d2ed2d675a106": {
+    "symbol": "TSLA",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T05:57:55.932000+00:00",
+    "end_time": "2025-06-24T00:37:55.932000+00:00",
+    "cached_at": "2025-06-30T12:37:50.555957+00:00",
+    "data_points": 958,
+    "cache_key": "27c5ebdd7d8ca43c8b3d2ed2d675a106"
+  },
+  "33474366c07f767304db555f97333c98": {
+    "symbol": "TSLA",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T07:57:55.932000+00:00",
+    "end_time": "2025-06-24T01:37:55.932000+00:00",
+    "cached_at": "2025-06-30T12:37:50.576352+00:00",
+    "data_points": 958,
+    "cache_key": "33474366c07f767304db555f97333c98"
   }
 }

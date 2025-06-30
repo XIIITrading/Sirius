@@ -39,8 +39,10 @@ from PyQt6.QtGui import QFont, QColor
 from core.engine import BacktestEngine, BacktestConfig
 from data.polygon_data_manager import PolygonDataManager
 from core.result_store import BacktestResultStore, BacktestResult
-from adapters.indicators.m1_ema_back_adapter import M1EMABackAdapter
 from storage.supabase_storage import prepare_bars_for_storage
+
+# Import plugin loader
+from plugins.plugin_loader import PluginLoader
 
 # Configure logging
 logging.basicConfig(
@@ -183,19 +185,28 @@ class BacktestDashboard(QMainWindow):
         self.last_result = None  # Store the last BacktestResult object
         self.last_result_dict = None  # Store the dict version
         self.push_worker = None
+        self.plugin_loader = None  # Plugin loader
         self.init_engine()
         self.init_ui()
         self.apply_dark_theme()
         
     def init_engine(self):
-        """Initialize backtest engine with real data"""
+        """Initialize backtest engine with plugin system"""
         try:
+            # Load plugins first
+            self.plugin_loader = PluginLoader()
+            plugins = self.plugin_loader.load_all_plugins()
+            plugin_registry = self.plugin_loader.get_registry()
+            
             # Create data manager
             self.data_manager = PolygonDataManager()
             
-            # Create engine with the data manager
-            self.engine = BacktestEngine(data_manager=self.data_manager)
-            logger.info("Backtest engine initialized with Polygon data manager")
+            # Create engine with plugin registry
+            self.engine = BacktestEngine(
+                data_manager=self.data_manager,
+                plugin_registry=plugin_registry
+            )
+            logger.info("Backtest engine initialized with plugin system")
             
         except Exception as e:
             logger.error(f"Failed to initialize engine: {e}")
@@ -205,20 +216,20 @@ class BacktestDashboard(QMainWindow):
                             "Please check your .env file has SUPABASE_URL, SUPABASE_KEY, and POLYGON_API_KEY")
             raise
         
-        # Register real adapters only
+        # Register adapters from plugins
         try:
-            # Register M1 EMA adapter
-            m1_ema_adapter = M1EMABackAdapter(buffer_size=100)
-            self.engine.register_adapter("m1_ema_crossover", m1_ema_adapter)
-            self.registered_adapters.append("m1_ema_crossover")
+            adapter_configs = self.plugin_loader.get_adapter_configs()
             
-            # Add more real adapters here as you develop them
-            # For example:
-            # rsi_adapter = RSIAdapter()
-            # self.engine.register_adapter("rsi_divergence", rsi_adapter)
-            # self.registered_adapters.append("rsi_divergence")
+            for adapter_name, config in adapter_configs.items():
+                # Create adapter instance
+                adapter_class = config['adapter_class']
+                adapter_config = config['adapter_config']
+                
+                adapter = adapter_class(**adapter_config)
+                self.engine.register_adapter(adapter_name, adapter)
+                self.registered_adapters.append(adapter_name)
             
-            logger.info(f"Registered adapters: {', '.join(self.registered_adapters)}")
+            logger.info(f"Registered {len(self.registered_adapters)} adapters from plugins")
             
         except Exception as e:
             logger.error(f"Failed to register adapters: {e}")
@@ -762,18 +773,29 @@ def run_gui():
 
 def run_cli(args):
     """Run backtest from command line"""
+    # Load plugins
+    plugin_loader = PluginLoader()
+    plugins = plugin_loader.load_all_plugins()
+    plugin_registry = plugin_loader.get_registry()
+    
     # Create data manager
     data_manager = PolygonDataManager()
     
-    # Create engine with data manager
-    engine = BacktestEngine(data_manager=data_manager)
+    # Create engine with plugin registry
+    engine = BacktestEngine(
+        data_manager=data_manager,
+        plugin_registry=plugin_registry
+    )
     
-    # Register only real adapters
-    m1_ema_adapter = M1EMABackAdapter()
-    engine.register_adapter("m1_ema_crossover", m1_ema_adapter)
+    # Register adapters from plugins
+    adapter_configs = plugin_loader.get_adapter_configs()
     
-    # More adapters can be added here
-    # engine.register_adapter("rsi_divergence", rsi_adapter)
+    for adapter_name, config in adapter_configs.items():
+        adapter_class = config['adapter_class']
+        adapter_config = config['adapter_config']
+        
+        adapter = adapter_class(**adapter_config)
+        engine.register_adapter(adapter_name, adapter)
     
     # Parse entry time
     entry_time = datetime.strptime(args.entry_time, "%Y-%m-%d %H:%M:%S")

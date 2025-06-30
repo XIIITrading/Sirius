@@ -27,6 +27,7 @@ class FilterCriteria:
     min_price: float = 5.0
     max_price: float = 500.0
     min_avg_volume: float = 500_000
+    min_premarket_volume: float = 300_000
     min_premarket_volume_ratio: float = 0.10  # 10% of avg daily volume
     min_dollar_volume: float = 5_000_000
     min_atr: float = 2.0
@@ -98,19 +99,6 @@ class MarketFilter:
     def apply_filters(self, market_data: pd.DataFrame) -> pd.DataFrame:
         """
         Apply all filter criteria to market data.
-        
-        Args:
-            market_data: DataFrame with columns:
-                - ticker: Stock symbol
-                - price: Current price
-                - avg_daily_volume: Average daily volume
-                - premarket_volume: Pre-market volume
-                - dollar_volume: Dollar volume (price * volume)
-                - atr: Average True Range
-                - atr_percent: ATR as percentage of price
-                
-        Returns:
-            DataFrame with only stocks passing all filters, plus scoring columns
         """
         if market_data.empty:
             logger.warning("Empty market data provided")
@@ -118,7 +106,7 @@ class MarketFilter:
         
         # Validate required columns
         required_columns = ['ticker', 'price', 'avg_daily_volume', 'premarket_volume',
-                          'dollar_volume', 'atr', 'atr_percent']
+                        'dollar_volume', 'atr', 'atr_percent']
         missing_columns = set(required_columns) - set(market_data.columns)
         if missing_columns:
             raise ValueError(f"Missing required columns: {missing_columns}")
@@ -135,6 +123,7 @@ class MarketFilter:
             'price_min': df['price'] >= self.criteria.min_price,
             'price_max': df['price'] <= self.criteria.max_price,
             'avg_volume': df['avg_daily_volume'] >= self.criteria.min_avg_volume,
+            'pm_volume_min': df['premarket_volume'] >= self.criteria.min_premarket_volume,  # Add this line
             'pm_volume_ratio': (df['premarket_volume'] / df['avg_daily_volume']) >= self.criteria.min_premarket_volume_ratio,
             'dollar_volume': df['dollar_volume'] >= self.criteria.min_dollar_volume,
             'atr_min': df['atr'] >= self.criteria.min_atr,
@@ -389,6 +378,25 @@ def push_to_supabase(scan_results: pd.DataFrame, scan_date: datetime):
         # Initialize Supabase client
         supabase: Client = create_client(supabase_url, supabase_key)
         
+        # Format scan date for database
+        scan_date_str = scan_date.strftime('%Y-%m-%d')
+        
+        # Check if records exist for this date
+        existing_records = supabase.table('premarket_scans').select('ticker').eq('scan_date', scan_date_str).execute()
+        
+        if existing_records.data and len(existing_records.data) > 0:
+            print(f"\n⚠️  Found {len(existing_records.data)} existing records for {scan_date_str}")
+            print("   This will cause duplicate key errors.")
+            
+            if get_user_confirmation(f"Would you like to DELETE all existing records for {scan_date_str} before inserting new ones?"):
+                # Delete existing records
+                print(f"🗑️  Deleting existing records for {scan_date_str}...")
+                delete_response = supabase.table('premarket_scans').delete().eq('scan_date', scan_date_str).execute()
+                print(f"✅ Deleted {len(existing_records.data)} existing records")
+            else:
+                print("\n⏭️  Skipping push to avoid duplicate key errors.")
+                return False
+        
         # Prepare data for insertion
         records = []
         for _, row in scan_results.iterrows():
@@ -407,7 +415,7 @@ def push_to_supabase(scan_results: pd.DataFrame, scan_date: datetime):
                 'dollar_vol_score': float(row['dollar_vol_score']),
                 'pm_vol_abs_score': float(row['pm_vol_abs_score']),
                 'price_atr_bonus': float(row['price_atr_bonus']),
-                'scan_date': scan_date.strftime('%Y-%m-%d'),
+                'scan_date': scan_date_str,
                 'passed_filters': True,  # All results passed filters
                 'market_session': 'pre-market'
             }
@@ -418,11 +426,14 @@ def push_to_supabase(scan_results: pd.DataFrame, scan_date: datetime):
         
         # Insert in batches to handle large datasets
         batch_size = 100
+        total_inserted = 0
         for i in range(0, len(records), batch_size):
             batch = records[i:i + batch_size]
-            response = supabase.table('premarket_scans').upsert(batch).execute()
+            response = supabase.table('premarket_scans').insert(batch).execute()
+            total_inserted += len(batch)
+            print(f"   Inserted batch {i//batch_size + 1}/{(len(records) + batch_size - 1)//batch_size} ({total_inserted}/{len(records)} records)")
         
-        print(f"✅ Successfully pushed {len(records)} records to Supabase!")
+        print(f"\n✅ Successfully pushed {len(records)} records to Supabase!")
         return True
         
     except Exception as e:
@@ -474,12 +485,13 @@ def example_usage():
         min_price=5.0,
         max_price=500.0,
         min_avg_volume=500_000,
-        min_premarket_volume_ratio=0.001,  # 0.1% - very relaxed for testing
-        min_dollar_volume=1_000_000,       # $1M instead of $5M
-        min_atr=0.5,                       # $0.50 instead of $2
-        min_atr_percent=0.5                # 0.5% instead of 10%
+        min_premarket_volume=300_000,         # Add minimum PM volume requirement
+        min_premarket_volume_ratio=0.001,      # 0.1% - very relaxed for testing
+        min_dollar_volume=1_000_000,           # $1M instead of $5M
+        min_atr=0.5,                           # $0.50 instead of $2
+        min_atr_percent=0.5                    # 0.5% instead of 10%
     )
-    
+
     # Initialize bridge with relaxed criteria
     try:
         # Use more parallel workers for full scan
@@ -593,6 +605,7 @@ def create_real_data_markdown(scan_results, summary, criteria, total_tickers_sca
         f.write("|-----------|-------|\n")
         f.write(f"| Price Range | ${criteria.min_price} - ${criteria.max_price} |\n")
         f.write(f"| Min Avg Volume | {criteria.min_avg_volume:,.0f} shares |\n")
+        f.write(f"| Min PM Volume | {criteria.min_premarket_volume:,.0f} shares |\n")  # Add this line
         f.write(f"| Min PM Volume Ratio | {criteria.min_premarket_volume_ratio:.1%} |\n")
         f.write(f"| Min Dollar Volume | ${criteria.min_dollar_volume:,.0f} |\n")
         f.write(f"| Min ATR | ${criteria.min_atr} |\n")

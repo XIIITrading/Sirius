@@ -1,7 +1,7 @@
 # backtest/plugins/m15_ema/adapter.py
 """
 M15 EMA Crossover Adapter for backtesting.
-Uses shared data cache from the engine.
+Uses shared data cache from the engine and aggregates 1-minute bars to 15-minute bars.
 """
 
 import sys
@@ -25,6 +25,7 @@ if backtest_dir not in sys.path:
 
 from adapters.base import CalculationAdapter, StandardSignal
 from modules.calculations.indicators.m15_ema import EMAAnalyzer15M, VolumeSignal as EMASignal
+from .aggregator import M15EMAggregator
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class M15EMABackAdapter(CalculationAdapter):
     """
     Adapter for 15-minute EMA Crossover backtesting.
     Works with shared data cache from BacktestEngine.
+    Aggregates 1-minute bars to 15-minute bars.
     """
     
     def __init__(self, buffer_size: int = 40):
@@ -55,14 +57,17 @@ class M15EMABackAdapter(CalculationAdapter):
         # Shared data cache reference
         self.data_cache = None
         
+        # Initialize aggregator
+        self.aggregator = M15EMAggregator()
+        
         logger.info(f"M15EMABackAdapter initialized with buffer_size={buffer_size}")
     
     def get_data_requirements(self) -> Dict:
         """Declare data requirements for shared cache system"""
         return {
             'bars': {
-                'timeframe': '15min',
-                'lookback_minutes': 900  # 15 hours of 15-minute data (60 bars)
+                'timeframe': '1min',  # Request 1-minute bars
+                'lookback_minutes': 900  # 15 hours of data for 15-minute aggregation
             },
             'trades': None,  # Not needed
             'quotes': None   # Not needed
@@ -82,10 +87,17 @@ class M15EMABackAdapter(CalculationAdapter):
             logger.error("No data cache available")
             return
             
-        # Get 15-minute bars from shared cache
-        bars = self.data_cache.get('15min_bars')
-        if bars is None or bars.empty:
-            logger.warning(f"No 15-minute bars in data cache for {symbol}")
+        # Get 1-minute bars from shared cache
+        bars_1min = self.data_cache.get('1min_bars')
+        if bars_1min is None or bars_1min.empty:
+            logger.warning(f"No 1-minute bars in data cache for {symbol}")
+            return
+        
+        # Use aggregator to convert 1-minute bars to 15-minute bars
+        bars_15min = self.aggregator.aggregate(bars_1min)
+        
+        if bars_15min.empty:
+            logger.warning(f"No valid 15-minute bars after aggregation")
             return
             
         # Get entry time to prevent look-ahead
@@ -94,11 +106,11 @@ class M15EMABackAdapter(CalculationAdapter):
             logger.error("No entry_time in data cache")
             return
         
-        logger.info(f"Processing {len(bars)} historical 15-minute bars for {symbol}")
+        logger.info(f"Processing {len(bars_15min)} aggregated 15-minute bars for {symbol}")
         
         # Convert to candle format and process
         candles = []
-        for timestamp, row in bars.iterrows():
+        for timestamp, row in bars_15min.iterrows():
             # Stop at entry time to prevent look-ahead
             if timestamp >= entry_time:
                 break
@@ -111,15 +123,17 @@ class M15EMABackAdapter(CalculationAdapter):
                 
             candle_dict = {
                 'timestamp': int(timestamp.timestamp() * 1000),
-                'open': row['open'],
-                'high': row['high'],
-                'low': row['low'],
-                'close': row['close'],
-                'volume': row['volume'],
-                'vwap': row.get('vwap', (row['high'] + row['low'] + row['close']) / 3),
-                'trades': row.get('transactions', 0)
+                'open': float(row['open']),
+                'high': float(row['high']),
+                'low': float(row['low']),
+                'close': float(row['close']),
+                'volume': float(row['volume']),
+                'vwap': float(row.get('vwap', (row['high'] + row['low'] + row['close']) / 3)),
+                'trades': int(row.get('transactions', 0))
             }
             candles.append(candle_dict)
+        
+        logger.info(f"Prepared {len(candles)} 15-minute candles for processing")
         
         # Process historical candles
         signal = self.calculation.process_historical_candles(symbol, candles)
@@ -139,13 +153,13 @@ class M15EMABackAdapter(CalculationAdapter):
         # Convert bar to candle format
         candle_data = {
             'timestamp': int(bar_data['timestamp'].timestamp() * 1000),
-            'open': bar_data['open'],
-            'high': bar_data['high'],
-            'low': bar_data['low'],
-            'close': bar_data['close'],
-            'volume': bar_data['volume'],
-            'vwap': bar_data.get('vwap', (bar_data['high'] + bar_data['low'] + bar_data['close']) / 3),
-            'trades': bar_data.get('transactions', 0)
+            'open': float(bar_data['open']),
+            'high': float(bar_data['high']),
+            'low': float(bar_data['low']),
+            'close': float(bar_data['close']),
+            'volume': float(bar_data['volume']),
+            'vwap': float(bar_data.get('vwap', (bar_data['high'] + bar_data['low'] + bar_data['close']) / 3)),
+            'trades': int(bar_data.get('transactions', 0))
         }
         
         # Process candle
@@ -170,16 +184,16 @@ class M15EMABackAdapter(CalculationAdapter):
         direction = direction_map.get(ema_signal.signal, 'NEUTRAL')
         metrics = ema_signal.metrics
         
-        # Build metadata
+        # Build metadata - ensure all values are clean
         metadata = {
-            'ema_9': metrics.get('ema_9', 0),
-            'ema_21': metrics.get('ema_21', 0),
-            'ema_spread': metrics.get('ema_spread', 0),
-            'ema_spread_pct': metrics.get('ema_spread_pct', 0),
-            'price_vs_ema9': metrics.get('price_vs_ema9', 'unknown'),
-            'trend_strength': metrics.get('trend_strength', 0),
+            'ema_9': float(metrics.get('ema_9', 0)),
+            'ema_21': float(metrics.get('ema_21', 0)),
+            'ema_spread': float(metrics.get('ema_spread', 0)),
+            'ema_spread_pct': float(metrics.get('ema_spread_pct', 0)),
+            'price_vs_ema9': str(metrics.get('price_vs_ema9', 'unknown')),
+            'trend_strength': float(metrics.get('trend_strength', 0)),
             'last_crossover_type': metrics.get('last_crossover_type'),
-            'reason': ema_signal.reason,
+            'reason': str(ema_signal.reason),
             'timeframe': '15-minute'
         }
         
@@ -187,8 +201,8 @@ class M15EMABackAdapter(CalculationAdapter):
             name=self.name,
             timestamp=ema_signal.timestamp,
             direction=direction,
-            strength=ema_signal.strength,
-            confidence=ema_signal.strength,  # Use strength as confidence
+            strength=float(ema_signal.strength),
+            confidence=float(ema_signal.strength),  # Use strength as confidence
             metadata=metadata
         )
     

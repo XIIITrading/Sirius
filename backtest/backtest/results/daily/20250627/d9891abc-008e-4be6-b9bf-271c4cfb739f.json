@@ -1,0 +1,149 @@
+{
+  "result_id": "d9891abc-008e-4be6-b9bf-271c4cfb739f",
+  "timestamp": "2025-06-30T15:52:37.475298+00:00",
+  "config": {
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:35:00.628000+00:00",
+    "direction": "SHORT",
+    "historical_lookback_hours": 2,
+    "forward_bars": 60,
+    "store_to_supabase": false
+  },
+  "entry_signals": [
+    {
+      "name": "15-Min EMA Crossover",
+      "timestamp": "2025-06-27T13:35:00.628000+00:00",
+      "direction": "NEUTRAL",
+      "strength": 50.0,
+      "confidence": 50.0,
+      "metadata": {
+        "reason": "No clear signal"
+      }
+    },
+    {
+      "name": "1-Min EMA Crossover",
+      "timestamp": "2025-06-27T13:35:00.628000+00:00",
+      "direction": "BEARISH",
+      "strength": 21.68867357564174,
+      "confidence": 21.68867357564174,
+      "metadata": {
+        "ema_9": 218.6879216825966,
+        "ema_21": 220.64471990102234,
+        "ema_spread": -1.956798218425746,
+        "ema_spread_pct": -0.9036947323184058,
+        "price_vs_ema9": "below",
+        "trend_strength": 18.073894646368117,
+        "last_crossover_type": "bearish",
+        "reason": "9 EMA (218.69) < 21 EMA (220.64) | Spread: -1.96 (-0.9%) | Recent bearish crossover 0s ago"
+      }
+    },
+    {
+      "name": "5-Min EMA Crossover",
+      "timestamp": "2025-06-27T13:35:00.628000+00:00",
+      "direction": "BEARISH",
+      "strength": 5.3919825736583915,
+      "confidence": 5.3919825736583915,
+      "metadata": {
+        "ema_9": 221.39387545154153,
+        "ema_21": 221.88035157729996,
+        "ema_spread": -0.48647612575842913,
+        "ema_spread_pct": -0.22466594056909966,
+        "price_vs_ema9": "below",
+        "trend_strength": 4.493318811381993,
+        "last_crossover_type": "bullish",
+        "reason": "9 EMA (221.39) < 21 EMA (221.88) | Spread: -0.49 (-0.2%) | Recent bullish crossover 0.0m ago",
+        "timeframe": "5-minute"
+      }
+    }
+  ],
+  "aggregated_signal": {
+    "consensus_direction": "BEARISH",
+    "agreement_score": 66.7,
+    "vote_breakdown": {
+      "BULLISH": 0,
+      "BEARISH": 2,
+      "NEUTRAL": 1
+    },
+    "category_consensus": {
+      "trend": "NO_DATA",
+      "order_flow": "NO_DATA",
+      "volume": "NO_DATA",
+      "market_structure": "NO_DATA"
+    },
+    "average_strength": 13.5,
+    "average_confidence": 13.5,
+    "total_calculations": 15,
+    "participating_calculations": 3,
+    "signals": [
+      {
+        "name": "15-Min EMA Crossover",
+        "timestamp": "2025-06-27T13:35:00.628000+00:00",
+        "direction": "NEUTRAL",
+        "strength": 50.0,
+        "confidence": 50.0,
+        "metadata": {
+          "reason": "No clear signal"
+        }
+      },
+      {
+        "name": "1-Min EMA Crossover",
+        "timestamp": "2025-06-27T13:35:00.628000+00:00",
+        "direction": "BEARISH",
+        "strength": 21.68867357564174,
+        "confidence": 21.68867357564174,
+        "metadata": {
+          "ema_9": 218.6879216825966,
+          "ema_21": 220.64471990102234,
+          "ema_spread": -1.956798218425746,
+          "ema_spread_pct": -0.9036947323184058,
+          "price_vs_ema9": "below",
+          "trend_strength": 18.073894646368117,
+          "last_crossover_type": "bearish",
+          "reason": "9 EMA (218.69) < 21 EMA (220.64) | Spread: -1.96 (-0.9%) | Recent bearish crossover 0s ago"
+        }
+      },
+      {
+        "name": "5-Min EMA Crossover",
+        "timestamp": "2025-06-27T13:35:00.628000+00:00",
+        "direction": "BEARISH",
+        "strength": 5.3919825736583915,
+        "confidence": 5.3919825736583915,
+        "metadata": {
+          "ema_9": 221.39387545154153,
+          "ema_21": 221.88035157729996,
+          "ema_spread": -0.48647612575842913,
+          "ema_spread_pct": -0.22466594056909966,
+          "price_vs_ema9": "below",
+          "trend_strength": 4.493318811381993,
+          "last_crossover_type": "bullish",
+          "reason": "9 EMA (221.39) < 21 EMA (221.88) | Spread: -0.49 (-0.2%) | Recent bullish crossover 0.0m ago",
+          "timeframe": "5-minute"
+        }
+      }
+    ]
+  },
+  "forward_analysis": {
+    "entry_price": 215.3403,
+    "exit_price": 201.184,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "final_pnl": 6.573920441273656,
+    "time_to_max_favorable": "2025-06-27T14:27:00+00:00",
+    "time_to_max_adverse": "2025-06-27T13:36:00+00:00",
+    "bars_analyzed": 60,
+    "volume_profile": {
+      "total": 9505809,
+      "average": 158430.15,
+      "at_extremes": {
+        "at_high": 120602,
+        "at_low": 138154
+      }
+    },
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
+  },
+  "runtime_seconds": 0.152548
+}

@@ -1,356 +1,317 @@
-# Modular Backtesting System - Comprehensive Technical Documentation
+Modular Backtest System - Technical Specifications
+System Overview
+The Modular Backtest System is a sophisticated Python-based backtesting framework designed for intraday trading analysis. It features a plugin-based architecture that allows for extensible calculation modules, unified data management, and comprehensive result storage. The system supports both GUI and CLI interfaces, making it suitable for interactive analysis and automated workflows.
+Core Architecture Principles
 
-## System Overview
+Plugin-Based Extensibility: Calculations are implemented as self-contained plugins that can be dynamically loaded and executed
+Shared Data Cache: Efficient data management through a centralized cache that prevents redundant API calls
+Signal Aggregation: Multiple calculation signals are aggregated using a point & call consensus system
+Comprehensive Storage: Results are stored both locally and in Supabase with unique identifiers (UIDs)
+Real-time and Historical Analysis: Supports both live signal generation and historical backtesting
 
-This is a sophisticated modular backtesting system designed for quantitative trading analysis. The system orchestrates historical market data fetching, signal calculation, consensus aggregation, forward performance analysis, and result storage in both local and cloud (Supabase) databases. It uses a **plugin-based architecture** for maximum extensibility and maintainability.
+System Components
+1. Main Entry Point (backtest_system.py)
+The main entry point provides both GUI and CLI interfaces for running backtests.
+Key Features:
 
-### Core Architecture
+PyQt6-based GUI dashboard for interactive backtesting
+Command-line interface for automated/scripted execution
+Real-time progress tracking and result visualization
+Automatic plugin discovery and loading
+Cache management and statistics
 
-```
+GUI Components:
 
-Sirius/
-├── backtest/
-│   ├── backtest_system.py          # Main entry point (GUI/CLI)
-│   ├── core/
-│   │   ├── engine.py               # Orchestration engine
-│   │   ├── data_manager.py         # Supabase data interface
-│   │   ├── result_store.py         # Local result storage
-│   │   └── signal_aggregator.py    # Point & Call consensus
-│   ├── data/
-│   │   └── polygon_data_manager.py # Polygon API + caching
-│   ├── adapters/
-│   │   └── base.py                 # Abstract adapter interface
-│   ├── plugins/                    # Plugin-based calculations
-│   │   ├── base_plugin.py          # Base plugin interface
-│   │   ├── plugin_loader.py        # Dynamic plugin discovery
-│   │   ├── m1_ema/                 # Example plugin
-│   │   │   ├── plugin.py           # Plugin definition
-│   │   │   ├── adapter.py          # Adapter implementation
-│   │   │   └── schema.sql          # Supabase table schema
-│   │   └── m5_ema/                 # Another plugin
-│   │       ├── plugin.py
-│   │       ├── adapter.py
-│   │       └── schema.sql
-│   ├── storage/
-│   │   └── supabase_storage.py     # Cloud storage module
-│   ├── cache/                       # Local cache directory
-│   └── results/                     # Local results storage
+Symbol input with direction selection (LONG/SHORT)
+DateTime picker for entry time (UTC)
+Calculation selector (individual or all calculations)
+Results display with summary metrics and signal details
+Supabase storage integration with auto-store option
+Cache statistics viewer
 
-```
+Worker Threads:
 
-## Key Components
+BacktestWorker: Runs backtests asynchronously without blocking the UI
+PushWorker: Handles Supabase storage operations in the background
 
-### 1. BacktestEngine (`core/engine.py`)
+2. Backtest Engine (core/engine.py)
+The core orchestration component that manages the complete backtest lifecycle.
+Primary Responsibilities:
 
-The central orchestrator that manages the complete backtest lifecycle:
+Plugin registry management
+Data requirement aggregation from all adapters
+Shared data cache coordination
+Signal collection and aggregation
+Forward movement analysis
+Result compilation and storage
 
-```python
+Configuration (BacktestConfig):
+python@dataclass
+class BacktestConfig:
+    symbol: str                    # Stock ticker
+    entry_time: datetime          # UTC timestamp for entry
+    direction: str                # 'LONG' or 'SHORT'
+    historical_lookback_hours: int = 2
+    forward_bars: int = 60        # 1-minute bars to track
+    enabled_calculations: List[str] = []  # Empty = run all
+    store_to_supabase: bool = False
+Backtest Process Flow:
 
-python
-class BacktestEngine:
-    def __init__(self, data_manager=None, enable_supabase_storage=True):
-# Initializes data manager (Polygon or Supabase)# Sets up local result store# Initializes signal aggregator# Configures Supabase storage if available
+Collect data requirements from enabled adapters
+Calculate required data window
+Fetch all data once into shared cache
+Initialize adapters with shared data
+Collect entry signals from all calculations
+Aggregate signals using point & call system
+Analyze forward price movement (60 bars)
+Store results locally and optionally to Supabase
 
-```
+3. Plugin System
+Plugins are self-contained modules that implement specific calculation strategies.
+Plugin Structure:
+plugins/
+├── plugin_loader.py      # Dynamic plugin discovery and loading
+├── base_plugin.py        # Base class all plugins inherit from
+└── m1_ema/              # Example plugin
+    ├── __init__.py
+    ├── plugin.py        # Plugin definition
+    ├── adapter.py       # Calculation adapter
+    ├── aggregator.py    # Data aggregation logic
+    ├── storage.py       # Supabase storage handler
+    └── schema.sql       # Database schema
+Plugin Requirements:
+Each plugin must provide:
 
-**Workflow:**
+Metadata: Name, version, adapter name
+Adapter Class: Implements calculation logic
+Data Requirements: Specifies needed data (bars, trades, quotes)
+Storage Mapping: Converts signals to storage format
+Storage Handler: Manages Supabase storage operations
 
-1. Collect data requirements from all plugins
-2. Load historical data (based on max requirements)
-3. Create shared data cache
-4. Distribute data to plugin adapters
-5. Collect entry signals from all calculations
-6. Aggregate signals using Point & Call voting
-7. Analyze forward price movement
-8. Store results locally and optionally to Supabase
-
-### 2. Plugin System
-
-### Base Plugin Interface (`plugins/base_plugin.py`)
-
-```python
-
-python
-class BacktestPlugin(ABC):
+Base Plugin Interface:
+pythonclass BacktestPlugin:
     @property
-    @abstractmethod
-    def name(self) -> str:
-        """Human-readable name for the calculation"""
-
+    def name(self) -> str: ...
+    
     @property
-    @abstractmethod
-    def adapter_name(self) -> str:
-        """Unique identifier for the adapter"""
-
+    def adapter_class(self) -> Type: ...
+    
     @property
-    @abstractmethod
-    def adapter_class(self) -> Type[CalculationAdapter]:
-        """The adapter class for this calculation"""
-
-    @property
-    @abstractmethod
-    def storage_table(self) -> str:
-        """Supabase table name for storing results"""
-
-    @abstractmethod
-    def get_adapter_config(self) -> Dict[str, Any]:
-        """Configuration for the adapter instance"""
-
-    @abstractmethod
-    def get_storage_mapping(self, signal_data: Dict) -> Dict[str, Any]:
-        """Convert signal data to storage format"""
-
-```
-
-### Plugin Loader (`plugins/plugin_loader.py`)
-
-- Auto-discovers all plugins in the plugins directory
-- Registers adapters with the engine
-- Provides storage mappings to the storage module
-- Handles plugin initialization and error handling
-
-### 3. Data Management Layer
-
-### PolygonDataManager (`data/polygon_data_manager.py`)
-
-- Two-tier caching: Memory (LRU) + File (Parquet)
-- Extended window fetching (±500 bars) for efficiency
-- Automatic timezone handling (UTC internally)
-- Smart cache hit detection for adjacent queries
-- **Enhanced Methods:**
-    - `load_bars()` - Bar data for any timeframe
-    - `load_trades()` - Tick-level trade data
-    - `load_quotes()` - NBBO quote data
-
-### Shared Data Cache
-
-The engine creates a shared data cache that all plugins access:
-
-```python
-
-python
-data_cache = {
-    '1min_bars': pd.DataFrame,# Always fetched as base
-    '5min_bars': pd.DataFrame,# Aggregated from 1min
-    '15min_bars': pd.DataFrame,# Aggregated from 1min
-    'trades': List[Dict],# Chronologically sorted
-    'quotes': List[Dict],# Chronologically sorted
-    'symbol': 'AAPL',
+    def storage_table(self) -> str: ...
+    
+    def get_adapter_config(self) -> Dict[str, Any]: ...
+    
+    def get_storage_mapping(self, signal_data: Dict) -> Dict[str, Any]: ...
+    
+    async def store_results(self, supabase_client, uid: str, signal_data: Dict) -> bool: ...
+4. Calculation Adapters
+Adapters implement the actual calculation logic and conform to a standard interface.
+Standard Adapter Interface:
+pythonclass CalculationAdapter:
+    def get_data_requirements(self) -> Dict: ...
+    def set_data_cache(self, cache: Dict): ...
+    def initialize(self, symbol: str): ...
+    def feed_historical_data(self, data: pd.DataFrame, symbol: str): ...
+    def get_signal_at_time(self, timestamp: datetime) -> StandardSignal: ...
+StandardSignal Format:
+python@dataclass
+class StandardSignal:
+    name: str                # Calculation name
+    timestamp: datetime      # Signal timestamp
+    direction: str          # 'BULLISH', 'BEARISH', 'NEUTRAL'
+    strength: float         # 0-100 scale
+    confidence: float       # 0-100 scale
+    metadata: Dict[str, Any]  # Calculation-specific data
+5. Data Management
+Shared Data Cache Structure:
+python{
+    'symbol': str,
     'data_start': datetime,
     'data_end': datetime,
-    'entry_time': datetime
+    'entry_time': datetime,
+    '1min_bars': pd.DataFrame,  # Always provided
+    'trades': List[Dict],        # If requested
+    'quotes': List[Dict]         # If requested
 }
+Data Flow:
 
-```
+Engine collects requirements from all adapters
+Maximum lookback period is determined
+Data is fetched once from the data source
+Shared cache is distributed to all adapters
+Adapters use cache for calculations
 
-### 4. Adapter System (`adapters/base.py`)
+6. Signal Aggregation
+The system uses a point & call consensus mechanism to aggregate multiple signals.
+Aggregation Output:
+python{
+    'consensus_direction': str,      # 'BULLISH', 'BEARISH', 'NEUTRAL'
+    'agreement_score': float,        # 0-100% agreement
+    'vote_breakdown': Dict[str, int], # Direction counts
+    'average_strength': float,
+    'average_confidence': float,
+    'participating_calculations': int,
+    'total_calculations': int
+}
+7. Storage System
+UID Format: TICKER.MMDDYY.HHMM.SIDE
 
-Abstract base class providing standardized interface:
+Example: AAPL.062724.1335.L (Apple, June 27 2024, 13:35 UTC, Long)
 
-```python
+Supabase Tables:
 
-python
-class CalculationAdapter(ABC):
-    def get_data_requirements(self) -> Dict:
-        """Declare data requirements for this calculation"""
+bt_index: Master record for each backtest
+bt_bars: 75 bars of OHLCV data (-15 to +59 from entry)
+bt_aggregated: Consensus results and forward analysis
+Plugin-specific tables (e.g., bt_m1_ema)
 
-    def set_data_cache(self, cache: Dict):
-        """Receive shared data cache from engine"""
+Storage Process:
 
-    @abstractmethod
-    def feed_historical_data(self, data: pd.DataFrame, symbol: str) -> None:
-        """Warm up calculation with historical data"""
+Generate UID from configuration
+Store/update master record in bt_index
+Store exactly 75 bars (15 before, 60 after entry)
+Delegate calculation results to plugin storage handlers
+Store aggregated results and forward analysis
 
-    def get_signal_at_time(self, timestamp: datetime) -> Optional[StandardSignal]:
-        """Get signal at specific time (entry point)"""
+Plugin Development Guide
+Creating a New Plugin
 
-```
+Create plugin directory under plugins/
+Implement plugin.py inheriting from BacktestPlugin
+Create adapter.py implementing calculation logic
+Add storage.py for Supabase storage handling
+Define schema.sql for database table
+Optional: Add aggregator.py for data preprocessing
 
-**StandardSignal Format:**
-
-```python
-
-python
-StandardSignal(
-    name="5-Min EMA Crossover",
-    timestamp=datetime,
-    direction="BULLISH|BEARISH|NEUTRAL",
-    strength=0-100,
-    confidence=0-100,
-    metadata={...}# Calculation-specific data
-)
-
-```
-
-### 5. Storage System
-
-### Plugin-Aware Storage (`storage/supabase_storage.py`)
-
-- Dynamically maps signals to tables using plugin system
-- No hardcoded table mappings
-- Each plugin defines its own storage schema
-- Automatic numpy type conversion
-
-## Database Schema
-
-### Core Tables (Required)
-
-```sql
-
-sql
--- Master index for all backtests
-CREATE TABLE bt_index (
-    uid VARCHAR(50) PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL,
-    date DATE NOT NULL,
-    time TIME NOT NULL,
-    side CHAR(1) NOT NULL CHECK (side IN ('L', 'S')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    calculations_run TEXT[] DEFAULT '{}'
-);
-
--- Bar data (75 bars per backtest)
-CREATE TABLE bt_bars (
-    uid VARCHAR(50) NOT NULL,
-    bar_index INTEGER NOT NULL CHECK (bar_index >= -15 AND bar_index <= 59),
-    timestamp TIMESTAMPTZ NOT NULL,
-    open DECIMAL(10,4) NOT NULL,
-    high DECIMAL(10,4) NOT NULL,
-    low DECIMAL(10,4) NOT NULL,
-    close DECIMAL(10,4) NOT NULL,
-    volume BIGINT NOT NULL,
-    PRIMARY KEY (uid, bar_index),
-    FOREIGN KEY (uid) REFERENCES bt_index(uid) ON DELETE CASCADE
-);
-
--- Aggregated results (consensus)
-CREATE TABLE bt_aggregated (
-    uid VARCHAR(50) PRIMARY KEY,
-    consensus_direction VARCHAR(20),
-    agreement_score DECIMAL(5,2),
-    average_strength DECIMAL(5,2),
-    average_confidence DECIMAL(5,2),
-    participating_calculations INTEGER,
-    total_calculations INTEGER,
-    entry_price DECIMAL(10,4),
-    exit_price DECIMAL(10,4),
-    final_pnl DECIMAL(8,4),
-    max_favorable_move DECIMAL(8,4),
-    max_adverse_move DECIMAL(8,4),
-    signal_matched_user BOOLEAN,
-    trade_profitable BOOLEAN,
-    signal_aligned_outcome BOOLEAN,
-    FOREIGN KEY (uid) REFERENCES bt_index(uid) ON DELETE CASCADE
-);
-
-```
-
-### Calculation-Specific Tables
-
-Each plugin includes its own `schema.sql` file defining its storage table.
-
-## Adding New Calculations - Plugin-Based Approach
-
-### 1. Create Plugin Directory Structure
-
-```
-
-backtest/plugins/your_calculation/
-├── __init__.py
-├── plugin.py       # Plugin definition
-├── adapter.py      # Adapter implementation
-└── schema.sql      # Supabase table schema
-
-```
-
-### 2. Implement the Plugin (`plugin.py`)
-
-```python
-
-python
-from plugins.base_plugin import BacktestPlugin
-from .adapter import YourCalculationAdapter
-
-class YourCalculationPlugin(BacktestPlugin):
+Example Plugin Structure (M1 EMA):
+python# plugin.py
+class M1EMAPlugin(BacktestPlugin):
     @property
     def name(self) -> str:
-        return "Your Calculation Name"
-
-    @property
-    def adapter_name(self) -> str:
-        return "your_calculation"
-
+        return "1-Min EMA Crossover"
+    
     @property
     def adapter_class(self) -> Type:
-        return YourCalculationAdapter
-
-    @property
-    def storage_table(self) -> str:
-        return "bt_your_calculation"
-
-    def get_adapter_config(self) -> Dict[str, Any]:
-        return {
-            'param1': value1,
-            'param2': value2
-        }
-
+        return M1EMABackAdapter
+    
     def get_storage_mapping(self, signal_data: Dict) -> Dict[str, Any]:
-        """Convert signal to storage format"""
         metadata = signal_data.get('metadata', {})
         return {
             'signal_direction': signal_data.get('direction'),
-            'signal_strength': float(signal_data.get('strength', 0)),
-            'signal_confidence': float(signal_data.get('confidence', 0)),
-# Add your specific fields here
-            'your_metric': metadata.get('your_metric', 0)
+            'ema_9': float(metadata.get('ema_9', 0)),
+            'ema_21': float(metadata.get('ema_21', 0)),
+            # ... other fields
         }
 
-# Export plugin instance
-plugin = YourCalculationPlugin()
-
-```
-
-### 3. Create the Adapter (`adapter.py`)
-
-```python
-
-python
-from adapters.base import CalculationAdapter, StandardSignal
-from modules.calculations.your_module import YourCalculator
-
-class YourCalculationAdapter(CalculationAdapter):
-    def __init__(self, **config):
-        super().__init__(
-            calculation_class=YourCalculator,
-            config=config,
-            name="Your Calculation Name"
-        )
-        self.data_cache = None
-
+# adapter.py
+class M1EMABackAdapter(CalculationAdapter):
     def get_data_requirements(self) -> Dict:
         return {
-            'bars': {'timeframe': '1min', 'lookback_minutes': 120},
-            'trades': {'lookback_minutes': 30},# If needed
-            'quotes': None# If not needed
+            'bars': {
+                'timeframe': '1min',
+                'lookback_minutes': 120
+            }
         }
-
-    def set_data_cache(self, cache: Dict):
-        self.data_cache = cache
-
-    def feed_historical_data(self, data: pd.DataFrame, symbol: str) -> None:
-# Use data from cache based on your requirements
+    
+    def feed_historical_data(self, data: pd.DataFrame, symbol: str):
+        # Use self.data_cache to access shared data
         bars = self.data_cache.get('1min_bars')
-        trades = self.data_cache.get('trades', [])
+        # Process bars and generate signals
+Usage Examples
+GUI Usage
 
-# Process historical data up to entry time# Generate signals and store last one
+Launch the dashboard:
 
-```
+bashpython backtest/backtest_system.py --gui
 
-### 4. Define Schema (`schema.sql`)
+Enter parameters:
 
-```
+Symbol: AAPL
+Entry Time: Select date/time in UTC
+Direction: LONG or SHORT
+Calculation: Choose specific or "All Calculations"
 
-```
 
----
+Click "Run Backtest" to execute
+Review results:
+
+Summary metrics (P&L, max moves)
+Individual calculation signals
+Aggregated consensus (if running all)
+Forward analysis
+
+
+Optionally push to Supabase for permanent storage
+
+CLI Usage
+bashpython backtest/backtest_system.py --cli \
+    --symbol AAPL \
+    --entry-time "2024-06-27 13:35:00" \
+    --direction LONG \
+    --calculation all \
+    --store-supabase \
+    --output results.json
+Programmatic Usage
+pythonfrom core.engine import BacktestEngine, BacktestConfig
+from data.polygon_data_manager import PolygonDataManager
+from plugins.plugin_loader import PluginLoader
+
+# Initialize components
+plugin_loader = PluginLoader()
+plugins = plugin_loader.load_all_plugins()
+data_manager = PolygonDataManager()
+
+# Create engine
+engine = BacktestEngine(
+    data_manager=data_manager,
+    plugin_registry=plugin_loader.get_registry()
+)
+
+# Register adapters
+for name, config in plugin_loader.get_adapter_configs().items():
+    adapter = config['adapter_class'](**config['adapter_config'])
+    engine.register_adapter(name, adapter)
+
+# Run backtest
+config = BacktestConfig(
+    symbol="AAPL",
+    entry_time=datetime(2024, 6, 27, 13, 35, tzinfo=timezone.utc),
+    direction="LONG"
+)
+
+result = await engine.run_backtest(config)
+Performance Considerations
+
+Data Caching: The shared cache prevents redundant API calls
+Concurrent Processing: Adapters can be initialized concurrently
+Batch Storage: Bars are stored in batches to Supabase
+Memory Management: Historical data windows are limited
+Async Operations: All I/O operations are asynchronous
+
+Error Handling
+
+Adapter Failures: Individual adapter failures don't crash the backtest
+Storage Failures: Local storage succeeds even if Supabase fails
+Data Validation: Invalid bars are filtered out
+Type Conversion: NumPy types are converted for JSON serialization
+
+Best Practices
+
+Plugin Independence: Plugins should not depend on other plugins
+Data Requirements: Declare minimal necessary data requirements
+Signal Metadata: Include relevant calculation details in metadata
+Storage Efficiency: Store only essential data in Supabase
+Error Messages: Provide clear error messages for debugging
+
+Future Extensions
+The modular architecture supports:
+
+Additional data sources beyond Polygon
+New calculation strategies as plugins
+Alternative storage backends
+Real-time signal generation
+Multi-symbol backtesting
+Advanced visualization plugins
+Performance analytics modules
+
+This system provides a robust foundation for systematic backtesting with the flexibility to adapt to changing requirements through its plugin architecture.

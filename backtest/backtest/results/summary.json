@@ -258,5 +258,69 @@
       "profitable": true,
       "signal_aligned_with_outcome": false
     }
+  },
+  {
+    "result_id": "d9891abc-008e-4be6-b9bf-271c4cfb739f",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:35:00.628000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "BEARISH",
+    "signal_agreement": 66.7,
+    "final_pnl": 6.573920441273656,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
+  },
+  {
+    "result_id": "c13ec9f8-6554-46d9-acfc-ff83a1a79675",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:35:00.289000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "BEARISH",
+    "signal_agreement": 66.7,
+    "final_pnl": 6.573920441273656,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
+  },
+  {
+    "result_id": "98aa9f87-9848-4f88-b510-21a70fd6b1da",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:35:00.621000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "BEARISH",
+    "signal_agreement": 66.7,
+    "final_pnl": 6.573920441273656,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
+  },
+  {
+    "result_id": "7e2f4f3f-c268-4f05-92a7-9ce3ddee19b5",
+    "symbol": "CRCL",
+    "entry_time": "2025-06-27T13:35:00.054000+00:00",
+    "direction": "SHORT",
+    "consensus_direction": "BEARISH",
+    "signal_agreement": 75.0,
+    "final_pnl": 6.573920441273656,
+    "max_favorable_move": 7.06802210269049,
+    "max_adverse_move": 0.49660932022476667,
+    "signal_accuracy": {
+      "consensus_matched_user": true,
+      "profitable": true,
+      "signal_aligned_with_outcome": false
+    }
   }
 ]

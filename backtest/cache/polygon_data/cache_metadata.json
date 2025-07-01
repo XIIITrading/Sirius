@@ -16,5 +16,117 @@
     "cached_at": "2025-06-30T19:37:41.349455+00:00",
     "data_points": 908,
     "cache_key": "5031343358b522fccac0bca3d95604d0"
+  },
+  "2ef25b25f583564039819c04875e0046": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T19:15:00.152000+00:00",
+    "end_time": "2025-06-27T21:55:00.152000+00:00",
+    "cached_at": "2025-06-30T20:46:00.255160+00:00",
+    "data_points": 1175,
+    "cache_key": "2ef25b25f583564039819c04875e0046"
+  },
+  "b2bad9a4df7795202abd370e1978fb39": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T19:15:00.994000+00:00",
+    "end_time": "2025-06-27T21:55:00.994000+00:00",
+    "cached_at": "2025-06-30T21:06:26.044370+00:00",
+    "data_points": 1175,
+    "cache_key": "b2bad9a4df7795202abd370e1978fb39"
+  },
+  "5f57d5f02943f07405da5d2d9474dfa3": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T19:25:00.994000+00:00",
+    "end_time": "2025-06-27T22:05:00.994000+00:00",
+    "cached_at": "2025-06-30T21:07:29.365943+00:00",
+    "data_points": 1165,
+    "cache_key": "5f57d5f02943f07405da5d2d9474dfa3"
+  },
+  "35afb5259548bb970dcbefef08d4bd9a": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T19:15:00.768000+00:00",
+    "end_time": "2025-06-27T21:55:00.768000+00:00",
+    "cached_at": "2025-06-30T21:12:24.430892+00:00",
+    "data_points": 1175,
+    "cache_key": "35afb5259548bb970dcbefef08d4bd9a"
+  },
+  "d2985b64961fb7fdd668c695e446429f": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T19:15:00.257000+00:00",
+    "end_time": "2025-06-27T21:55:00.257000+00:00",
+    "cached_at": "2025-06-30T21:16:19.384224+00:00",
+    "data_points": 1175,
+    "cache_key": "d2985b64961fb7fdd668c695e446429f"
+  },
+  "2bac8c9b831e3ee519d69e5b2c4c75e8": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T19:15:00.282000+00:00",
+    "end_time": "2025-06-27T21:55:00.282000+00:00",
+    "cached_at": "2025-06-30T21:27:48.301872+00:00",
+    "data_points": 1175,
+    "cache_key": "2bac8c9b831e3ee519d69e5b2c4c75e8"
+  },
+  "f6b72970e4159dc1a359a3cbb8b01682": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T19:15:00.190000+00:00",
+    "end_time": "2025-06-27T21:55:00.190000+00:00",
+    "cached_at": "2025-06-30T21:46:13.688417+00:00",
+    "data_points": 1175,
+    "cache_key": "f6b72970e4159dc1a359a3cbb8b01682"
+  },
+  "027baed4b15d5936fe849dbbe993d29b": {
+    "symbol": "CRCL",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T05:15:00.572000+00:00",
+    "end_time": "2025-06-27T21:55:00.572000+00:00",
+    "cached_at": "2025-06-30T22:56:04.726317+00:00",
+    "data_points": 908,
+    "cache_key": "027baed4b15d5936fe849dbbe993d29b"
+  },
+  "27a61747e39ecf1fa57da2b6651cf51f": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:15:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-01T00:58:35.204480+00:00",
+    "data_points": 30671,
+    "cache_key": "27a61747e39ecf1fa57da2b6651cf51f"
+  },
+  "920819cd9426a72a32f9a3d1a604d6ef": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:15:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-01T00:58:35.810741+00:00",
+    "data_points": 4222,
+    "cache_key": "920819cd9426a72a32f9a3d1a604d6ef"
+  },
+  "dce288c3ee03e6fa245d47f817f5b0ed": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T19:15:00.595000+00:00",
+    "end_time": "2025-06-27T21:55:00.595000+00:00",
+    "cached_at": "2025-07-01T00:59:52.367165+00:00",
+    "data_points": 1175,
+    "cache_key": "dce288c3ee03e6fa245d47f817f5b0ed"
+  },
+  "3138309394a2a705151e70c0631fa7ac": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T19:15:00.546000+00:00",
+    "end_time": "2025-06-27T21:55:00.546000+00:00",
+    "cached_at": "2025-07-01T01:05:04.189827+00:00",
+    "data_points": 1175,
+    "cache_key": "3138309394a2a705151e70c0631fa7ac"
   }
 }

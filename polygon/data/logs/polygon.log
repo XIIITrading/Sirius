@@ -37525,3 +37525,123 @@ to 2025-07-01
 2025-07-02 13:13:17 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-23 to 2025-06-23
 2025-07-02 13:13:17 - polygon.fetcher - INFO - Filled 2 small gaps in data
 2025-07-02 13:13:17 - polygon.fetcher - INFO - Returned 637 rows for TSLA 1min
+2025-07-02 13:30:49 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 13:30:49 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-06-23 to 2025-06-23
+2025-07-02 13:30:49 - polygon.fetcher - INFO - Returned 140 rows for TSLA 5min
+2025-07-02 13:33:23 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 13:33:23 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-06-23 to 2025-06-23
+2025-07-02 13:33:23 - polygon.fetcher - INFO - Returned 139 rows for TSLA 5min
+2025-07-02 15:40:04 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 15:40:04 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-03-23 to 2025-03-23
+2025-07-02 15:40:04 - polygon.core - WARNING - No results in aggregate response for TSLA
+2025-07-02 15:40:04 - polygon.fetcher - WARNING - No data returned for TSLA 2025-03-23 to 2025-03-23
+2025-07-02 15:40:04 - polygon.fetcher - INFO - Returned 0 rows for TSLA 5min
+2025-07-02 15:40:04 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-03-23 to 2025-03-23
+2025-07-02 15:40:04 - polygon.core - WARNING - No results in aggregate response for TSLA
+2025-07-02 15:40:04 - polygon.fetcher - WARNING - No data returned for TSLA 2025-03-23 to 2025-03-23
+2025-07-02 15:40:04 - polygon.fetcher - INFO - Returned 0 rows for TSLA 5min
+2025-07-02 15:43:44 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 15:43:44 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-06-23 to 2025-06-23
+2025-07-02 15:43:44 - polygon.fetcher - INFO - Returned 140 rows for TSLA 5min
+2025-07-02 15:48:20 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 15:48:20 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-06-23 to 2025-06-23
+2025-07-02 15:48:21 - polygon.fetcher - INFO - Returned 140 rows for TSLA 5min
+2025-07-02 16:35:55 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 16:35:55 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-23 to 2025-06-23
+2025-07-02 16:35:56 - polygon.fetcher - INFO - Returned 64 rows for TSLA 15min
+2025-07-02 16:37:13 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 16:37:13 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-23 to 2025-06-23
+2025-07-02 16:37:14 - polygon.fetcher - INFO - Returned 64 rows for TSLA 15min
+2025-07-02 16:37:43 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 16:38:35 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:38:35 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 16:38:35 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:38:36 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 16:38:36 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-30 to 2025-07-01
+2025-07-02 16:38:37 - polygon.fetcher - INFO - Filled 6 small gaps in data
+2025-07-02 16:38:37 - polygon.fetcher - INFO - Returned 1518 rows for TSLA 1min
+2025-07-02 16:38:37 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:38:37 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 16:38:37 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-30 to 2025-07-01
+2025-07-02 16:38:38 - polygon.fetcher - INFO - Filled 6 small gaps in data
+2025-07-02 16:38:38 - polygon.fetcher - INFO - Returned 1218 rows for TSLA 1min
+2025-07-02 16:38:38 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-29 to 2025-07-01
+2025-07-02 16:38:38 - polygon.fetcher - INFO - Filled 6 small gaps in data
+2025-07-02 16:38:38 - polygon.fetcher - INFO - Returned 1919 rows for TSLA 1min
+2025-07-02 16:38:39 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:38:39 - polygon.fetcher - INFO - Returned 619 rows for TSLA 1min
+2025-07-02 16:38:40 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:38:40 - polygon.fetcher - INFO - Returned 136 rows for TSLA 5min
+2025-07-02 16:38:41 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:38:41 - polygon.fetcher - INFO - Returned 64 rows for TSLA 15min
+2025-07-02 16:48:01 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:48:01 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 16:48:01 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:48:02 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 16:48:02 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-30 to 2025-07-01
+2025-07-02 16:48:02 - polygon.fetcher - INFO - Filled 6 small gaps in data
+2025-07-02 16:48:02 - polygon.fetcher - INFO - Returned 1535 rows for TSLA 1min
+2025-07-02 16:48:02 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:48:03 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 16:48:03 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-30 to 2025-07-01
+2025-07-02 16:48:03 - polygon.fetcher - INFO - Filled 6 small gaps in data
+2025-07-02 16:48:03 - polygon.fetcher - INFO - Returned 1235 rows for TSLA 1min
+2025-07-02 16:48:03 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-29 to 2025-07-01
+2025-07-02 16:48:04 - polygon.fetcher - INFO - Filled 6 small gaps in data
+2025-07-02 16:48:04 - polygon.fetcher - INFO - Returned 1919 rows for TSLA 1min
+2025-07-02 16:48:04 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:48:04 - polygon.fetcher - INFO - Returned 636 rows for TSLA 1min
+2025-07-02 16:48:04 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:48:05 - polygon.fetcher - INFO - Returned 140 rows for TSLA 5min
+2025-07-02 16:48:05 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-07-01 to 2025-07-01
+2025-07-02 16:48:05 - polygon.fetcher - INFO - Returned 64 rows for TSLA 15min
+2025-07-02 16:51:09 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:51:10 - polygon.fetcher - INFO - Filled 27 small gaps in data
+2025-07-02 16:51:10 - polygon.fetcher - INFO - Returned 955 rows for TSLA 1min
+2025-07-02 16:51:10 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:51:10 - polygon.fetcher - INFO - Filled 27 small gaps in data
+2025-07-02 16:51:10 - polygon.fetcher - INFO - Returned 955 rows for TSLA 1min
+2025-07-02 16:51:10 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-26 to 2025-06-27
+2025-07-02 16:51:11 - polygon.fetcher - INFO - Filled 34 small gaps in data
+2025-07-02 16:51:11 - polygon.fetcher - INFO - Returned 1527 rows for TSLA 1min
+2025-07-02 16:51:11 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:51:11 - polygon.fetcher - INFO - Filled 27 small gaps in data
+2025-07-02 16:51:11 - polygon.fetcher - INFO - Returned 955 rows for TSLA 1min
+2025-07-02 16:51:11 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-26 to 2025-06-27
+2025-07-02 16:51:12 - polygon.fetcher - INFO - Filled 34 small gaps in data
+2025-07-02 16:51:12 - polygon.fetcher - INFO - Returned 1227 rows for TSLA 1min
+2025-07-02 16:51:12 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-25 to 2025-06-27
+2025-07-02 16:51:13 - polygon.fetcher - INFO - Filled 57 small gaps in data
+2025-07-02 16:51:13 - polygon.fetcher - INFO - Returned 1947 rows for TSLA 1min
+2025-07-02 16:51:13 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:51:13 - polygon.fetcher - INFO - Filled 27 small gaps in data
+2025-07-02 16:51:13 - polygon.fetcher - INFO - Returned 629 rows for TSLA 1min
+2025-07-02 16:51:13 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:51:14 - polygon.fetcher - INFO - Returned 139 rows for TSLA 5min
+2025-07-02 16:51:14 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:51:14 - polygon.fetcher - INFO - Returned 64 rows for TSLA 15min
+2025-07-02 16:54:03 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:54:03 - polygon.fetcher - INFO - Filled 27 small gaps in data
+2025-07-02 16:54:03 - polygon.fetcher - INFO - Returned 955 rows for TSLA 1min
+2025-07-02 16:54:03 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:54:04 - polygon.fetcher - INFO - Filled 27 small gaps in data
+2025-07-02 16:54:04 - polygon.fetcher - INFO - Returned 955 rows for TSLA 1min
+2025-07-02 16:54:04 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-26 to 2025-06-27
+2025-07-02 16:54:04 - polygon.fetcher - INFO - Filled 34 small gaps in data
+2025-07-02 16:54:04 - polygon.fetcher - INFO - Returned 1522 rows for TSLA 1min
+2025-07-02 16:54:04 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:54:05 - polygon.fetcher - INFO - Filled 27 small gaps in data
+2025-07-02 16:54:05 - polygon.fetcher - INFO - Returned 955 rows for TSLA 1min
+2025-07-02 16:54:05 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-26 to 2025-06-27
+2025-07-02 16:54:06 - polygon.fetcher - INFO - Filled 34 small gaps in data
+2025-07-02 16:54:06 - polygon.fetcher - INFO - Returned 1222 rows for TSLA 1min
+2025-07-02 16:54:06 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-25 to 2025-06-27
+2025-07-02 16:54:06 - polygon.fetcher - INFO - Filled 57 small gaps in data
+2025-07-02 16:54:06 - polygon.fetcher - INFO - Returned 1942 rows for TSLA 1min
+2025-07-02 16:54:06 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:54:07 - polygon.fetcher - INFO - Filled 27 small gaps in data
+2025-07-02 16:54:07 - polygon.fetcher - INFO - Returned 624 rows for TSLA 1min
+2025-07-02 16:54:07 - polygon.fetcher - INFO - Fetching TSLA 5min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:54:07 - polygon.fetcher - INFO - Returned 138 rows for TSLA 5min
+2025-07-02 16:54:07 - polygon.fetcher - INFO - Fetching TSLA 15min data from 2025-06-27 to 2025-06-27
+2025-07-02 16:54:08 - polygon.fetcher - INFO - Returned 64 rows for TSLA 15min

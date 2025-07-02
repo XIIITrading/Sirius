@@ -5,6 +5,8 @@ Purpose: Provide broader market perspective for short-term trading confirmation
 Features: Multi-timeframe analysis (15/25/50 min), WebSocket integration, Position signals
 Performance Target: <100 microseconds per calculation
 Time Handling: All timestamps in UTC
+
+REACTIVE VERSION: More sensitive thresholds for faster signal generation
 """
 
 import numpy as np
@@ -106,6 +108,8 @@ class StatisticalTrend5Min:
     5-Minute Statistical Trend Calculator for higher timeframe analysis.
     Provides market context and position management signals.
     All timestamps are in UTC.
+    
+    REACTIVE VERSION: More sensitive to market changes
     """
     
     def __init__(self,
@@ -156,7 +160,7 @@ class StatisticalTrend5Min:
         self.calculation_count = 0
         self.total_calculation_time = 0
         
-        logger.info(f"Initialized 5-min trend calculator: "
+        logger.info(f"Initialized REACTIVE 5-min trend calculator: "
                    f"Short={short_lookback*5}min, Medium={medium_lookback*5}min, Long={long_lookback*5}min")
         logger.info(f"System initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     
@@ -172,12 +176,12 @@ class StatisticalTrend5Min:
         logger.info(f"Initialized 5-min buffers for {symbol}")
     
     def _initialize_kalman(self) -> Dict:
-        """Initialize Kalman filter state for 5-min bars"""
+        """Initialize Kalman filter state for 5-min bars - MORE REACTIVE"""
         return {
             'x': 0.0,      # State estimate
             'P': 1.0,      # Error covariance
-            'Q': 0.0002,   # Higher process noise for 5-min bars
-            'R': 0.02,     # Higher measurement noise
+            'Q': 0.0005,   # INCREASED process noise for faster adaptation (was 0.0002)
+            'R': 0.01,     # REDUCED measurement noise for more responsiveness (was 0.02)
             'K': 0.0       # Kalman gain
         }
     
@@ -248,7 +252,8 @@ class StatisticalTrend5Min:
         
         p_value = 2 * (1 - 0.5 * (1 + np.sign(z) * (1 - np.exp(-2 * z * z / np.pi)) ** 0.5))
         
-        if p_value < 0.05:
+        # MORE REACTIVE: Use p < 0.10 instead of 0.05
+        if p_value < 0.10:  # CHANGED from 0.05
             trend = 1 if s > 0 else -1
         else:
             trend = 0
@@ -430,10 +435,11 @@ class StatisticalTrend5Min:
         mk_trend, mk_z, mk_p = self._fast_mann_kendall(prices)
         
         kalman_price = self._update_kalman(symbol, current_price)
-        kalman_trend = 1 if kalman_price > np.mean(prices[-min(3, lookback):]) else -1
+        # MORE REACTIVE: Use 2-bar average instead of 3
+        kalman_trend = 1 if kalman_price > np.mean(prices[-min(2, lookback):]) else -1  # CHANGED from 3
         
-        # Momentum - adjusted for 5-min bars
-        momentum_periods = min(3, lookback - 1)  # 3-bar momentum
+        # Momentum - MORE REACTIVE: Use 2-bar momentum instead of 3
+        momentum_periods = min(2, lookback - 1)  # CHANGED from 3
         if lookback > momentum_periods:
             momentum = ((prices[-1] - prices[-momentum_periods-1]) / 
                        prices[-momentum_periods-1] * 100)
@@ -468,8 +474,8 @@ class StatisticalTrend5Min:
         # Use 5-min optimized scoring
         composite_score = self._calculate_5min_composite_score(components, lookback)
         
-        # Determine trend - less sensitive thresholds for 5-min
-        if abs(composite_score) < 0.25:  # Higher threshold
+        # Determine trend - MORE REACTIVE: Lower threshold
+        if abs(composite_score) < 0.15:  # CHANGED from 0.25
             direction = 'neutral'
         elif composite_score > 0:
             direction = 'bullish'
@@ -495,43 +501,43 @@ class StatisticalTrend5Min:
     
     def _calculate_5min_composite_score(self, components: TrendComponents5Min,
                                       lookback: int) -> float:
-        """Calculate composite score optimized for 5-min timeframe"""
-        # Different weights based on lookback
+        """Calculate composite score optimized for 5-min timeframe - MORE REACTIVE"""
+        # Different weights based on lookback - MORE REACTIVE WEIGHTS
         if lookback <= self.short_lookback:
-            # 15-min: Still reactive but more stable
+            # 15-min: More weight on momentum and Kalman
             weights = {
-                'linear': 0.20,
-                'mann_kendall': 0.20,
-                'kalman': 0.25,
-                'momentum': 0.25,
+                'linear': 0.15,      # REDUCED from 0.20
+                'mann_kendall': 0.15, # REDUCED from 0.20
+                'kalman': 0.30,      # INCREASED from 0.25
+                'momentum': 0.30,    # INCREASED from 0.25
                 'vwap': 0.10
             }
-            sensitivity = 1.0  # Less sensitive than 1-min
+            sensitivity = 0.7  # MORE REACTIVE (was 1.0)
         elif lookback <= self.medium_lookback:
-            # 25-min: Balanced
+            # 25-min: Still balanced but more reactive
             weights = {
-                'linear': 0.25,
-                'mann_kendall': 0.25,
-                'kalman': 0.20,
-                'momentum': 0.20,
+                'linear': 0.20,      # REDUCED from 0.25
+                'mann_kendall': 0.20, # REDUCED from 0.25
+                'kalman': 0.25,      # INCREASED from 0.20
+                'momentum': 0.25,    # INCREASED from 0.20
                 'vwap': 0.10
             }
-            sensitivity = 1.5
+            sensitivity = 1.2  # MORE REACTIVE (was 1.5)
         else:
-            # 50-min: Trend focused
+            # 50-min: Less reactive but still improved
             weights = {
-                'linear': 0.30,
-                'mann_kendall': 0.30,
-                'kalman': 0.20,
-                'momentum': 0.10,
+                'linear': 0.25,      # REDUCED from 0.30
+                'mann_kendall': 0.25, # REDUCED from 0.30
+                'kalman': 0.25,      # INCREASED from 0.20
+                'momentum': 0.15,    # INCREASED from 0.10
                 'vwap': 0.10
             }
-            sensitivity = 2.0
+            sensitivity = 1.5  # MORE REACTIVE (was 2.0)
         
-        # Less sensitive normalization for 5-min
+        # More sensitive normalization for 5-min
         slope_signal = np.tanh(components.linear_slope / sensitivity)
         momentum_signal = np.tanh(components.price_momentum / sensitivity)
-        vwap_signal = np.tanh(components.vwap_position / 1.0)  # 1% from VWAP
+        vwap_signal = np.tanh(components.vwap_position / 0.75)  # MORE REACTIVE: was 1.0
         
         weighted_sum = (
             weights['linear'] * slope_signal * components.linear_r_squared +
@@ -544,7 +550,7 @@ class StatisticalTrend5Min:
         return np.clip(weighted_sum, -1, 1)
     
     def _calculate_confidence(self, components: TrendComponents5Min) -> float:
-        """Calculate confidence for 5-min signals"""
+        """Calculate confidence for 5-min signals - MORE REACTIVE"""
         signals = [
             np.sign(components.linear_slope),
             components.mann_kendall_trend,
@@ -560,17 +566,17 @@ class StatisticalTrend5Min:
         agreement = abs(sum(non_zero_signals)) / len(non_zero_signals)
         confidence = agreement * 100
         
-        # Boost for significant Mann-Kendall
-        if components.mann_kendall_p_value < 0.05:
-            confidence = min(100, confidence * 1.2)
+        # MORE REACTIVE: Boost for less strict Mann-Kendall
+        if components.mann_kendall_p_value < 0.10:  # CHANGED from 0.05
+            confidence = min(100, confidence * 1.15)  # Slightly less boost
         
-        # R-squared factor
-        confidence *= (0.5 + 0.5 * components.linear_r_squared)
+        # R-squared factor - less penalty for lower R-squared
+        confidence *= (0.6 + 0.4 * components.linear_r_squared)  # CHANGED from 0.5 + 0.5
         
         return min(100, confidence)
     
     def _analyze_market_state(self, trends: Dict) -> Dict:
-        """Analyze market state and generate position signals"""
+        """Analyze market state and generate position signals - MORE REACTIVE"""
         short = trends.get('short', {})
         medium = trends.get('medium', {})
         long = trends.get('long', {})
@@ -601,29 +607,29 @@ class StatisticalTrend5Min:
         avg_strength = np.mean([t.get('strength', 0) for t in [short, medium, long] if t])
         avg_confidence = np.mean([t.get('confidence', 0) for t in [short, medium, long] if t])
         
-        # Check for trending vs ranging
-        if abs(alignment) == len(directions) and avg_strength > 40:
+        # MORE REACTIVE: Lower thresholds
+        if abs(alignment) == len(directions) and avg_strength > 35:  # CHANGED from 40
             market_state = 'TRENDING'
-        elif avg_strength < 30:
+        elif avg_strength < 25:  # CHANGED from 30
             market_state = 'CONSOLIDATING'
         else:
             market_state = 'VOLATILE'
         
-        # Generate signals
-        if alignment == len(directions) and avg_strength > 50:
+        # Generate signals - MORE REACTIVE THRESHOLDS
+        if alignment == len(directions) and avg_strength > 40:  # CHANGED from 50
             # Strong trend - all timeframes aligned
             signal = 'STRONG TREND UP'
             bias = 'BULLISH'
             recommendation = 'Full position size on pullbacks'
-        elif alignment == -len(directions) and avg_strength > 50:
+        elif alignment == -len(directions) and avg_strength > 40:  # CHANGED from 50
             signal = 'STRONG TREND DOWN'
             bias = 'BEARISH'
             recommendation = 'Full short position on rallies'
-        elif alignment > 0 and avg_strength > 30:
+        elif alignment > 0 and avg_strength > 25:  # CHANGED from 30
             signal = 'TREND UP'
             bias = 'BULLISH'
             recommendation = '75% position size, scale in'
-        elif alignment < 0 and avg_strength > 30:
+        elif alignment < 0 and avg_strength > 25:  # CHANGED from 30
             signal = 'TREND DOWN'
             bias = 'BEARISH'
             recommendation = '75% short position, scale in'
@@ -632,9 +638,9 @@ class StatisticalTrend5Min:
             bias = 'NEUTRAL'
             recommendation = 'Reduce position size or stay flat'
         
-        # Adjust for VWAP position
+        # MORE REACTIVE: Adjust for VWAP position with lower threshold
         avg_vwap_pos = np.mean([t.get('vwap_position', 0) for t in [short, medium, long] if t])
-        if abs(avg_vwap_pos) > 2:  # More than 2% from VWAP
+        if abs(avg_vwap_pos) > 1.5:  # CHANGED from 2.0
             if signal == 'RANGING':
                 if avg_vwap_pos > 0:
                     recommendation = 'Consider mean reversion short'
@@ -709,7 +715,7 @@ class StatisticalTrend5Min:
                 self._calculation_loop(symbol)
             )
         
-        logger.info(f"✓ Started 5-min trend monitoring for {symbols}")
+        logger.info(f"✓ Started REACTIVE 5-min trend monitoring for {symbols}")
     
     async def _handle_websocket_data(self, data: Dict):
         """Handle incoming WebSocket data - aggregate to 5-min bars"""
@@ -814,7 +820,7 @@ class StatisticalTrend5Min:
 # ============= LIVE TESTING =============
 async def run_5min_test():
     """Test 5-minute trend calculation"""
-    print("=== Testing 5-Minute Statistical Trend for Position Management ===\n")
+    print("=== Testing REACTIVE 5-Minute Statistical Trend for Position Management ===\n")
     
     TEST_SYMBOLS = ['TSLA', 'AAPL', 'SPY', 'QQQ', 'NVDA']
     TEST_DURATION = 180  # 3 minutes
@@ -898,17 +904,17 @@ async def run_5min_test():
         # In production, you'd aggregate to proper 5-min bars
         await calculator.start_websocket(TEST_SYMBOLS, display_signal)
         
-        print(f"\n🚀 5-Minute Trend Monitor Started at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        print(f"\n🚀 REACTIVE 5-Minute Trend Monitor Started at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print(f"📊 Tracking {len(TEST_SYMBOLS)} symbols")
         print(f"⏱️  Timeframes: 15-min, 25-min, 50-min")
         print(f"🔄 Updates every 30 seconds")
         print(f"⏰ Test duration: {TEST_DURATION} seconds")
         print(f"🌍 All timestamps in UTC\n")
         
-        print("📖 Signal Guide:")
-        print("   STRONG TREND UP/DOWN = Strong directional bias")
-        print("   TREND UP/DOWN = Moderate directional bias")
-        print("   RANGING = No clear direction\n")
+        print("📖 REACTIVE Signal Guide (Lower Thresholds):")
+        print("   STRONG TREND UP/DOWN = Strong directional bias (>40% strength)")
+        print("   TREND UP/DOWN = Moderate directional bias (>25% strength)")
+        print("   RANGING = No clear direction (<25% strength)\n")
         
         print("⏳ Waiting for 5-min analysis...")
         
@@ -928,7 +934,7 @@ async def run_5min_test():
         print(f"  • Updates shown: {update_count}")
         
         await calculator.stop()
-        print("\n✅ 5-minute trend test completed successfully!")
+        print("\n✅ REACTIVE 5-minute trend test completed successfully!")
         
     except KeyboardInterrupt:
         print("\n\n⚠️  Test interrupted")
@@ -942,15 +948,16 @@ async def run_5min_test():
 
 
 if __name__ == "__main__":
-    print(f"Starting 5-Minute Statistical Trend Calculator at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    print("Provides higher timeframe market context")
+    print(f"Starting REACTIVE 5-Minute Statistical Trend Calculator at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print("Provides higher timeframe market context with MORE REACTIVE settings")
     print("All timestamps are in UTC\n")
-    print("Features:")
-    print("• Multi-timeframe: 15/25/50 minute analysis")
-    print("• Market state detection (trending/ranging)")
-    print("• Position sizing recommendations")
-    print("• VWAP analysis for mean reversion")
-    print("• Clear directional bias signals")
-    print("• UTC timestamp enforcement\n")
+    print("REACTIVE Features:")
+    print("• Lower thresholds: 15% composite, 25% trend, 40% strong trend")
+    print("• Increased Kalman responsiveness (Q=0.0005, R=0.01)")
+    print("• More weight on momentum and Kalman filter")
+    print("• 2-bar lookback for faster signals")
+    print("• P-value threshold relaxed to 0.10")
+    print("• VWAP mean reversion at 1.5% (was 2%)")
+    print("• Faster trend detection with reduced sensitivity\n")
     
     asyncio.run(run_5min_test())

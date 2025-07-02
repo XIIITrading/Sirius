@@ -1,1 +1,42 @@
-{}
+{
+  "00561c5e64ed9dbc1c93e7c5829cfe91": {
+    "symbol": "TSLA",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T05:19:00+00:00",
+    "end_time": "2025-06-23T21:59:00+00:00",
+    "cached_at": "2025-07-02T12:38:10.319232+00:00",
+    "data_points": 960,
+    "cache_key": "00561c5e64ed9dbc1c93e7c5829cfe91"
+  },
+  "58673ca1cbbb8881dab8b5cececd386c": {
+    "symbol": "TSLA",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T13:19:00+00:00",
+    "end_time": "2025-06-23T13:44:00+00:00",
+    "cached_at": "2025-07-02T13:00:47.975538+00:00",
+    "data_points": 641,
+    "cache_key": "58673ca1cbbb8881dab8b5cececd386c"
+  },
+  "b051ec6d13c76146cdea153ecfb93fca": {
+    "symbol": "TSLA",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T13:22:00+00:00",
+    "end_time": "2025-06-23T13:47:00+00:00",
+    "cached_at": "2025-07-02T13:01:31.267576+00:00",
+    "data_points": 638,
+    "cache_key": "b051ec6d13c76146cdea153ecfb93fca"
+  },
+  "ba7528d113145b1e3e207dee000c9bc9": {
+    "symbol": "TSLA",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T13:22:00.769000+00:00",
+    "end_time": "2025-06-23T13:47:00.769000+00:00",
+    "cached_at": "2025-07-02T13:13:17.989136+00:00",
+    "data_points": 637,
+    "cache_key": "ba7528d113145b1e3e207dee000c9bc9"
+  }
+}

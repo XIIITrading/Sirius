@@ -10,7 +10,7 @@ Time Handling: All timestamps in UTC
 import asyncio
 import numpy as np
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Deque, Tuple
+from typing import Dict, List, Optional, Deque, Tuple, Union
 from dataclasses import dataclass, field
 from collections import deque
 import logging
@@ -158,8 +158,8 @@ class TickFlowAnalyzer:
         size = trade_data['size']
         conditions = trade_data.get('conditions', [])
         
-        # Classify trade as buy or sell
-        is_buy = self._classify_trade(symbol, price, size, conditions)
+        # Classify trade as buy or sell and get parsed conditions
+        is_buy, parsed_conditions = self._classify_trade(symbol, price, size, conditions)
         
         # Update spread estimate
         self._update_spread_estimate(symbol, price)
@@ -175,7 +175,7 @@ class TickFlowAnalyzer:
             is_buy=is_buy,
             is_large=is_large,
             exchange=trade_data.get('exchange'),
-            conditions=conditions
+            conditions=parsed_conditions  # Use parsed conditions here
         )
         
         # Add to buffer
@@ -193,37 +193,65 @@ class TickFlowAnalyzer:
         return None
     
     def _classify_trade(self, symbol: str, price: float, size: float, 
-                       conditions: List[int]) -> bool:
+                       conditions: Union[List[int], str, int, None]) -> Tuple[bool, List[int]]:
         """
         Classify trade as buy or sell using tick rule and other heuristics
         
         Returns:
-            True if buy, False if sell
+            Tuple of (is_buy, parsed_conditions)
         """
+        # Handle different condition formats (string, list, etc.)
+        parsed_conditions = []
+        if conditions:
+            if isinstance(conditions, str):
+                # Parse string format: "37" or "12,37"
+                try:
+                    if ',' in conditions:
+                        parsed_conditions = [int(c.strip()) for c in conditions.split(',') if c.strip().isdigit()]
+                    elif conditions.strip().isdigit():
+                        parsed_conditions = [int(conditions.strip())]
+                except (ValueError, AttributeError):
+                    parsed_conditions = []
+            elif isinstance(conditions, list):
+                # Ensure all items are integers
+                try:
+                    parsed_conditions = [int(c) for c in conditions]
+                except (ValueError, TypeError):
+                    # If conversion fails, try to extract valid integers
+                    parsed_conditions = []
+                    for c in conditions:
+                        try:
+                            parsed_conditions.append(int(c))
+                        except (ValueError, TypeError):
+                            continue
+            elif isinstance(conditions, (int, float)):
+                # Single condition as number
+                parsed_conditions = [int(conditions)]
+        
         # If we have previous price, use tick rule
         if symbol in self.last_prices:
             last_price = self.last_prices[symbol]
             
             if price > last_price:
-                return True  # Uptick = buy
+                return True, parsed_conditions  # Uptick = buy
             elif price < last_price:
-                return False  # Downtick = sell
+                return False, parsed_conditions  # Downtick = sell
             else:
                 # Price unchanged, look at conditions or use last classification
                 # For now, use size as tiebreaker (larger = more likely institutional buy)
                 avg_size = self.avg_trade_sizes.get(symbol, size)
-                return size > avg_size
+                return size > avg_size, parsed_conditions
         
         # First trade - use conditions if available
         # Condition codes vary by exchange, but some common ones:
         # 12 = Intermarket sweep (aggressive)
         # 37 = Contingent trade
-        if conditions:
-            if 12 in conditions:  # Intermarket sweep often aggressive buying
-                return True
+        if parsed_conditions:
+            if 12 in parsed_conditions:  # Intermarket sweep often aggressive buying
+                return True, parsed_conditions
                 
         # Default to buy for first trade
-        return True
+        return True, parsed_conditions
     
     def _update_spread_estimate(self, symbol: str, price: float):
         """Estimate bid-ask spread from trade prices"""

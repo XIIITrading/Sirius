@@ -33179,3 +33179,25 @@ to 2025-07-01
 2025-07-01 23:01:44 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-23 to 2025-06-25
 2025-07-01 23:01:44 - polygon.fetcher - INFO - Filled 28 small gaps in data
 2025-07-01 23:01:44 - polygon.fetcher - INFO - Returned 1961 rows for TSLA 1min
+2025-07-02 11:43:55 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 11:49:18 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 11:57:06 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 11:58:16 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-02 11:59:01 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-23 to 2025-06-23
+2025-07-02 11:59:02 - polygon.fetcher - INFO - Filled 2 small gaps in data
+2025-07-02 11:59:02 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 11:59:02 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-23 to 2025-06-23
+2025-07-02 11:59:02 - polygon.fetcher - INFO - Filled 2 small gaps in data
+2025-07-02 11:59:02 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 11:59:03 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-22 to 2025-06-23
+2025-07-02 11:59:04 - polygon.fetcher - INFO - Filled 2 small gaps in data
+2025-07-02 11:59:04 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 11:59:04 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-23 to 2025-06-23
+2025-07-02 11:59:04 - polygon.fetcher - INFO - Filled 2 small gaps in data
+2025-07-02 11:59:04 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 11:59:04 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-22 to 2025-06-23
+2025-07-02 11:59:05 - polygon.fetcher - INFO - Filled 2 small gaps in data
+2025-07-02 11:59:05 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min
+2025-07-02 11:59:05 - polygon.fetcher - INFO - Fetching TSLA 1min data from 2025-06-21 to 2025-06-23
+2025-07-02 11:59:05 - polygon.fetcher - INFO - Filled 2 small gaps in data
+2025-07-02 11:59:05 - polygon.fetcher - INFO - Returned 960 rows for TSLA 1min

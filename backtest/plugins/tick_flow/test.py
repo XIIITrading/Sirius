@@ -74,6 +74,12 @@ class TickFlowTest:
                 'conditions': trade.get('conditions', [])
             }
             
+            # Debug 
+            if trade_count <= 5:  # Just print first 5 to see format
+                print(f"\nDEBUG Trade #{trade_count}:")
+                print(f"  Raw conditions from DataFrame: {trade.get('conditions')} (type: {type(trade.get('conditions'))})")
+                print(f"  trade_data conditions: {trade_data['conditions']} (type: {type(trade_data['conditions'])})")
+            
             # Process trade
             signal = self.analyzer.process_trade(symbol, trade_data)
             

@@ -37,7 +37,8 @@ PLUGIN_RUN_ORDER = [
     "5-Min Market Structure",
     "15-Min Market Structure",
     "1-Min Bid/Ask Analysis",
-    "Bid/Ask Imbalance Analysis"
+    "Bid/Ask Imbalance Analysis",
+    "Tick Flow Analysis"
 ]
 
 

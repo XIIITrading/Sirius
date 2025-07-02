@@ -27,6 +27,7 @@ urllib3                     # HTTP library (dependency)
 #====Statistics====#
 scipy
 numba
+tabulate
 
 
 # ===== Additional Dependencies =====

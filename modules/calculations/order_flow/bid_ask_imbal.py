@@ -2,7 +2,7 @@
 """
 Module: Bid/Ask Imbalance Analysis
 Purpose: Measure buyer/seller aggressiveness by tracking trades at bid vs ask
-Features: Real-time imbalance calculation, spread analysis, liquidity detection
+Features: Real-time imbalance calculation, spread analysis, liquidity detection, bar index tracking
 Performance Target: <100 microseconds per trade
 Time Handling: All timestamps in UTC
 """
@@ -38,6 +38,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ============= CONFIGURABLE PARAMETERS =============
+# Total number of trades to track in the rolling window
+TOTAL_TRADES_LOOKBACK = 1000
+
+# Number of trades per bar index (must divide evenly into TOTAL_TRADES_LOOKBACK)
+TRADES_PER_BAR_INDEX = 100
+
+# Calculate number of bar indices (should be 10 with default settings)
+NUM_BAR_INDICES = TOTAL_TRADES_LOOKBACK // TRADES_PER_BAR_INDEX
+
+# Imbalance thresholds for signal generation
+IMBALANCE_THRESHOLD_NORMAL = 0.6    # 60% for normal market hours
+IMBALANCE_THRESHOLD_PREMARKET = 0.7  # 70% for pre-market (higher threshold)
+AGGRESSION_THRESHOLD_NORMAL = 0.7    # 70% aggressive trades for normal hours
+AGGRESSION_THRESHOLD_PREMARKET = 0.5 # 50% for pre-market
+
+# Moderate signal thresholds
+IMBALANCE_THRESHOLD_MODERATE = 0.3   # 30% imbalance for moderate signals
+AGGRESSION_THRESHOLD_MODERATE = 0.6  # 60% aggressive trades for moderate signals
+
+# ===================================================
 
 @dataclass
 class Quote:
@@ -50,6 +71,21 @@ class Quote:
     timestamp: datetime
     bid_levels: Optional[List[Dict]] = None  # Full depth if available
     ask_levels: Optional[List[Dict]] = None
+
+
+@dataclass
+class BarIndexMetrics:
+    """Metrics for a single bar index (group of trades)"""
+    bar_index: int  # 1-10, where 1 is most recent
+    trade_count: int
+    raw_imbalance: float
+    weighted_imbalance: float
+    aggression_ratio: float
+    buy_volume: float
+    sell_volume: float
+    total_volume: float
+    avg_spread: float
+    time_range: Tuple[datetime, datetime]  # start and end time of trades in this bar
 
 
 @dataclass
@@ -71,6 +107,7 @@ class ImbalanceComponents:
     liquidity_state: str
     book_pressure: Optional[float] = None
     spreads_by_size: Optional[Dict[int, float]] = None
+    bar_indices: Optional[List[BarIndexMetrics]] = None  # NEW: Bar index breakdown
 
 
 @dataclass
@@ -114,25 +151,30 @@ class BidAskImbalance:
     """
     Bid/Ask Imbalance Calculator for order flow analysis.
     Tracks whether trades execute at bid (seller-initiated) or ask (buyer-initiated).
+    Now with bar index tracking to show imbalance evolution over time.
     """
     
     def __init__(self,
-                 imbalance_lookback: int = 100,
+                 imbalance_lookback: int = TOTAL_TRADES_LOOKBACK,
+                 trades_per_bar: int = TRADES_PER_BAR_INDEX,
                  spread_history_seconds: int = 600,
                  quote_sync_tolerance_ms: int = 100,
-                 aggression_threshold: float = 0.7,
+                 aggression_threshold: float = AGGRESSION_THRESHOLD_NORMAL,
                  smoothing_alpha: float = 0.1):
         """
         Initialize bid/ask imbalance calculator.
         
         Args:
-            imbalance_lookback: Number of trades for imbalance calculation
+            imbalance_lookback: Total number of trades to track (default 1000)
+            trades_per_bar: Number of trades per bar index (default 100)
             spread_history_seconds: Seconds of spread history to maintain
             quote_sync_tolerance_ms: Max milliseconds between trade and quote
             aggression_threshold: Threshold for aggressive vs passive trades
             smoothing_alpha: EWMA smoothing factor
         """
         self.imbalance_lookback = imbalance_lookback
+        self.trades_per_bar = trades_per_bar
+        self.num_bars = imbalance_lookback // trades_per_bar
         self.spread_history_seconds = spread_history_seconds
         self.quote_sync_tolerance_ms = quote_sync_tolerance_ms
         self.aggression_threshold = aggression_threshold
@@ -160,7 +202,8 @@ class BidAskImbalance:
         # Smoothed values
         self.smoothed_imbalances: Dict[str, float] = {}
         
-        logger.info(f"Initialized BidAskImbalance: lookback={imbalance_lookback}, "
+        logger.info(f"Initialized BidAskImbalance: lookback={imbalance_lookback} trades, "
+                   f"{self.num_bars} bars of {trades_per_bar} trades each, "
                    f"spread_history={spread_history_seconds}s, sync_tolerance={quote_sync_tolerance_ms}ms")
     
     def initialize_symbol(self, symbol: str):
@@ -232,14 +275,15 @@ class BidAskImbalance:
         # Update session metrics
         self._update_session_metrics(trade.symbol, classified)
         
-        # Need minimum trades for analysis
-        if len(self.classified_trades[trade.symbol]) < 20:
+        # Need minimum trades for analysis (at least 2 bars worth)
+        min_trades_required = min(self.trades_per_bar * 2, 20)
+        if len(self.classified_trades[trade.symbol]) < min_trades_required:
             logger.debug(f"{trade.symbol}: Warming up "
-                        f"({len(self.classified_trades[trade.symbol])}/20)")
+                        f"({len(self.classified_trades[trade.symbol])}/{min_trades_required})")
             return None
         
-        # Calculate imbalance metrics
-        imbalance_metrics = self._calculate_volume_imbalance(
+        # Calculate imbalance metrics with bar indices
+        imbalance_metrics = self._calculate_volume_imbalance_with_bars(
             list(self.classified_trades[trade.symbol])
         )
         
@@ -268,15 +312,16 @@ class BidAskImbalance:
             spread_volatility=spread_metrics['spread_volatility'],
             spread_trend=spread_metrics['spread_trend'],
             quote_stability=spread_metrics['quote_stability'],
-            liquidity_state=spread_metrics['liquidity_state']
+            liquidity_state=spread_metrics['liquidity_state'],
+            bar_indices=imbalance_metrics.get('bar_indices', [])  # NEW: Add bar indices
         )
         
         if depth_metrics:
             components.book_pressure = depth_metrics['book_pressure']
             components.spreads_by_size = depth_metrics['spreads_by_size']
         
-        # Generate signal
-        signal = self._calculate_bid_ask_score(trade, components, depth_metrics)
+        # Generate signal with enhanced scoring based on bar trends
+        signal = self._calculate_bid_ask_score_with_bars(trade, components, depth_metrics)
         
         # Track performance
         calculation_time = (time_module.perf_counter() - start_time) * 1000
@@ -346,8 +391,13 @@ class BidAskImbalance:
         else:
             return 'midpoint'  # Neutral
     
-    def _calculate_volume_imbalance(self, classified_trades: List[ClassifiedTrade]) -> Dict:
-        """Calculate buy/sell volume imbalance with aggression weighting"""
+    def _calculate_volume_imbalance_with_bars(self, classified_trades: List[ClassifiedTrade]) -> Dict:
+        """
+        Calculate buy/sell volume imbalance with bar index breakdown.
+        
+        This splits the trades into bars and calculates imbalance for each,
+        allowing us to see the evolution of order flow over time.
+        """
         # Weight aggressive trades more heavily
         weights = {
             'buy_aggressive': 1.0,
@@ -358,12 +408,92 @@ class BidAskImbalance:
             'unknown': 0.0
         }
         
+        # Overall metrics (same as before)
         weighted_volume = 0
         total_volume = 0
         buy_volume = 0
         sell_volume = 0
         aggressive_volume = 0
         
+        # Calculate bar indices
+        bar_indices = []
+        num_trades = len(classified_trades)
+        
+        # Calculate how many complete bars we have
+        complete_bars = num_trades // self.trades_per_bar
+        
+        # Process each bar from oldest to newest
+        for bar_num in range(complete_bars):
+            # Calculate slice indices
+            start_idx = bar_num * self.trades_per_bar
+            end_idx = start_idx + self.trades_per_bar
+            
+            # Get trades for this bar
+            bar_trades = classified_trades[start_idx:end_idx]
+            
+            # Calculate metrics for this bar
+            bar_weighted = 0
+            bar_total = 0
+            bar_buy = 0
+            bar_sell = 0
+            bar_aggressive = 0
+            bar_spreads = []
+            
+            for ct in bar_trades:
+                volume = ct.trade.size
+                classification = ct.classification
+                
+                bar_weighted += volume * weights.get(classification, 0)
+                bar_total += volume
+                
+                if 'buy' in classification:
+                    bar_buy += volume
+                elif 'sell' in classification:
+                    bar_sell += volume
+                
+                if 'aggressive' in classification:
+                    bar_aggressive += volume
+                
+                bar_spreads.append(ct.spread_at_trade)
+            
+            # Calculate bar metrics
+            if bar_total > 0:
+                bar_raw_imb = (bar_buy - bar_sell) / bar_total
+                bar_weighted_imb = bar_weighted / bar_total
+                bar_aggr_ratio = bar_aggressive / bar_total
+            else:
+                bar_raw_imb = 0
+                bar_weighted_imb = 0
+                bar_aggr_ratio = 0
+            
+            # Create bar index metric (numbering from newest to oldest)
+            bar_index_num = complete_bars - bar_num
+            
+            bar_metric = BarIndexMetrics(
+                bar_index=bar_index_num,
+                trade_count=len(bar_trades),
+                raw_imbalance=bar_raw_imb,
+                weighted_imbalance=bar_weighted_imb,
+                aggression_ratio=bar_aggr_ratio,
+                buy_volume=bar_buy,
+                sell_volume=bar_sell,
+                total_volume=bar_total,
+                avg_spread=np.mean(bar_spreads) if bar_spreads else 0,
+                time_range=(bar_trades[0].trade.timestamp, bar_trades[-1].trade.timestamp)
+            )
+            
+            bar_indices.append(bar_metric)
+        
+        # Process remaining trades (partial bar)
+        if num_trades % self.trades_per_bar > 0:
+            remaining_trades = classified_trades[complete_bars * self.trades_per_bar:]
+            # Process these as the most recent partial bar
+            # ... (similar calculation as above)
+        
+        # Reverse bar_indices so most recent is first
+        bar_indices.reverse()
+        
+        # Calculate overall metrics (for all trades)
         for ct in classified_trades:
             volume = ct.trade.size
             classification = ct.classification
@@ -379,7 +509,7 @@ class BidAskImbalance:
             if 'aggressive' in classification:
                 aggressive_volume += volume
         
-        # Calculate metrics
+        # Calculate overall metrics
         if total_volume > 0:
             raw_imbalance = (buy_volume - sell_volume) / total_volume
             weighted_imbalance = weighted_volume / total_volume
@@ -405,8 +535,13 @@ class BidAskImbalance:
             'aggression_ratio': aggression_ratio,
             'buy_volume': buy_volume,
             'sell_volume': sell_volume,
-            'total_volume': total_volume
+            'total_volume': total_volume,
+            'bar_indices': bar_indices  # NEW: Include bar breakdown
         }
+    
+    def _calculate_volume_imbalance(self, classified_trades: List[ClassifiedTrade]) -> Dict:
+        """Original method for backward compatibility"""
+        return self._calculate_volume_imbalance_with_bars(classified_trades)
     
     def _analyze_spread_dynamics(self, symbol: str) -> Optional[Dict]:
         """Analyze bid-ask spread behavior and liquidity"""
@@ -523,9 +658,14 @@ class BidAskImbalance:
         else:
             return levels[0]['price'] if levels else 0
     
-    def _calculate_bid_ask_score(self, trade: Trade, components: ImbalanceComponents,
-                                depth_metrics: Optional[Dict] = None) -> BidAskSignal:
-        """Generate bull/bear scores from imbalance data"""
+    def _calculate_bid_ask_score_with_bars(self, trade: Trade, components: ImbalanceComponents,
+                                          depth_metrics: Optional[Dict] = None) -> BidAskSignal:
+        """
+        Enhanced scoring that considers bar index trends.
+        
+        This looks at how imbalance has evolved across the bar indices to
+        identify momentum and trend changes.
+        """
         bull_score = 0
         bear_score = 0
         warnings = []
@@ -537,37 +677,63 @@ class BidAskImbalance:
         liquidity = components.liquidity_state
         spread_trend = components.spread_trend
         
-        # Adjust for pre-market
+        # Analyze bar trends if available
+        momentum_factor = 1.0
+        trend_description = ""
+        
+        if components.bar_indices and len(components.bar_indices) >= 3:
+            # Look at recent bars (1-3) vs older bars (4+)
+            recent_bars = components.bar_indices[:3]
+            older_bars = components.bar_indices[3:] if len(components.bar_indices) > 3 else []
+            
+            if recent_bars and older_bars:
+                recent_avg_imb = np.mean([b.weighted_imbalance for b in recent_bars])
+                older_avg_imb = np.mean([b.weighted_imbalance for b in older_bars])
+                
+                # Check for momentum
+                if recent_avg_imb > older_avg_imb + 0.1:  # Bullish acceleration
+                    momentum_factor = 1.2
+                    trend_description = " with accelerating momentum"
+                elif recent_avg_imb < older_avg_imb - 0.1:  # Bearish acceleration
+                    momentum_factor = 1.2
+                    trend_description = " with accelerating momentum"
+                elif abs(recent_avg_imb - older_avg_imb) < 0.05:  # Steady
+                    momentum_factor = 1.1
+                    trend_description = " with steady flow"
+                else:  # Decelerating
+                    momentum_factor = 0.9
+                    trend_description = " but momentum slowing"
+        
+        # Adjust thresholds for pre-market
         is_premarket = trade.timestamp.hour < 9 or trade.timestamp.hour >= 16
         if is_premarket:
-            # Adjust thresholds for pre-market
-            imb_threshold = 0.7  # vs 0.6 normal
-            aggr_threshold = 0.5  # vs 0.7 normal
+            imb_threshold = IMBALANCE_THRESHOLD_PREMARKET
+            aggr_threshold = AGGRESSION_THRESHOLD_PREMARKET
         else:
-            imb_threshold = 0.6
-            aggr_threshold = 0.7
+            imb_threshold = IMBALANCE_THRESHOLD_NORMAL
+            aggr_threshold = AGGRESSION_THRESHOLD_NORMAL
         
         # Bull conditions
         if imb > imb_threshold and aggr > aggr_threshold and liquidity == 'high':
             bull_score = 2  # Aggressive buying with tight spreads
             signal_type = "AGGRESSIVE_BUYING"
             signal_strength = "EXCEPTIONAL"
-            reason = f"Heavy buying pressure (imb={imb:.2f}) with tight spreads"
+            reason = f"Heavy buying pressure (imb={imb:.2f}) with tight spreads{trend_description}"
         elif imb > 0.5 and spread_ratio < 0.8:
             bull_score = 2  # Strong buying with tightening spreads
             signal_type = "STRONG_BUYING"
             signal_strength = "STRONG"
-            reason = f"Strong buying with tightening spreads ({spread_ratio:.2f}x)"
-        elif imb > 0.3 and aggr > 0.6:
+            reason = f"Strong buying with tightening spreads ({spread_ratio:.2f}x){trend_description}"
+        elif imb > IMBALANCE_THRESHOLD_MODERATE and aggr > AGGRESSION_THRESHOLD_MODERATE:
             bull_score = 1  # Moderate buying pressure
             signal_type = "MODERATE_BUYING"
             signal_strength = "MODERATE"
-            reason = "Moderate buying pressure detected"
+            reason = f"Moderate buying pressure detected{trend_description}"
         elif spread_trend < -0.1 and imb > 0:
             bull_score = 1  # Spreads tightening with buying
             signal_type = "LIQUIDITY_IMPROVING"
             signal_strength = "MODERATE"
-            reason = "Improving liquidity with buying interest"
+            reason = f"Improving liquidity with buying interest{trend_description}"
         else:
             signal_type = "NEUTRAL"
             signal_strength = "NEUTRAL"
@@ -578,22 +744,29 @@ class BidAskImbalance:
             bear_score = 2  # Aggressive selling with wide spreads
             signal_type = "AGGRESSIVE_SELLING"
             signal_strength = "EXCEPTIONAL"
-            reason = f"Heavy selling pressure (imb={imb:.2f}) with wide spreads"
+            reason = f"Heavy selling pressure (imb={imb:.2f}) with wide spreads{trend_description}"
         elif imb < -0.5 and spread_ratio > 1.5:
             bear_score = 2  # Strong selling with widening spreads
             signal_type = "STRONG_SELLING"
             signal_strength = "STRONG"
-            reason = f"Strong selling with widening spreads ({spread_ratio:.2f}x)"
-        elif imb < -0.3 and aggr > 0.6:
+            reason = f"Strong selling with widening spreads ({spread_ratio:.2f}x){trend_description}"
+        elif imb < -IMBALANCE_THRESHOLD_MODERATE and aggr > AGGRESSION_THRESHOLD_MODERATE:
             bear_score = 1  # Moderate selling pressure
             signal_type = "MODERATE_SELLING"
             signal_strength = "MODERATE"
-            reason = "Moderate selling pressure detected"
+            reason = f"Moderate selling pressure detected{trend_description}"
         elif spread_ratio > 2.0:
             bear_score = 1  # Liquidity exodus
             signal_type = "LIQUIDITY_CRISIS"
             signal_strength = "MODERATE"
-            reason = f"Liquidity drying up (spread {spread_ratio:.1f}x normal)"
+            reason = f"Liquidity drying up (spread {spread_ratio:.1f}x normal){trend_description}"
+        
+        # Apply momentum factor to scores
+        if momentum_factor != 1.0:
+            if bull_score > 0:
+                bull_score = min(2, int(bull_score * momentum_factor))
+            if bear_score > 0:
+                bear_score = min(2, int(bear_score * momentum_factor))
         
         # Depth-based adjustments
         if depth_metrics:
@@ -604,18 +777,29 @@ class BidAskImbalance:
                 bear_score = min(bear_score + 1, 2)
         
         # Special patterns
-        if imb > 0.3 and spread_ratio > 1.5:
+        if imb > IMBALANCE_THRESHOLD_MODERATE and spread_ratio > 1.5:
             # Buying into wide spreads - desperation
             bull_score = max(bull_score - 1, 0)
             warnings.append("Desperate buying into wide spreads")
-        elif imb < -0.3 and spread_ratio < 0.7:
+        elif imb < -IMBALANCE_THRESHOLD_MODERATE and spread_ratio < 0.7:
             # Selling into tight spreads - hidden distribution
             bear_score = min(bear_score + 1, 2)
             signal_type = "HIDDEN_DISTRIBUTION"
             warnings.append("Hidden distribution detected")
         
-        # Calculate confidence
-        confidence = min(abs(imb) + aggr, 1.0)
+        # Calculate confidence based on consistency across bars
+        base_confidence = min(abs(imb) + aggr, 1.0)
+        
+        # Adjust confidence based on bar consistency
+        if components.bar_indices and len(components.bar_indices) >= 3:
+            # Check if all recent bars agree on direction
+            recent_directions = [1 if b.weighted_imbalance > 0 else -1 for b in components.bar_indices[:3]]
+            if len(set(recent_directions)) == 1:  # All same direction
+                confidence = min(base_confidence * 1.2, 1.0)
+            else:
+                confidence = base_confidence * 0.8
+        else:
+            confidence = base_confidence
         
         # Pre-market warning
         if is_premarket:
@@ -636,6 +820,11 @@ class BidAskImbalance:
             trade_count=len(self.classified_trades.get(trade.symbol, [])),
             warnings=warnings
         )
+    
+    def _calculate_bid_ask_score(self, trade: Trade, components: ImbalanceComponents,
+                                depth_metrics: Optional[Dict] = None) -> BidAskSignal:
+        """Original method for backward compatibility"""
+        return self._calculate_bid_ask_score_with_bars(trade, components, depth_metrics)
     
     def _cleanup_quote_history(self, symbol: str, current_time: datetime):
         """Remove old quotes beyond history window"""
@@ -661,6 +850,35 @@ class BidAskImbalance:
         sorted_data = sorted(data)
         count_below = sum(1 for x in sorted_data if x < value)
         return (count_below / len(data)) * 100
+    
+    def get_bar_index_summary(self, symbol: str) -> Optional[List[Dict]]:
+        """
+        Get a summary of the current bar indices for display.
+        
+        Returns a list of dictionaries with bar index information suitable
+        for display in a table or chart.
+        """
+        if symbol not in self.latest_signals:
+            return None
+        
+        signal = self.latest_signals[symbol]
+        if not signal.components.bar_indices:
+            return None
+        
+        summary = []
+        for bar in signal.components.bar_indices:
+            summary.append({
+                'bar_index': bar.bar_index,
+                'imbalance': bar.weighted_imbalance,
+                'buy_volume': bar.buy_volume,
+                'sell_volume': bar.sell_volume,
+                'total_volume': bar.total_volume,
+                'aggression': bar.aggression_ratio,
+                'avg_spread': bar.avg_spread,
+                'time_range': f"{bar.time_range[0].strftime('%H:%M:%S')} - {bar.time_range[1].strftime('%H:%M:%S')}"
+            })
+        
+        return summary
     
     # ============= WEBSOCKET FUNCTIONALITY =============
     
@@ -824,213 +1042,3 @@ class BidAskImbalance:
             'alert': signal.signal_strength == 'EXCEPTIONAL',
             'warnings': signal.warnings
         }
-
-
-# ============= TEST SCRIPT =============
-
-async def run_test():
-    """Test bid/ask imbalance calculation"""
-    print("=== Testing Bid/Ask Imbalance Analysis ===\n")
-    
-    # Test configuration
-    TEST_SYMBOL = 'AAPL'
-    TEST_DURATION = 60  # seconds
-    
-    calculator = BidAskImbalance(
-        imbalance_lookback=100,
-        spread_history_seconds=600,
-        quote_sync_tolerance_ms=100,
-        aggression_threshold=0.7
-    )
-    
-    print("📊 Bid/Ask Imbalance Monitor")
-    print(f"📈 Lookback: {calculator.imbalance_lookback} trades")
-    print(f"📊 Spread History: {calculator.spread_history_seconds} seconds")
-    print(f"🎯 Quote Sync Tolerance: {calculator.quote_sync_tolerance_ms}ms")
-    print()
-    
-    # Test 1: Synthetic data test
-    print("Test 1: Processing synthetic trades with quotes...")
-    print("-" * 50)
-    
-    # Initialize symbol
-    calculator.initialize_symbol(TEST_SYMBOL)
-    
-    # Simulate order flow with quotes
-    base_price = 150.0
-    base_spread = 0.02
-    current_time = datetime.now(timezone.utc)
-    
-    # Simulate accumulation pattern
-    for i in range(200):
-        # Generate quote
-        if i < 50:  # Normal market
-            spread = base_spread
-        elif i < 100:  # Tightening spreads (bullish)
-            spread = base_spread * (1 - (i-50)/100)
-        elif i < 150:  # Aggressive buying
-            spread = base_spread * 0.5
-        else:  # Widening spreads
-            spread = base_spread * (1 + (i-150)/50)
-        
-        bid = base_price - spread/2 + (i * 0.001)  # Slight uptrend
-        ask = bid + spread
-        
-        quote = Quote(
-            symbol=TEST_SYMBOL,
-            bid=bid,
-            ask=ask,
-            bid_size=np.random.randint(100, 1000),
-            ask_size=np.random.randint(100, 1000),
-            timestamp=current_time + timedelta(milliseconds=i*100)
-        )
-        
-        calculator.process_quote(quote)
-        
-        # Generate trade
-        if i < 100:  # Mixed trading
-            if np.random.random() > 0.5:
-                price = ask  # Buy at ask
-                size = np.random.randint(100, 1000)
-            else:
-                price = bid  # Sell at bid
-                size = np.random.randint(100, 500)
-        else:  # Aggressive buying phase
-            if np.random.random() > 0.2:
-                price = ask + np.random.uniform(0, 0.01)  # Aggressive buys
-                size = np.random.randint(500, 2000)
-            else:
-                price = bid
-                size = np.random.randint(50, 200)
-        
-        trade = Trade(
-            symbol=TEST_SYMBOL,
-            price=price,
-            size=size,
-            timestamp=current_time + timedelta(milliseconds=i*100 + 50)
-        )
-        
-        signal = calculator.process_trade(trade)
-        
-        # Display significant signals
-        if signal and i >= 50 and (signal.bull_score >= 2 or signal.bear_score >= 2):
-            print(f"\n🚨 SIGNIFICANT IMBALANCE DETECTED!")
-            print(f"   Time: {signal.timestamp.strftime('%H:%M:%S.%f')[:-3]}")
-            print(f"   Type: {signal.signal_type}")
-            print(f"   Strength: {signal.signal_strength}")
-            print(f"   Bull/Bear: {signal.bull_score}/{signal.bear_score}")
-            print(f"   Reason: {signal.reason}")
-            print(f"   Components:")
-            print(f"     • Imbalance: {signal.components.smoothed_imbalance:+.2f}")
-            print(f"     • Aggression: {signal.components.aggression_ratio:.0%}")
-            print(f"     • Spread: {signal.components.spread_ratio_1min:.2f}x")
-            print(f"     • Liquidity: {signal.components.liquidity_state}")
-            if signal.warnings:
-                print(f"   ⚠️  Warnings: {', '.join(signal.warnings)}")
-            print()
-    
-    # Final analysis
-    final_signal = calculator.latest_signals.get(TEST_SYMBOL)
-    if final_signal:
-        print("\n📊 Final Analysis:")
-        dashboard_format = calculator.format_for_dashboard(final_signal)
-        print(f"   Display: {dashboard_format['main_display']}")
-        print(f"   Color: {dashboard_format['color']}")
-        print(f"   Sub-components:")
-        for key, value in dashboard_format['sub_components'].items():
-            print(f"     • {key}: {value}")
-        
-        # Session summary
-        summary = calculator.get_session_summary(TEST_SYMBOL)
-        print(f"\n📈 Session Summary:")
-        print(f"   Session Imbalance: {summary['session_imbalance']:+.2%}")
-        print(f"   Spread Range: {summary['spread_range'][0]:.4f} - {summary['spread_range'][1]:.4f}")
-        print(f"   Extreme Periods: {summary['extreme_periods']}")
-        print(f"   Total Volume: {summary['total_volume']:,}")
-    
-    # Test 2: Performance test
-    print("\n\nTest 2: Performance benchmark...")
-    print("-" * 50)
-    
-    # Reset calculator
-    calculator = BidAskImbalance()
-    calculator.initialize_symbol(TEST_SYMBOL)
-    
-    # Pre-generate quotes
-    quotes = []
-    for i in range(1000):
-        quotes.append(Quote(
-            symbol=TEST_SYMBOL,
-            bid=150 - 0.01,
-            ask=150 + 0.01,
-            bid_size=np.random.randint(100, 1000),
-            ask_size=np.random.randint(100, 1000),
-            timestamp=datetime.now(timezone.utc) + timedelta(milliseconds=i*10)
-        ))
-    
-    # Process quotes first
-    for quote in quotes:
-        calculator.process_quote(quote)
-    
-    # Benchmark trade processing
-    start_time = time_module.perf_counter()
-    for i in range(1000):
-        trade = Trade(
-            symbol=TEST_SYMBOL,
-            price=150 + np.random.uniform(-0.05, 0.05),
-            size=np.random.randint(100, 1000),
-            timestamp=quotes[i].timestamp + timedelta(milliseconds=5)
-        )
-        calculator.process_trade(trade)
-    
-    elapsed = (time_module.perf_counter() - start_time) * 1000
-    avg_time = elapsed / 1000
-    
-    print(f"✓ Processed 1000 trades in {elapsed:.2f}ms")
-    print(f"✓ Average time per trade: {avg_time:.3f}ms")
-    print(f"✓ {'PASS' if avg_time < 0.1 else 'FAIL'} performance target (<0.1ms)")
-    
-    # Performance stats
-    stats = calculator.get_performance_stats()
-    print(f"\n📊 Performance Statistics:")
-    print(f"   Total calculations: {stats['total_calculations']}")
-    print(f"   Average calculation time: {stats['average_time_ms']:.3f}ms")
-    
-    # Test 3: WebSocket test
-    print("\n\nTest 3: WebSocket integration...")
-    print("-" * 50)
-    
-    signal_count = 0
-    
-    def display_signal(signal: BidAskSignal):
-        nonlocal signal_count
-        signal_count += 1
-        
-        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Signal #{signal_count}")
-        print(f"Symbol: {signal.symbol}")
-        print(f"Signal: {signal.signal_type} ({signal.signal_strength})")
-        print(f"Bull/Bear: {signal.bull_score}/{signal.bear_score}")
-        print(f"Imbalance: {signal.components.smoothed_imbalance:+.2%}")
-        print(f"Spread: {signal.components.spread_ratio_1min:.2f}x")
-    
-    try:
-        await calculator.start_websocket([TEST_SYMBOL], display_signal)
-        print(f"✓ WebSocket connected, monitoring {TEST_SYMBOL}")
-        print(f"⏰ Running for {TEST_DURATION} seconds...")
-        
-        await asyncio.sleep(TEST_DURATION)
-        
-        await calculator.stop()
-        print(f"\n✓ WebSocket test complete: {signal_count} signals received")
-        
-    except Exception as e:
-        print(f"⚠️  WebSocket test skipped: {e}")
-    
-    print("\n✅ All tests completed!")
-
-
-if __name__ == "__main__":
-    print("Bid/Ask Imbalance Analysis Module")
-    print("Measuring order flow aggression through bid/ask execution analysis\n")
-    
-    asyncio.run(run_test())

@@ -165,13 +165,26 @@ class ResultViewer(QWidget):
             self.current_chart = ChartClass()
             self.chart_layout.addWidget(self.current_chart)
             
-            # Update chart with data
+            # Update chart with data - check which method to use
             chart_data = chart_config.get('data', [])
-            self.current_chart.update_data(chart_data)
             
-            # Add entry marker if specified
-            if 'entry_time' in chart_config:
-                # Add marker at the end (30 minutes for bid/ask ratio)
+            # Use the appropriate update method based on what the chart supports
+            if hasattr(self.current_chart, 'update_from_data'):
+                # For charts that expect pre-formatted data (like Impact Success)
+                self.current_chart.update_from_data(chart_data)
+            elif hasattr(self.current_chart, 'update_data'):
+                # For legacy charts
+                self.current_chart.update_data(chart_data)
+            else:
+                logger.error(f"Chart {chart_class_name} has no update method")
+                self._hide_chart()
+                return
+            
+            # Add entry marker if specified and chart supports it
+            if chart_config.get('entry_time') and hasattr(self.current_chart, 'add_entry_marker'):
+                self.current_chart.add_entry_marker(chart_config['entry_time'])
+            elif chart_config.get('entry_time') and hasattr(self.current_chart, 'add_marker'):
+                # For charts using add_marker method (legacy)
                 self.current_chart.add_marker(30, "Entry", "#ff0000")
             
             # Show chart container

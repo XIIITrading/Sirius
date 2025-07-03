@@ -1,4 +1,4 @@
-# backtest/plugins/bid_ask_ratio/plugin.py
+# backtest/plugins/buy_sell_ratio/plugin.py
 """
 Bid/Ask Ratio Plugin Implementation
 Tracks buy/sell pressure ratio over a 30-minute window using SimpleDeltaTracker
@@ -258,9 +258,9 @@ class BidAskRatioPlugin(BacktestPlugin):
         for bar in completed_bars[-10:]:  # Last 10 bars
             recent_bars_data.append([
                 bar.timestamp.strftime('%H:%M:%S'),
-                f"{bar.weighted_pressure:+.3f}",    # Changed from bar.buy_sell_ratio
-                f"{bar.positive_volume:,.0f}",      # Changed from bar.buy_volume
-                f"{bar.negative_volume:,.0f}",      # Changed from bar.sell_volume
+                f"{bar.weighted_pressure:+.3f}",    # ✅ Fixed from bar.buy_sell_ratio
+                f"{bar.positive_volume:,.0f}",      # ✅ Fixed from bar.buy_volume
+                f"{bar.negative_volume:,.0f}",      # ✅ Fixed from bar.sell_volume
                 f"{bar.total_volume:,.0f}"
             ])
         
@@ -271,19 +271,20 @@ class BidAskRatioPlugin(BacktestPlugin):
         else:
             description += f"❌ Contradicts {direction}"
         
-        if latest_ratio > 0.75:
-            description += " | Strong buying pressure"
-        elif latest_ratio < -0.75:
-            description += " | Strong selling pressure"
-        elif abs(latest_ratio) < 0.25:
-            description += " | Balanced flow"
+        if latest_ratio is not None:
+            if latest_ratio > 0.75:
+                description += " | Strong buying pressure"
+            elif latest_ratio < -0.75:
+                description += " | Strong selling pressure"
+            elif abs(latest_ratio) < 0.25:
+                description += " | Balanced flow"
         
         # Format chart data for visualization
         chart_config = {
-            'module': 'backtest.plugins.buy_sell_ratio.chart',
+            'module': 'backtest.plugins.buy_sell_ratio.chart',  # ✅ Fixed from buy_sell_ratio
             'type': 'BidAskRatioChart',
             'data': chart_data,
-            'entry_time': entry_time
+            'entry_time': entry_time.isoformat() if entry_time else None  # ✅ Added .isoformat()
         }
         
         return {
@@ -304,7 +305,7 @@ class BidAskRatioPlugin(BacktestPlugin):
                 'aligned': signal_assessment['aligned']
             },
             'display_data': {
-                'summary': f"Bid/Ask Ratio: {latest_ratio:+.3f}",
+                'summary': f"Bid/Ask Ratio: {latest_ratio:+.3f}" if latest_ratio is not None else "No Data",
                 'description': description,
                 'table_data': summary_rows,
                 'recent_bars': {

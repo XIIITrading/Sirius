@@ -47,7 +47,9 @@ PLUGIN_RUN_ORDER = [
     "1-Min Bid/Ask Analysis",
     "Bid/Ask Imbalance Analysis",
     "Tick Flow Analysis",
-     "Bid/Ask Ratio Tracker"
+    "Bid/Ask Ratio Tracker",
+    "Impact Success",
+    "Net Large Volume" 
 ]
 
 
@@ -136,6 +138,9 @@ class BacktestDashboard(QMainWindow):
         
         # Chart containers
         self.chart_widgets = {}
+        
+        # Store for chart data that might get corrupted by signals
+        self.pending_chart_updates = {}
         
         # Get available plugins and sort them according to our order
         self.available_plugins = self._get_ordered_plugins()
@@ -500,6 +505,8 @@ class BacktestDashboard(QMainWindow):
     
     def on_plugin_completed(self, plugin_name: str, result: dict):
         """Handle plugin completion"""
+        logger.info(f"=== on_plugin_completed called for {plugin_name} ===")
+        
         self.plugin_status[plugin_name] = PluginStatus.COMPLETED
         
         if plugin_name in self.progress_widgets:
@@ -516,8 +523,20 @@ class BacktestDashboard(QMainWindow):
                 f"{signal_dir} - Strength: {strength:.0f}%, Confidence: {confidence:.0f}%"
             )
             
-        # Update chart if this is a chart plugin
-        self._update_chart_if_applicable(plugin_name, result)
+        # Check if we have pending chart data for this plugin
+        if plugin_name in self.pending_chart_updates:
+            logger.info(f"Found pending chart update for {plugin_name}")
+            # Create a copy of the result and add the chart data
+            result_with_chart = result.copy()
+            if 'display_data' not in result_with_chart:
+                result_with_chart['display_data'] = {}
+            result_with_chart['display_data']['chart_widget'] = self.pending_chart_updates.pop(plugin_name)
+            
+            # Update chart with the complete data
+            self._update_chart_if_applicable(plugin_name, result_with_chart)
+        else:
+            # Original behavior - try with the result as-is
+            self._update_chart_if_applicable(plugin_name, result)
     
     def on_plugin_error(self, plugin_name: str, error_message: str):
         """Handle plugin error"""
@@ -533,41 +552,99 @@ class BacktestDashboard(QMainWindow):
     
     def _update_chart_if_applicable(self, plugin_name: str, result: dict):
         """Update chart if plugin provides chart data"""
+        logger.info(f"Checking chart update for {plugin_name}")
+        
         display_data = result.get('display_data', {})
         chart_config = display_data.get('chart_widget')
         
-        if chart_config and plugin_name == "Bid/Ask Ratio Tracker":
-            # Replace placeholder with actual chart
-            try:
-                # Import the chart module
-                module = importlib.import_module(chart_config['module'])
-                ChartClass = getattr(module, chart_config['type'])
+        if not chart_config:
+            logger.info(f"No chart_widget in display_data for {plugin_name}")
+            return
+        
+        logger.info(f"Found chart config for {plugin_name}: module={chart_config.get('module')}, type={chart_config.get('type')}")
+        logger.info(f"Chart data points: {len(chart_config.get('data', []))}")
+        
+        # Determine which chart container to update based on plugin name
+        target_mapping = {
+            "Bid/Ask Ratio Tracker": ('buy_sell_chart', 'buy_sell_ratio'),
+            "Impact Success": ('large_order_chart', 'impact_success'),
+            "Net Large Volume": ('additional_chart', 'net_large_volume')
+        }
+        
+        if plugin_name not in target_mapping:
+            logger.warning(f"No target mapping for plugin: {plugin_name}")
+            return
+            
+        target_chart_attr, chart_key = target_mapping[plugin_name]
+        
+        # Get the target container
+        try:
+            target_placeholder = getattr(self, target_chart_attr)
+            target_container = target_placeholder.parent()
+            
+            if not target_container:
+                logger.error(f"No parent container for {target_chart_attr}")
+                return
                 
-                # Create chart instance
-                chart = ChartClass()
-                chart.update_data(chart_config['data'])
-                
-                # Add entry marker
-                if 'entry_time' in chart_config:
+        except AttributeError as e:
+            logger.error(f"Could not find chart attribute {target_chart_attr}: {e}")
+            return
+        
+        try:
+            # Import the chart module and class
+            module = importlib.import_module(chart_config['module'])
+            ChartClass = getattr(module, chart_config['type'])
+            
+            logger.info(f"Successfully imported {ChartClass.__name__} from {chart_config['module']}")
+            
+            # Create chart instance
+            chart = ChartClass()
+            
+            # Check if data exists
+            chart_data = chart_config.get('data', [])
+            logger.info(f"Updating chart with {len(chart_data)} data points")
+            
+            # Pass the data directly to the chart
+            if chart_data and hasattr(chart, 'update_from_data'):
+                chart.update_from_data(chart_data)
+                logger.info("Called update_from_data successfully")
+            elif chart_data and hasattr(chart, 'update_data'):
+                chart.update_data(chart_data)
+                logger.info("Called update_data successfully")
+            else:
+                logger.warning(f"No data or update method not found")
+            
+            # Add entry marker if the chart supports it
+            if chart_config.get('entry_time'):
+                if hasattr(chart, 'add_entry_marker'):
+                    chart.add_entry_marker(chart_config['entry_time'])
+                elif hasattr(chart, 'add_marker'):
                     chart.add_marker(30, "Entry", "#ff0000")
+                logger.info("Added entry marker")
+            
+            # Replace placeholder with real chart
+            layout = target_container.layout()
+            if not layout:
+                logger.error("Target container has no layout")
+                return
                 
-                # Find the buy/sell container and replace its content
-                buy_sell_container = self.buy_sell_chart.parent()
-                if buy_sell_container:
-                    # Remove placeholder
-                    layout = buy_sell_container.layout()
-                    layout.removeWidget(self.buy_sell_chart)
-                    self.buy_sell_chart.deleteLater()
-                    
-                    # Add real chart
-                    self.buy_sell_chart = chart
-                    layout.addWidget(chart)
-                    
-                    # Store reference
-                    self.chart_widgets['buy_sell_ratio'] = chart
-                
-            except Exception as e:
-                logger.error(f"Error loading chart: {e}")
+            # Remove old chart
+            layout.removeWidget(target_placeholder)
+            target_placeholder.deleteLater()
+            
+            # Add real chart
+            setattr(self, target_chart_attr, chart)
+            layout.addWidget(chart)
+            
+            # Store reference
+            self.chart_widgets[chart_key] = chart
+            
+            logger.info(f"✅ Successfully loaded {plugin_name} chart")
+            
+        except Exception as e:
+            logger.error(f"Error loading chart for {plugin_name}: {e}")
+            import traceback
+            traceback.print_exc()
     
     def run_analysis(self):
         """Run the selected analysis"""
@@ -597,8 +674,9 @@ class BacktestDashboard(QMainWindow):
             widget_info['widget'].deleteLater()
             del self.progress_widgets[plugin_name]
         
-        # Reset plugin status
+        # Reset plugin status and pending updates
         self.plugin_status.clear()
+        self.pending_chart_updates.clear()
         
         # Update status
         plugin_text = f"{len(selected_plugins)} plugins" if len(selected_plugins) > 1 else selected_plugins[0]
@@ -649,6 +727,13 @@ class BacktestDashboard(QMainWindow):
                     
                     # Add to multi-viewer immediately
                     self.multi_result_viewer.add_result(result)
+                    
+                    # Check if result has chart data and store it separately
+                    if 'display_data' in result and 'chart_widget' in result['display_data']:
+                        chart_config = result['display_data']['chart_widget']
+                        if chart_config and 'data' in chart_config and len(chart_config['data']) > 0:
+                            logger.info(f"Storing chart data for {plugin_name} ({len(chart_config['data'])} points)")
+                            self.pending_chart_updates[plugin_name] = chart_config
                     
                     # Emit completion signal
                     self.progress_signals.plugin_completed.emit(plugin_name, result)

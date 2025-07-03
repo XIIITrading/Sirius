@@ -39,7 +39,7 @@ class BidAskRatioTest:
         print(f"\n{'='*80}")
         print(f"BID/ASK RATIO TRACKER TEST")
         print(f"Symbol: {symbol}")
-        print(f"Test Time: {test_time}")
+        print(f"Entry Time: {test_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print(f"Direction: {direction}")
         print(f"{'='*80}\n")
         
@@ -51,20 +51,26 @@ class BidAskRatioTest:
         print(f"- Output range: -1 to +1")
         print()
         
-        # Fetch data
-        data_start_time = test_time - timedelta(minutes=35)  # Extra 5 minutes
+        # Calculate data window (30 minutes before entry + 5 extra for processing)
+        data_end_time = test_time
+        data_start_time = test_time - timedelta(minutes=35)
+        analysis_start_time = test_time - timedelta(minutes=30)  # Actual analysis window
         
-        print(f"Fetching data from {data_start_time} to {test_time}...")
-        trades_df = await self.data_manager.load_trades(symbol, data_start_time, test_time)
-        quotes_df = await self.data_manager.load_quotes(symbol, data_start_time, test_time)
+        print(f"Data fetch window: {data_start_time.strftime('%H:%M:%S')} to {data_end_time.strftime('%H:%M:%S')}")
+        print(f"Analysis window: {analysis_start_time.strftime('%H:%M:%S')} to {data_end_time.strftime('%H:%M:%S')} (30 minutes)")
+        
+        # Fetch data
+        print(f"\nFetching market data...")
+        trades_df = await self.data_manager.load_trades(symbol, data_start_time, data_end_time)
+        quotes_df = await self.data_manager.load_quotes(symbol, data_start_time, data_end_time)
         
         if trades_df.empty:
             print("ERROR: No trade data available")
             return
             
         print(f"\nData Summary:")
-        print(f"- Trades loaded: {len(trades_df)}")
-        print(f"- Quotes loaded: {len(quotes_df)}")
+        print(f"- Trades loaded: {len(trades_df):,}")
+        print(f"- Quotes loaded: {len(quotes_df):,}")
         
         # Process quotes
         print(f"\nProcessing quotes...")
@@ -79,9 +85,9 @@ class BidAskRatioTest:
             quote_count += 1
             
             if quote_count % 5000 == 0:
-                print(f"  Processed {quote_count} quotes...")
+                print(f"  Processed {quote_count:,} quotes...")
         
-        print(f"Total quotes processed: {quote_count}")
+        print(f"Total quotes processed: {quote_count:,}")
         
         # Process trades
         print(f"\nProcessing trades...")
@@ -105,14 +111,22 @@ class BidAskRatioTest:
             trades_processed += 1
             
             if trades_processed % 5000 == 0:
-                print(f"  Processed {trades_processed} trades, {len(completed_bars)} minute bars...")
+                print(f"  Processed {trades_processed:,} trades, {len(completed_bars)} minute bars...")
         
-        print(f"\nTotal trades processed: {trades_processed}")
+        print(f"\nTotal trades processed: {trades_processed:,}")
         print(f"Minute bars completed: {len(completed_bars)}")
         
         # Get results from tracker
         chart_data = tracker.get_chart_data(symbol)
-        self.chart_data = chart_data  # Store for chart display
+        
+        # Filter chart data to only include the 30-minute analysis window
+        filtered_chart_data = []
+        for point in chart_data:
+            point_time = datetime.fromisoformat(point['timestamp'])
+            if analysis_start_time <= point_time <= data_end_time:
+                filtered_chart_data.append(point)
+        
+        self.chart_data = filtered_chart_data  # Store filtered data for chart display
         latest_ratio = tracker.get_latest_ratio(symbol)
         summary_stats = tracker.get_summary_stats(symbol)
         
@@ -137,9 +151,12 @@ class BidAskRatioTest:
             if 'sync_stats' in summary_stats:
                 sync = summary_stats['sync_stats']
                 print(f"\nSync Statistics:")
-                print(f"  Total Trades: {sync.get('total_trades', 0)}")
-                print(f"  Synced Trades: {sync.get('synced_trades', 0)}")
-                print(f"  Failed Syncs: {sync.get('failed_syncs', 0)}")
+                print(f"  Total Trades: {sync.get('total_trades', 0):,}")
+                print(f"  Synced Trades: {sync.get('synced_trades', 0):,}")
+                print(f"  Failed Syncs: {sync.get('failed_syncs', 0):,}")
+                if sync.get('total_trades', 0) > 0:
+                    sync_rate = (sync.get('synced_trades', 0) / sync.get('total_trades', 1)) * 100
+                    print(f"  Sync Rate: {sync_rate:.1f}%")
             
             # Direction alignment
             print(f"\nTrade Direction: {direction}")
@@ -156,7 +173,10 @@ class BidAskRatioTest:
             print(f"{'Time':<10} {'Pressure':>10} {'Pos Vol':>12} {'Neg Vol':>12} {'Total Vol':>12} {'Classified':>12}")
             print("-" * 80)
             
-            for bar in completed_bars[-10:]:
+            # Filter to show only bars within the analysis window
+            recent_bars = [bar for bar in completed_bars if bar.timestamp >= analysis_start_time][-10:]
+            
+            for bar in recent_bars:
                 print(f"{bar.timestamp.strftime('%H:%M:%S'):<10} "
                       f"{bar.weighted_pressure:>10.3f} "
                       f"{bar.positive_volume:>12,.0f} "
@@ -165,22 +185,31 @@ class BidAskRatioTest:
                       f"{bar.classified_trades:>12}")
         
         # Show chart data visualization
-        if chart_data:
-            print(f"\nChart Data Points: {len(chart_data)}")
-            recent_chart = [p for p in chart_data[-30:]]
+        if self.chart_data:
+            print(f"\nChart Data Points: {len(self.chart_data)} (30-minute window)")
             
-            if recent_chart:
-                print(f"\nPressure Trend (5-minute intervals):")
-                for i in range(0, len(recent_chart), 5):
-                    point = recent_chart[i]
+            if len(self.chart_data) >= 5:
+                print(f"\nPressure Trend (5-minute samples):")
+                
+                # Sample every 5 minutes
+                sample_indices = list(range(0, len(self.chart_data), 5))
+                if len(self.chart_data) - 1 not in sample_indices:
+                    sample_indices.append(len(self.chart_data) - 1)  # Always include last point
+                
+                for idx in sample_indices:
+                    point = self.chart_data[idx]
                     time_str = datetime.fromisoformat(point['timestamp']).strftime('%H:%M')
                     pressure = point['buy_sell_ratio']
                     bar = '█' * int(abs(pressure) * 20)
                     
+                    # Calculate minutes from entry
+                    point_time = datetime.fromisoformat(point['timestamp'])
+                    mins_from_entry = int((point_time - test_time).total_seconds() / 60)
+                    
                     if pressure >= 0:
-                        print(f"{time_str} | {' '*20}|{bar:<20} {pressure:+.3f}")
+                        print(f"{time_str} ({mins_from_entry:3d}m) | {' '*20}|{bar:<20} {pressure:+.3f}")
                     else:
-                        print(f"{time_str} | {bar:>20}|{' '*20} {pressure:+.3f}")
+                        print(f"{time_str} ({mins_from_entry:3d}m) | {bar:>20}|{' '*20} {pressure:+.3f}")
         
         print(f"\n{'='*80}\n")
         
@@ -197,11 +226,13 @@ class BidAskRatioTest:
         sys.path.append(str(Path(__file__).parent))
         from chart import BidAskRatioChart
         
-        app = QApplication(sys.argv)
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication(sys.argv)
         
         # Create main window
         window = QMainWindow()
-        window.setWindowTitle(f"Bid/Ask Ratio Chart - {symbol} - {test_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        window.setWindowTitle(f"Bid/Ask Ratio Chart - {symbol} - Entry: {test_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
         window.setGeometry(100, 100, 1200, 800)
         
         # Create central widget with layout
@@ -209,10 +240,13 @@ class BidAskRatioTest:
         window.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
         
-        # Add title label
-        title = QLabel(f"{symbol} - {direction} - {test_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        # Add title label with time window info
+        start_time = test_time - timedelta(minutes=30)
+        title_text = (f"{symbol} - {direction} Trade Analysis\n"
+                     f"Window: {start_time.strftime('%H:%M:%S')} to {test_time.strftime('%H:%M:%S')} UTC (30 minutes)")
+        title = QLabel(title_text)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;")
+        title.setStyleSheet("font-size: 14px; font-weight: bold; padding: 10px;")
         layout.addWidget(title)
         
         # Create and add chart
@@ -223,7 +257,14 @@ class BidAskRatioTest:
         chart.update_data(self.chart_data)
         
         # Add entry marker at the 30-minute mark (end of data)
-        chart.add_marker(30, "Entry", "#ff0000")
+        if len(self.chart_data) > 0:
+            # Calculate actual minutes span
+            first_time = datetime.fromisoformat(self.chart_data[0]['timestamp'])
+            last_time = datetime.fromisoformat(self.chart_data[-1]['timestamp'])
+            total_minutes = (last_time - first_time).total_seconds() / 60
+            
+            # Add marker at the end
+            chart.add_marker(total_minutes, "Entry", "#ff0000")
         
         # Apply dark theme to window
         window.setStyleSheet("""
@@ -246,7 +287,7 @@ class BidAskRatioTest:
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description='Bid/Ask Ratio Analysis Test'
+        description='Bid/Ask Ratio Analysis Test - Analyzes order flow pressure for the 30 minutes before entry'
     )
     
     parser.add_argument(
@@ -260,7 +301,7 @@ def parse_arguments():
         '-t', '--time',
         type=str,
         default=None,
-        help='Analysis time in format "YYYY-MM-DD HH:MM:SS"'
+        help='Entry time in format "YYYY-MM-DD HH:MM:SS" (analyzes 30 minutes before this time)'
     )
     
     parser.add_argument(
@@ -274,7 +315,7 @@ def parse_arguments():
     parser.add_argument(
         '-c', '--chart',
         action='store_true',
-        help='Display chart after analysis'
+        help='Display interactive chart after analysis'
     )
     
     return parser.parse_args()
@@ -294,8 +335,10 @@ async def main():
             print("Please use format: YYYY-MM-DD HH:MM:SS")
             return
     else:
-        test_time = datetime.now(timezone.utc) - timedelta(minutes=30)
-        print(f"No time specified, using: {test_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        # Default to current time (will analyze 30 minutes before now)
+        test_time = datetime.now(timezone.utc)
+        print(f"No time specified, using current time: {test_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        print(f"Will analyze 30 minutes before this time")
     
     # Create tester and run
     tester = BidAskRatioTest()

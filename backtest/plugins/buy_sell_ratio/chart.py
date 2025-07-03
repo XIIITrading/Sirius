@@ -5,7 +5,7 @@ Standalone chart widget for visualizing buy/sell pressure with volume
 
 import numpy as np
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import pyqtgraph as pg
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 from PyQt6.QtCore import Qt, QTimer
@@ -129,6 +129,17 @@ class BidAskRatioChart(QWidget):
             plot.getAxis('bottom').setTextPen(pg.mkPen('#ffffff'))
             
             # Grid colors are already set via showGrid alpha parameter
+    
+    def update_from_data(self, chart_data: List[Dict[str, Any]]):
+        """
+        Standard method name for receiving data from dashboard.
+        This is what the dashboard expects to call.
+        
+        Args:
+            chart_data: List of dicts with data format from plugin
+        """
+        # Delegate to existing update_data method
+        self.update_data(chart_data)
     
     def update_data(self, chart_data: List[Dict]):
         """
@@ -262,6 +273,22 @@ class BidAskRatioChart(QWidget):
         
         self.ratio_plot.addItem(line)
         self.ratio_plot.addItem(text)
+    
+    def add_entry_marker(self, entry_time_iso: str):
+        """
+        Add entry marker based on ISO timestamp.
+        Matches the Impact Success pattern.
+        
+        Args:
+            entry_time_iso: Entry time in ISO format
+        """
+        # This assumes the entry time is at the end of the data (30 minutes)
+        self.add_marker(30, "Entry", "#ff0000")
+    
+    def clear_data(self):
+        """Clear all chart data (standard interface)"""
+        # Delegate to existing clear method
+        self.clear()
     
     def clear(self):
         """Clear all chart data"""

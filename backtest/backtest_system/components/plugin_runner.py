@@ -187,15 +187,10 @@ class PluginRunner:
         self.data_manager = data_manager
     
     async def run_single_plugin(self, plugin_name: str, symbol: str, 
-                               entry_time: datetime, direction: str,
-                               progress_callback: Optional[Callable[[int, str], None]] = None) -> Dict[str, Any]:
+                           entry_time: datetime, direction: str,
+                           progress_callback: Optional[Callable[[int, str], None]] = None) -> Dict[str, Any]:
         """
-        Run a single plugin with automatic progress tracking.
-        
-        Progress tracking works in three tiers:
-        1. If plugin implements run_analysis_with_progress - use it
-        2. If plugin is simple - use time-based estimation
-        3. If plugin is complex without progress - add suggestion to implement it
+        Run a single plugin and return its results without modification.
         """
         if plugin_name not in self.plugins:
             return {
@@ -211,18 +206,25 @@ class PluginRunner:
         self._set_current_plugin(plugin_name)
         
         try:
-            # Case 1: Plugin supports progress reporting
-            if plugin_meta.get('has_progress'):
+            # Check if plugin has run_analysis_with_data_manager method
+            if hasattr(plugin_module, 'run_analysis_with_data_manager'):
+                # Plugin expects data_manager to be passed
+                logger.info(f"Running {plugin_name} with data_manager support")
+                result = await plugin_module.run_analysis_with_data_manager(
+                    symbol, entry_time, direction, self.data_manager, progress_callback
+                )
+            
+            # Check if plugin supports progress reporting
+            elif plugin_meta.get('has_progress'):
                 logger.info(f"Running {plugin_name} with native progress support")
                 result = await plugin_module.run_analysis_with_progress(
                     symbol, entry_time, direction, progress_callback
                 )
                 
-            # Case 2: Complex plugin without progress support
+            # Complex plugin without progress support
             elif plugin_meta.get('is_complex'):
                 logger.info(f"Running complex plugin {plugin_name} with estimated progress")
                 
-                # Adjust time estimates for complex plugins
                 wrapper = ProgressWrapper(plugin_name, progress_callback)
                 wrapper.phase_times = {
                     'initialization': 3,
@@ -231,7 +233,6 @@ class PluginRunner:
                     'formatting': 2
                 }
                 
-                # Add warning about missing progress support
                 if progress_callback:
                     progress_callback(0, "Note: This plugin doesn't report detailed progress")
                 
@@ -239,17 +240,16 @@ class PluginRunner:
                     plugin_module.run_analysis, symbol, entry_time, direction
                 )
                 
-            # Case 3: Simple plugin with estimated progress
+            # Simple plugin with estimated progress
             else:
                 logger.info(f"Running simple plugin {plugin_name} with estimated progress")
                 
                 wrapper = ProgressWrapper(plugin_name, progress_callback)
-                # Use default time estimates
-                
                 result = await wrapper.run_with_estimated_progress(
                     plugin_module.run_analysis, symbol, entry_time, direction
                 )
             
+            # Return the result exactly as provided by the plugin
             return result
             
         except Exception as e:
@@ -257,7 +257,6 @@ class PluginRunner:
             import traceback
             traceback.print_exc()
             
-            # Call progress callback with error
             if progress_callback:
                 progress_callback(100, f"Error: {str(e)}")
             

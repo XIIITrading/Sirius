@@ -41907,3 +41907,6 @@ to 2025-07-01
 2025-07-03 14:12:29 - polygon.fetcher - INFO - Fetching ORCL 15min data from 2025-07-02 to 2025-07-02
 2025-07-03 14:12:29 - polygon.fetcher - INFO - Filled 2 small gaps in data
 2025-07-03 14:12:29 - polygon.fetcher - INFO - Returned 64 rows for ORCL 15min
+2025-07-03 14:22:41 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-03 14:25:35 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-03 14:25:42 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data

@@ -258,9 +258,9 @@ class BidAskRatioPlugin(BacktestPlugin):
         for bar in completed_bars[-10:]:  # Last 10 bars
             recent_bars_data.append([
                 bar.timestamp.strftime('%H:%M:%S'),
-                f"{bar.buy_sell_ratio:+.3f}",
-                f"{bar.buy_volume:,.0f}",
-                f"{bar.sell_volume:,.0f}",
+                f"{bar.weighted_pressure:+.3f}",    # Changed from bar.buy_sell_ratio
+                f"{bar.positive_volume:,.0f}",      # Changed from bar.buy_volume
+                f"{bar.negative_volume:,.0f}",      # Changed from bar.sell_volume
                 f"{bar.total_volume:,.0f}"
             ])
         
@@ -280,20 +280,10 @@ class BidAskRatioPlugin(BacktestPlugin):
         
         # Format chart data for visualization
         chart_config = {
-            'type': 'line',
-            'y_axis': {
-                'min': self.config['chart_y_min'],
-                'max': self.config['chart_y_max'],
-                'reference_lines': [
-                    {'value': line, 'style': 'dotted', 'color': '#666'} 
-                    for line in self.config['reference_lines']
-                ]
-            },
-            'x_axis': {
-                'type': 'time',
-                'range_minutes': 30
-            },
-            'data': chart_data
+            'module': 'backtest.plugins.buy_sell_ratio.chart',
+            'type': 'BidAskRatioChart',
+            'data': chart_data,
+            'entry_time': entry_time
         }
         
         return {
@@ -321,6 +311,6 @@ class BidAskRatioPlugin(BacktestPlugin):
                     'headers': ['Time', 'Ratio', 'Buy Vol', 'Sell Vol', 'Total Vol'],
                     'rows': recent_bars_data
                 },
-                'chart': chart_config
+                'chart_widget': chart_config
             }
         }

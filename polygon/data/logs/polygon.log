@@ -42015,3 +42015,88 @@ to 2025-07-01
 2025-07-03 21:16:25 - polygon.fetcher - INFO - Fetching ORCL 15min data from 2025-07-02 to 2025-07-02
 2025-07-03 21:16:25 - polygon.fetcher - INFO - Filled 2 small gaps in data
 2025-07-03 21:16:25 - polygon.fetcher - INFO - Returned 64 rows for ORCL 15min
+2025-07-03 21:43:56 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-03 21:59:33 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-03 21:59:49 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 21:59:50 - polygon.fetcher - INFO - Filled 44 small gaps in data
+2025-07-03 21:59:50 - polygon.fetcher - INFO - Returned 698 rows for ORCL 1min
+2025-07-03 21:59:50 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 21:59:50 - polygon.fetcher - INFO - Filled 44 small gaps in data
+2025-07-03 21:59:50 - polygon.fetcher - INFO - Returned 698 rows for ORCL 1min
+2025-07-03 21:59:51 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-01 to 2025-07-02
+2025-07-03 21:59:51 - polygon.fetcher - INFO - Filled 119 small gaps in data
+2025-07-03 21:59:51 - polygon.fetcher - INFO - Returned 1074 rows for ORCL 1min
+2025-07-03 21:59:51 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 21:59:52 - polygon.fetcher - INFO - Filled 44 small gaps in data
+2025-07-03 21:59:52 - polygon.fetcher - INFO - Returned 698 rows for ORCL 1min
+2025-07-03 21:59:52 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-01 to 2025-07-02
+2025-07-03 21:59:52 - polygon.fetcher - INFO - Filled 119 small gaps in data
+2025-07-03 21:59:52 - polygon.fetcher - INFO - Returned 774 rows for ORCL 1min
+2025-07-03 21:59:52 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-06-30 to 2025-07-02
+2025-07-03 21:59:53 - polygon.fetcher - INFO - Filled 168 small gaps in data
+2025-07-03 21:59:53 - polygon.fetcher - INFO - Returned 1397 rows for ORCL 1min
+2025-07-03 21:59:53 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 21:59:53 - polygon.fetcher - INFO - Filled 44 small gaps in data
+2025-07-03 21:59:53 - polygon.fetcher - INFO - Returned 533 rows for ORCL 1min
+2025-07-03 21:59:54 - polygon.fetcher - INFO - Fetching ORCL 5min data from 2025-07-02 to 2025-07-02
+2025-07-03 21:59:55 - polygon.fetcher - INFO - Filled 10 small gaps in data
+2025-07-03 21:59:55 - polygon.fetcher - INFO - Returned 134 rows for ORCL 5min
+2025-07-03 21:59:55 - polygon.fetcher - INFO - Fetching ORCL 15min data from 2025-07-02 to 2025-07-02
+2025-07-03 21:59:56 - polygon.fetcher - INFO - Filled 2 small gaps in data
+2025-07-03 21:59:56 - polygon.fetcher - INFO - Returned 64 rows for ORCL 15min
+2025-07-03 22:07:35 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-03 22:09:28 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-03 22:16:42 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-03 22:17:40 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:17:41 - polygon.fetcher - INFO - Filled 44 small gaps in data
+2025-07-03 22:17:41 - polygon.fetcher - INFO - Returned 698 rows for ORCL 1min
+2025-07-03 22:17:41 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:17:41 - polygon.fetcher - INFO - Filled 44 small gaps in data
+2025-07-03 22:17:41 - polygon.fetcher - INFO - Returned 698 rows for ORCL 1min
+2025-07-03 22:17:41 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-01 to 2025-07-02
+2025-07-03 22:17:42 - polygon.fetcher - INFO - Filled 119 small gaps in data
+2025-07-03 22:17:42 - polygon.fetcher - INFO - Returned 1069 rows for ORCL 1min
+2025-07-03 22:17:42 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:17:42 - polygon.fetcher - INFO - Filled 44 small gaps in data
+2025-07-03 22:17:42 - polygon.fetcher - INFO - Returned 698 rows for ORCL 1min
+2025-07-03 22:17:42 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-01 to 2025-07-02
+2025-07-03 22:17:43 - polygon.fetcher - INFO - Filled 119 small gaps in data
+2025-07-03 22:17:43 - polygon.fetcher - INFO - Returned 769 rows for ORCL 1min
+2025-07-03 22:17:43 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-06-30 to 2025-07-02
+2025-07-03 22:17:44 - polygon.fetcher - INFO - Filled 168 small gaps in data
+2025-07-03 22:17:44 - polygon.fetcher - INFO - Returned 1394 rows for ORCL 1min
+2025-07-03 22:17:44 - polygon.fetcher - INFO - Fetching ORCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:17:44 - polygon.fetcher - INFO - Filled 44 small gaps in data
+2025-07-03 22:17:44 - polygon.fetcher - INFO - Returned 528 rows for ORCL 1min
+2025-07-03 22:17:45 - polygon.fetcher - INFO - Fetching ORCL 5min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:17:45 - polygon.fetcher - INFO - Filled 10 small gaps in data
+2025-07-03 22:17:45 - polygon.fetcher - INFO - Returned 133 rows for ORCL 5min
+2025-07-03 22:17:46 - polygon.fetcher - INFO - Fetching ORCL 15min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:17:46 - polygon.fetcher - INFO - Filled 2 small gaps in data
+2025-07-03 22:17:46 - polygon.fetcher - INFO - Returned 64 rows for ORCL 15min
+2025-07-03 22:33:42 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:33:42 - polygon.fetcher - INFO - Filled 51 small gaps in data
+2025-07-03 22:33:42 - polygon.fetcher - INFO - Returned 901 rows for CRCL 1min
+2025-07-03 22:33:42 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:33:43 - polygon.fetcher - INFO - Filled 51 small gaps in data
+2025-07-03 22:33:43 - polygon.fetcher - INFO - Returned 901 rows for CRCL 1min
+2025-07-03 22:33:43 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-07-01 to 2025-07-02
+2025-07-03 22:33:43 - polygon.fetcher - INFO - Filled 100 small gaps in data
+2025-07-03 22:33:43 - polygon.fetcher - INFO - Returned 1441 rows for CRCL 1min
+2025-07-03 22:33:43 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:33:44 - polygon.fetcher - INFO - Filled 51 small gaps in data
+2025-07-03 22:33:44 - polygon.fetcher - INFO - Returned 901 rows for CRCL 1min
+2025-07-03 22:33:44 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-07-01 to 2025-07-02
+2025-07-03 22:33:45 - polygon.fetcher - INFO - Filled 100 small gaps in data
+2025-07-03 22:33:45 - polygon.fetcher - INFO - Returned 1141 rows for CRCL 1min
+2025-07-03 22:33:45 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-30 to 2025-07-02
+2025-07-03 22:33:45 - polygon.fetcher - INFO - Filled 119 small gaps in data
+2025-07-03 22:33:45 - polygon.fetcher - INFO - Returned 1844 rows for CRCL 1min
+2025-07-03 22:33:45 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:33:46 - polygon.fetcher - INFO - Filled 51 small gaps in data
+2025-07-03 22:33:46 - polygon.fetcher - INFO - Returned 590 rows for CRCL 1min
+2025-07-03 22:33:46 - polygon.fetcher - INFO - Fetching CRCL 5min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:33:46 - polygon.fetcher - INFO - Filled 2 small gaps in data
+2025-07-03 22:33:46 - polygon.fetcher - INFO - Returned 139 rows for CRCL 5min
+2025-07-03 22:33:46 - polygon.fetcher - INFO - Fetching CRCL 15min data from 2025-07-02 to 2025-07-02
+2025-07-03 22:33:47 - polygon.fetcher - INFO - Returned 64 rows for CRCL 15min

@@ -49,7 +49,7 @@ PLUGIN_RUN_ORDER = [
     "Tick Flow Analysis",
     "Bid/Ask Ratio Tracker",
     "Impact Success",
-    "Net Large Volume" 
+    "Large Orders Grid"  # Updated from "Large Orders"
 ]
 
 
@@ -136,11 +136,15 @@ class BacktestDashboard(QMainWindow):
         self.plugin_status = {}
         self.progress_widgets = {}
         
-        # Chart containers
+        # Chart containers - updated for new layout
         self.chart_widgets = {}
+        self.large_orders_grid_chart = None  # Add this
+        self.buy_sell_chart = None
+        self.impact_success_chart = None  # Add this
         
         # Store for chart data that might get corrupted by signals
         self.pending_chart_updates = {}
+        self.pending_grid_updates = {}  # Add for grid updates
         
         # Get available plugins and sort them according to our order
         self.available_plugins = self._get_ordered_plugins()
@@ -351,26 +355,26 @@ class BacktestDashboard(QMainWindow):
         charts_layout = QHBoxLayout(charts_widget)
         charts_layout.setSpacing(10)
         
-        # Chart 1: Buy/Sell Ratio Chart
+        # Chart 1: Large Orders Grid (LEFT)
+        large_orders_container = QGroupBox("Large Orders Grid")
+        large_orders_layout = QVBoxLayout(large_orders_container)
+        self.large_orders_grid_chart = ChartPlaceholder("Large Orders Grid")
+        large_orders_layout.addWidget(self.large_orders_grid_chart)
+        charts_layout.addWidget(large_orders_container, 1)  # stretch factor 1
+        
+        # Chart 2: Buy/Sell Ratio Chart (MIDDLE)
         buy_sell_container = QGroupBox("Buy/Sell Ratio")
         buy_sell_layout = QVBoxLayout(buy_sell_container)
         self.buy_sell_chart = ChartPlaceholder("Buy/Sell Ratio Chart")
         buy_sell_layout.addWidget(self.buy_sell_chart)
         charts_layout.addWidget(buy_sell_container, 1)  # stretch factor 1
         
-        # Chart 2: Large Order Viewer
-        large_order_container = QGroupBox("Large Orders")
-        large_order_layout = QVBoxLayout(large_order_container)
-        self.large_order_chart = ChartPlaceholder("Large Order Viewer")
-        large_order_layout.addWidget(self.large_order_chart)
-        charts_layout.addWidget(large_order_container, 1)  # stretch factor 1
-        
-        # Chart 3: Additional Analysis
-        additional_container = QGroupBox("Additional Analysis")
-        additional_layout = QVBoxLayout(additional_container)
-        self.additional_chart = ChartPlaceholder("Additional Analysis Chart")
-        additional_layout.addWidget(self.additional_chart)
-        charts_layout.addWidget(additional_container, 1)  # stretch factor 1
+        # Chart 3: Impact Success (RIGHT)
+        impact_container = QGroupBox("Impact Success")
+        impact_layout = QVBoxLayout(impact_container)
+        self.impact_success_chart = ChartPlaceholder("Impact Success Chart")
+        impact_layout.addWidget(self.impact_success_chart)
+        charts_layout.addWidget(impact_container, 1)  # stretch factor 1
         
         main_layout.addWidget(charts_widget)
         
@@ -533,10 +537,20 @@ class BacktestDashboard(QMainWindow):
             result_with_chart['display_data']['chart_widget'] = self.pending_chart_updates.pop(plugin_name)
             
             # Update chart with the complete data
-            self._update_chart_if_applicable(plugin_name, result_with_chart)
+            self._update_display_if_applicable(plugin_name, result_with_chart)
+        elif plugin_name in self.pending_grid_updates:
+            logger.info(f"Found pending grid update for {plugin_name}")
+            # Create a copy of the result and add the grid data
+            result_with_grid = result.copy()
+            if 'display_data' not in result_with_grid:
+                result_with_grid['display_data'] = {}
+            result_with_grid['display_data']['grid_widget'] = self.pending_grid_updates.pop(plugin_name)
+            
+            # Update grid with the complete data
+            self._update_display_if_applicable(plugin_name, result_with_grid)
         else:
             # Original behavior - try with the result as-is
-            self._update_chart_if_applicable(plugin_name, result)
+            self._update_display_if_applicable(plugin_name, result)
     
     def on_plugin_error(self, plugin_name: str, error_message: str):
         """Handle plugin error"""
@@ -550,31 +564,99 @@ class BacktestDashboard(QMainWindow):
                 error_message[:50] + "..." if len(error_message) > 50 else error_message
             )
     
-    def _update_chart_if_applicable(self, plugin_name: str, result: dict):
-        """Update chart if plugin provides chart data"""
-        logger.info(f"Checking chart update for {plugin_name}")
+    def _update_display_if_applicable(self, plugin_name: str, result: dict):
+        """Update chart or grid if plugin provides display data"""
+        logger.info(f"Checking display update for {plugin_name}")
         
         display_data = result.get('display_data', {})
+        
+        # Check for chart widget
         chart_config = display_data.get('chart_widget')
+        if chart_config:
+            self._handle_chart_display(plugin_name, chart_config)
         
-        if not chart_config:
-            logger.info(f"No chart_widget in display_data for {plugin_name}")
-            return
+        # Check for grid widget
+        grid_config = display_data.get('grid_widget')
+        if grid_config:
+            self._handle_grid_display(plugin_name, grid_config)
+    
+    def _handle_grid_display(self, plugin_name: str, grid_config: dict):
+        """Handle grid display for plugins that provide grid data"""
+        logger.info(f"Found grid config for {plugin_name}")
         
-        logger.info(f"Found chart config for {plugin_name}: module={chart_config.get('module')}, type={chart_config.get('type')}")
-        logger.info(f"Chart data points: {len(chart_config.get('data', []))}")
-        
-        # Determine which chart container to update based on plugin name
+        # Mapping for grid plugins
         target_mapping = {
-            "Bid/Ask Ratio Tracker": ('buy_sell_chart', 'buy_sell_ratio'),
-            "Impact Success": ('large_order_chart', 'impact_success'),
-            "Net Large Volume": ('additional_chart', 'net_large_volume')
+            "Large Orders Grid": ('large_orders_grid_chart', 'large_orders_grid')
         }
         
         if plugin_name not in target_mapping:
-            logger.warning(f"No target mapping for plugin: {plugin_name}")
+            logger.warning(f"No grid target mapping for plugin: {plugin_name}")
             return
+        
+        target_attr, grid_key = target_mapping[plugin_name]
+        
+        try:
+            # Get the target container
+            target_placeholder = getattr(self, target_attr)
+            target_container = target_placeholder.parent()
             
+            if not target_container:
+                logger.error(f"No parent container for {target_attr}")
+                return
+            
+            # Import the grid module and class
+            module = importlib.import_module(grid_config['module'])
+            GridClass = getattr(module, grid_config['type'])
+            
+            logger.info(f"Successfully imported {GridClass.__name__} from {grid_config['module']}")
+            
+            # Create grid instance
+            grid = GridClass(grid_config.get('config', {}))
+            
+            # Update grid with data
+            grid_data = grid_config.get('data', [])
+            if grid_data:
+                grid.update_from_data(grid_data)
+                logger.info(f"Updated grid with {len(grid_data)} items")
+            
+            # Replace placeholder with real grid
+            layout = target_container.layout()
+            if not layout:
+                logger.error("Target container has no layout")
+                return
+            
+            # Remove old placeholder
+            layout.removeWidget(target_placeholder)
+            target_placeholder.deleteLater()
+            
+            # Add real grid
+            setattr(self, target_attr, grid)
+            layout.addWidget(grid)
+            
+            # Store reference
+            self.chart_widgets[grid_key] = grid
+            
+            logger.info(f"✅ Successfully loaded {plugin_name} grid")
+            
+        except Exception as e:
+            logger.error(f"Error loading grid for {plugin_name}: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _handle_chart_display(self, plugin_name: str, chart_config: dict):
+        """Handle chart display for plugins that provide chart data"""
+        logger.info(f"Found chart config for {plugin_name}")
+        
+        # Mapping for chart plugins (updated for new layout)
+        target_mapping = {
+            "Bid/Ask Ratio Tracker": ('buy_sell_chart', 'buy_sell_ratio'),
+            "Impact Success": ('impact_success_chart', 'impact_success')
+        }
+        
+        if plugin_name not in target_mapping:
+            logger.warning(f"No chart target mapping for plugin: {plugin_name}")
+            return
+        
         target_chart_attr, chart_key = target_mapping[plugin_name]
         
         # Get the target container
@@ -677,6 +759,7 @@ class BacktestDashboard(QMainWindow):
         # Reset plugin status and pending updates
         self.plugin_status.clear()
         self.pending_chart_updates.clear()
+        self.pending_grid_updates.clear()  # Clear grid updates too
         
         # Update status
         plugin_text = f"{len(selected_plugins)} plugins" if len(selected_plugins) > 1 else selected_plugins[0]
@@ -734,6 +817,13 @@ class BacktestDashboard(QMainWindow):
                         if chart_config and 'data' in chart_config and len(chart_config['data']) > 0:
                             logger.info(f"Storing chart data for {plugin_name} ({len(chart_config['data'])} points)")
                             self.pending_chart_updates[plugin_name] = chart_config
+                    
+                    # Check if result has grid data and store it separately
+                    if 'display_data' in result and 'grid_widget' in result['display_data']:
+                        grid_config = result['display_data']['grid_widget']
+                        if grid_config and 'data' in grid_config and len(grid_config['data']) > 0:
+                            logger.info(f"Storing grid data for {plugin_name} ({len(grid_config['data'])} items)")
+                            self.pending_grid_updates[plugin_name] = grid_config
                     
                     # Emit completion signal
                     self.progress_signals.plugin_completed.emit(plugin_name, result)

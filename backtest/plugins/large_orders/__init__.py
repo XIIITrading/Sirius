@@ -1,0 +1,117 @@
+"""
+Large Orders Grid Plugin
+Displays successful large order trades in a grid format
+"""
+
+import asyncio
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, Callable
+
+logger = logging.getLogger(__name__)
+
+# Plugin metadata
+PLUGIN_NAME = "Large Orders Grid"
+PLUGIN_VERSION = "1.0.0"
+PLUGIN_DESCRIPTION = "Displays successful large order trades with impact analysis"
+
+
+async def run_analysis(symbol: str, entry_time: datetime, direction: str) -> Dict[str, Any]:
+    """
+    Run Large Orders Grid analysis.
+    
+    Args:
+        symbol: Stock symbol
+        entry_time: Entry time for analysis
+        direction: Trade direction (LONG/SHORT)
+        
+    Returns:
+        Analysis results dictionary
+    """
+    try:
+        # Import here to avoid circular imports
+        from .plugin import Plugin
+        
+        # Create plugin instance
+        plugin = Plugin()
+        
+        # Get data manager
+        from backtest.data.polygon_data_manager import PolygonDataManager
+        data_manager = PolygonDataManager(disable_polygon_cache=True)
+        
+        # Run the analysis
+        result = await plugin.run(symbol, entry_time, direction, data_manager)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in Large Orders Grid analysis: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        return {
+            'plugin_name': PLUGIN_NAME,
+            'timestamp': entry_time,
+            'symbol': symbol,
+            'error': str(e),
+            'signal': {'direction': 'ERROR', 'strength': 0, 'confidence': 0}
+        }
+
+
+async def run_analysis_with_progress(symbol: str, entry_time: datetime, direction: str,
+                                   progress_callback: Optional[Callable[[int, str], None]] = None) -> Dict[str, Any]:
+    """
+    Run Large Orders Grid analysis with progress tracking.
+    
+    Args:
+        symbol: Stock symbol
+        entry_time: Entry time for analysis
+        direction: Trade direction (LONG/SHORT)
+        progress_callback: Progress callback function
+        
+    Returns:
+        Analysis results dictionary
+    """
+    try:
+        # Import here to avoid circular imports
+        from .plugin import Plugin
+        from backtest.data.polygon_data_manager import PolygonDataManager
+        
+        # Create plugin instance
+        plugin = Plugin()
+        
+        # Create data manager
+        data_manager = PolygonDataManager(disable_polygon_cache=True)
+        data_manager.set_current_plugin(PLUGIN_NAME)
+        
+        # Run with progress
+        result = await plugin.run(symbol, entry_time, direction, data_manager, progress_callback)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in Large Orders Grid analysis: {e}")
+        
+        if progress_callback:
+            progress_callback(100, f"Error: {str(e)}")
+            
+        return {
+            'plugin_name': PLUGIN_NAME,
+            'timestamp': entry_time,
+            'symbol': symbol,
+            'error': str(e),
+            'signal': {'direction': 'ERROR', 'strength': 0, 'confidence': 0}
+        }
+
+
+async def run_analysis_with_data_manager(symbol: str, entry_time: datetime, direction: str, 
+                                       data_manager: Any, progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+    """Entry point with provided data_manager - preferred method"""
+    from .plugin import Plugin
+    plugin = Plugin()
+    return await plugin.run(symbol, entry_time, direction, data_manager, progress_callback)
+
+
+# Export everything needed
+__all__ = ['run_analysis', 'run_analysis_with_progress', 'run_analysis_with_data_manager', 
+           'PLUGIN_NAME', 'PLUGIN_VERSION']

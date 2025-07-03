@@ -4,7 +4,7 @@ Shows net buy/sell pressure from large orders over time
 """
 
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore
+from pyqtgraph.Qt import QtCore, QtGui
 import numpy as np
 from collections import deque
 from datetime import datetime, timedelta
@@ -12,6 +12,11 @@ from typing import List, Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Configure pyqtgraph for better appearance
+pg.setConfigOptions(antialias=True)
+pg.setConfigOption('background', '#1e1e1e')
+pg.setConfigOption('foreground', '#ffffff')
 
 
 class ImpactSuccessChart(pg.PlotWidget):
@@ -61,14 +66,21 @@ class ImpactSuccessChart(pg.PlotWidget):
         
     def setup_chart(self):
         """Configure chart appearance and settings"""
+        # Set background to match Buy/Sell Ratio chart
+        self.setBackground('#1e1e1e')
+        self.getViewBox().setBackgroundColor('#2b2b2b')
+        
         # Set title and labels
         title = "Large Order Cumulative Pressure" if self.show_cumulative else "Large Order Net Pressure"
-        self.setTitle(title, color='w', size='12pt')
-        self.setLabel('left', 'Volume Delta', color='w', size='10pt')
-        self.setLabel('bottom', 'Minutes from Entry', color='w', size='10pt')
+        self.setTitle(title, color='#ffffff', size='12pt')
+        self.setLabel('left', 'Volume Delta', color='#ffffff', size='10pt')
+        self.setLabel('bottom', 'Minutes from Entry', color='#ffffff', size='10pt')
         
-        # Set background
-        self.setBackground('k')
+        # Set axis colors
+        self.getAxis('left').setPen(pg.mkPen('#ffffff'))
+        self.getAxis('bottom').setPen(pg.mkPen('#ffffff'))
+        self.getAxis('left').setTextPen(pg.mkPen('#ffffff'))
+        self.getAxis('bottom').setTextPen(pg.mkPen('#ffffff'))
         
         # Enable anti-aliasing
         self.setAntialiasing(True)
@@ -88,14 +100,26 @@ class ImpactSuccessChart(pg.PlotWidget):
         self.zero_line = pg.InfiniteLine(
             pos=0,
             angle=0,
-            pen=pg.mkPen('w', width=2, style=QtCore.Qt.PenStyle.DashLine),
+            pen=pg.mkPen('#ffffff', width=1, style=QtCore.Qt.PenStyle.DashLine),
             movable=False
         )
         self.addItem(self.zero_line)
         
+        # Add other reference lines similar to Buy/Sell Ratio chart
+        reference_levels = [-5000, -2500, 2500, 5000]  # Adjust based on your data scale
+        for level in reference_levels:
+            pen = pg.mkPen(color='#666666', width=1, style=QtCore.Qt.PenStyle.DotLine)
+            line = pg.InfiniteLine(
+                pos=level,
+                angle=0,
+                pen=pen,
+                movable=False
+            )
+            self.addItem(line)
+        
         # Main pressure line
         self.pressure_line = self.plot(
-            pen=pg.mkPen(color=(255, 255, 255), width=2),
+            pen=pg.mkPen(color='#00ff00', width=2),  # Green default, matching Buy/Sell
             name='Net Pressure' if not self.show_cumulative else 'Cumulative Pressure'
         )
         
@@ -108,7 +132,7 @@ class ImpactSuccessChart(pg.PlotWidget):
         # Text items for current values
         self.current_text = pg.TextItem(
             text='',
-            color=(255, 255, 255),
+            color='#ffffff',
             anchor=(0, 1),
             fill=(0, 0, 0, 180)
         )
@@ -116,7 +140,7 @@ class ImpactSuccessChart(pg.PlotWidget):
         
         self.volume_text = pg.TextItem(
             text='',
-            color=(255, 255, 255),
+            color='#ffffff',
             anchor=(0, 0),
             fill=(0, 0, 0, 180)
         )
@@ -125,25 +149,26 @@ class ImpactSuccessChart(pg.PlotWidget):
         # Time reference text
         self.time_text = pg.TextItem(
             text='',
-            color=(255, 255, 255),
+            color='#ffffff',
             anchor=(1, 1),
             fill=(0, 0, 0, 180)
         )
         self.addItem(self.time_text)
         
-        # Scatter points for large orders
+        # Scatter points for large orders - matching dashboard colors
+        # Fix: Use QtGui.QColor for creating colors with alpha
         self.buy_scatter = pg.ScatterPlotItem(
             size=8,
-            pen=pg.mkPen(None),
-            brush=pg.mkBrush(0, 255, 0, 120),
+            pen=None,  # No pen for scatter points
+            brush=QtGui.QColor(13, 115, 119, 120),  # Dashboard teal color with alpha
             symbol='o'
         )
         self.addItem(self.buy_scatter)
         
         self.sell_scatter = pg.ScatterPlotItem(
             size=8,
-            pen=pg.mkPen(None),
-            brush=pg.mkBrush(255, 0, 0, 120),
+            pen=None,  # No pen for scatter points
+            brush=QtGui.QColor(255, 68, 68, 120),  # Dashboard red color with alpha
             symbol='o'
         )
         self.addItem(self.sell_scatter)
@@ -238,17 +263,17 @@ class ImpactSuccessChart(pg.PlotWidget):
             negative_sum = np.abs(np.sum(y_data[y_data < 0]))
             
             if positive_sum > negative_sum:
-                # Overall bullish
-                self.pressure_line.setPen(pg.mkPen(color=(0, 255, 0), width=2))
-                fill_color = (0, 255, 0, 30)
+                # Overall bullish - use dashboard teal color
+                self.pressure_line.setPen(pg.mkPen(color='#0d7377', width=2))
+                fill_color = QtGui.QColor(13, 115, 119, 30)  # Teal with transparency
             elif negative_sum > positive_sum:
-                # Overall bearish
-                self.pressure_line.setPen(pg.mkPen(color=(255, 0, 0), width=2))
-                fill_color = (255, 0, 0, 30)
+                # Overall bearish - use dashboard red color
+                self.pressure_line.setPen(pg.mkPen(color='#ff4444', width=2))
+                fill_color = QtGui.QColor(255, 68, 68, 30)  # Red with transparency
             else:
-                # Neutral
-                self.pressure_line.setPen(pg.mkPen(color=(255, 255, 255), width=2))
-                fill_color = (255, 255, 255, 30)
+                # Neutral - use white
+                self.pressure_line.setPen(pg.mkPen(color='#ffffff', width=2))
+                fill_color = QtGui.QColor(255, 255, 255, 30)  # White with transparency
             
             # Create fill between curve and zero
             self.fill_item = pg.FillBetweenItem(self.pressure_line, self.zero_curve, brush=fill_color)
@@ -331,14 +356,14 @@ class ImpactSuccessChart(pg.PlotWidget):
         
         axis.setTicks([ticks])
     
-    def add_marker(self, minute: float, label: str, color: str = '#ffffff'):
+    def add_marker(self, minute: float, label: str, color: str = '#ff0000'):
         """
         Add a vertical marker at specific time.
         
         Args:
             minute: Minute from start (0-30)
             label: Label for marker
-            color: Marker color
+            color: Marker color (default red to match Buy/Sell chart)
         """
         # Convert to our coordinate system (negative minutes from entry)
         marker_x = minute - 30
@@ -365,7 +390,7 @@ class ImpactSuccessChart(pg.PlotWidget):
         """Toggle between cumulative and period pressure views"""
         self.show_cumulative = not self.show_cumulative
         title = "Large Order Cumulative Pressure" if self.show_cumulative else "Large Order Net Pressure"
-        self.setTitle(title, color='w', size='12pt')
+        self.setTitle(title, color='#ffffff', size='12pt')
         self.pressure_line.setName('Cumulative Pressure' if self.show_cumulative else 'Net Pressure')
         self.update_display()
     
@@ -438,7 +463,7 @@ if __name__ == '__main__':
     chart.update_from_data(test_data)
     
     # Add entry marker
-    chart.add_marker(30, "Entry", "#ffff00")
+    chart.add_marker(30, "Entry", "#ff0000")
     
     # Start event loop
     sys.exit(app.exec())

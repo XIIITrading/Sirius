@@ -128,5 +128,135 @@
     "cached_at": "2025-07-02T16:57:12.738195+00:00",
     "data_points": 26879,
     "cache_key": "735d69ea7e2baa39b60a15c552836515"
+  },
+  "574703d2460303956ca7172d7d3c1db1": {
+    "symbol": "TSLA",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-23T15:30:00+00:00",
+    "end_time": "2025-06-23T17:30:00+00:00",
+    "cached_at": "2025-07-02T17:56:46.805669+00:00",
+    "data_points": 614229,
+    "cache_key": "574703d2460303956ca7172d7d3c1db1"
+  },
+  "d9eff13be3238375d5ef4ca6b9bc0113": {
+    "symbol": "TSLA",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-23T15:30:00+00:00",
+    "end_time": "2025-06-23T17:30:00+00:00",
+    "cached_at": "2025-07-02T17:56:57.980889+00:00",
+    "data_points": 371765,
+    "cache_key": "d9eff13be3238375d5ef4ca6b9bc0113"
+  },
+  "27ea901dd1f588d6ae5d6e6243b3f1e5": {
+    "symbol": "TSLA",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T15:45:00+00:00",
+    "end_time": "2025-06-27T17:45:00+00:00",
+    "cached_at": "2025-07-02T23:28:39.173454+00:00",
+    "data_points": 160920,
+    "cache_key": "27ea901dd1f588d6ae5d6e6243b3f1e5"
+  },
+  "7b3c4a86e4a790f86bb04972b1466cea": {
+    "symbol": "TSLA",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T15:45:00+00:00",
+    "end_time": "2025-06-27T17:45:00+00:00",
+    "cached_at": "2025-07-02T23:28:41.748685+00:00",
+    "data_points": 84430,
+    "cache_key": "7b3c4a86e4a790f86bb04972b1466cea"
+  },
+  "cbd488baad5e0de73cef3a37b2b1f85b": {
+    "symbol": "TSLA",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T17:00:00+00:00",
+    "end_time": "2025-06-27T17:45:00+00:00",
+    "cached_at": "2025-07-02T23:46:34.952566+00:00",
+    "data_points": 51624,
+    "cache_key": "cbd488baad5e0de73cef3a37b2b1f85b"
+  },
+  "31d466ba244aded05fc5e0ec1289a425": {
+    "symbol": "TSLA",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T17:00:00+00:00",
+    "end_time": "2025-06-27T17:45:00+00:00",
+    "cached_at": "2025-07-02T23:46:36.020875+00:00",
+    "data_points": 27683,
+    "cache_key": "31d466ba244aded05fc5e0ec1289a425"
+  },
+  "551b8caf0a8099984f9622a3e300bb20": {
+    "symbol": "TSLA",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T17:10:00+00:00",
+    "end_time": "2025-06-27T17:45:00+00:00",
+    "cached_at": "2025-07-03T13:22:18.697200+00:00",
+    "data_points": 41953,
+    "cache_key": "551b8caf0a8099984f9622a3e300bb20"
+  },
+  "c520fbb4dea597ba7dbb178a765c071b": {
+    "symbol": "TSLA",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T17:10:00+00:00",
+    "end_time": "2025-06-27T17:45:00+00:00",
+    "cached_at": "2025-07-03T13:22:19.726733+00:00",
+    "data_points": 22384,
+    "cache_key": "c520fbb4dea597ba7dbb178a765c071b"
+  },
+  "dde48e79c585029efea2fb249f844c65": {
+    "symbol": "TSLA",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T17:20:00+00:00",
+    "end_time": "2025-06-27T17:55:00+00:00",
+    "cached_at": "2025-07-03T13:28:51.461394+00:00",
+    "data_points": 67403,
+    "cache_key": "dde48e79c585029efea2fb249f844c65"
+  },
+  "3292d72bb48309dfea273dbd46b13394": {
+    "symbol": "TSLA",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T17:20:00+00:00",
+    "end_time": "2025-06-27T17:55:00+00:00",
+    "cached_at": "2025-07-03T13:28:52.643887+00:00",
+    "data_points": 37807,
+    "cache_key": "3292d72bb48309dfea273dbd46b13394"
+  },
+  "58f5c8622e69c3a51ace55052ac3b28d": {
+    "symbol": "TSLA",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T17:35:00.324000+00:00",
+    "end_time": "2025-06-27T17:40:00.324000+00:00",
+    "cached_at": "2025-07-03T14:08:36.690003+00:00",
+    "data_points": 6383,
+    "cache_key": "58f5c8622e69c3a51ace55052ac3b28d"
+  },
+  "a76ca07c64935cfdb2522e46efeb6c70": {
+    "symbol": "ORCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-07-02T13:34:00.954000+00:00",
+    "end_time": "2025-07-02T14:09:00.954000+00:00",
+    "cached_at": "2025-07-03T14:12:38.603765+00:00",
+    "data_points": 18698,
+    "cache_key": "a76ca07c64935cfdb2522e46efeb6c70"
+  },
+  "7650b0736b5fab6fad9f66dd58395db2": {
+    "symbol": "ORCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-07-02T13:34:00.954000+00:00",
+    "end_time": "2025-07-02T14:09:00.954000+00:00",
+    "cached_at": "2025-07-03T14:12:39.437184+00:00",
+    "data_points": 6191,
+    "cache_key": "7650b0736b5fab6fad9f66dd58395db2"
   }
 }

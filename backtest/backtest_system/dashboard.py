@@ -1,9 +1,13 @@
 """
-Backtest Dashboard with Simplified Plugin Selection and Custom Ordering
+Backtest Dashboard with Enhanced Layout
+- Header: Input controls
+- Middle: Results grid (left) | Charts (right)
+- Bottom: Three analysis grids (HVN, Order Block, Supply/Demand)
 """
 
 import asyncio
 import logging
+import importlib
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Callable
 from pathlib import Path
@@ -15,7 +19,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QSplitter, QTableWidget, QTableWidgetItem,
     QTextEdit, QProgressBar, QMessageBox, QCheckBox,
     QListWidget, QListWidgetItem, QAbstractItemView,
-    QScrollArea
+    QScrollArea, QTabWidget, QHeaderView
 )
 from PyQt6.QtCore import Qt, QDateTime, pyqtSignal, QObject
 
@@ -30,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 # Define the order in which plugins should run
 PLUGIN_RUN_ORDER = [
+   
     "1-Min EMA Crossover",
     "5-Min EMA Crossover", 
     "15-Min EMA Crossover",
@@ -41,7 +46,8 @@ PLUGIN_RUN_ORDER = [
     "15-Min Statistical Trend",
     "1-Min Bid/Ask Analysis",
     "Bid/Ask Imbalance Analysis",
-    "Tick Flow Analysis"
+    "Tick Flow Analysis",
+     "Bid/Ask Ratio Tracker"
 ]
 
 
@@ -61,8 +67,52 @@ class ProgressSignals(QObject):
     plugin_error = pyqtSignal(str, str)  # plugin_name, error_message
 
 
+class ChartPlaceholder(QWidget):
+    """Placeholder widget for charts"""
+    def __init__(self, title: str):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        label = QLabel(title)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet("""
+            QLabel {
+                background-color: #2b2b2b;
+                border: 1px solid #444;
+                padding: 20px;
+                font-size: 14px;
+                color: #888;
+            }
+        """)
+        layout.addWidget(label)
+
+
+class AnalysisGrid(QTableWidget):
+    """Base class for analysis grids"""
+    def __init__(self, title: str):
+        super().__init__()
+        self.title = title
+        self.init_ui()
+        
+    def init_ui(self):
+        """Initialize the grid UI"""
+        # Set some default properties
+        self.setAlternatingRowColors(True)
+        self.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.horizontalHeader().setStretchLastSection(True)
+        
+        # Add placeholder data
+        self.setColumnCount(4)
+        self.setRowCount(5)
+        self.setHorizontalHeaderLabels(['Column 1', 'Column 2', 'Column 3', 'Column 4'])
+        
+        # Add some placeholder data
+        for i in range(5):
+            for j in range(4):
+                self.setItem(i, j, QTableWidgetItem(f"{self.title} {i},{j}"))
+
+
 class BacktestDashboard(QMainWindow):
-    """Main dashboard with simplified plugin selection and progress tracking"""
+    """Main dashboard with enhanced layout"""
     
     def __init__(self):
         super().__init__()
@@ -75,16 +125,25 @@ class BacktestDashboard(QMainWindow):
         logger.info("Initializing PluginRunner with data manager...")
         self.plugin_runner = PluginRunner(data_manager=self.data_manager)
         
-        self.single_result_viewer = ResultViewer()
+        # Create result viewers
+        self.result_detail_viewer = ResultViewer()
         self.multi_result_viewer = MultiResultViewer()
         
         # Progress tracking
         self.progress_signals = ProgressSignals()
-        self.plugin_status = {}  # Track status of each plugin
-        self.progress_widgets = {}  # Progress bars for each plugin
+        self.plugin_status = {}
+        self.progress_widgets = {}
+        
+        # Chart containers
+        self.chart_widgets = {}
         
         # Get available plugins and sort them according to our order
         self.available_plugins = self._get_ordered_plugins()
+        
+        # Analysis grids
+        self.hvn_grid = None
+        self.order_block_grid = None
+        self.supply_demand_grid = None
         
         self.init_ui()
         self.apply_dark_theme()
@@ -115,127 +174,245 @@ class BacktestDashboard(QMainWindow):
         self.progress_signals.plugin_error.connect(self.on_plugin_error)
         
     def init_ui(self):
-        """Initialize the UI with simplified controls"""
-        self.setWindowTitle("Backtest Analysis System")
-        self.setGeometry(100, 100, 1400, 900)
+        """Initialize the UI with new layout"""
+        self.setWindowTitle("Backtest Analysis System - Enhanced")
+        self.setGeometry(50, 50, 1600, 1000)
         
-        # Central widget
+        # Central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
+        main_layout.setSpacing(10)
         
-        # Top controls (single row now)
-        controls_widget = self._create_controls()
-        main_layout.addWidget(controls_widget)
+        # 1. HEADER SECTION - Input controls
+        header_widget = self._create_header_section()
+        main_layout.addWidget(header_widget)
         
-        # Progress tracking widget
+        # 2. PROGRESS WIDGET (shown during analysis)
         self.progress_widget = self._create_progress_widget()
+        self.progress_widget.setVisible(False)
         main_layout.addWidget(self.progress_widget)
         
-        # Create splitter for results
-        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        # 3. MIDDLE SECTION - Results and Charts
+        middle_splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # Multi-result viewer (for multiple plugins)
-        self.splitter.addWidget(self.multi_result_viewer)
+        # Left side - Results grid
+        results_container = QGroupBox("Analysis Results")
+        results_layout = QVBoxLayout(results_container)
+        results_layout.addWidget(self.multi_result_viewer)
+        middle_splitter.addWidget(results_container)
         
-        # Single result viewer (for detailed view)
-        self.splitter.addWidget(self.single_result_viewer)
+        # Right side - Charts
+        charts_container = self._create_charts_section()
+        middle_splitter.addWidget(charts_container)
         
-        # Set initial sizes
-        self.splitter.setSizes([400, 300])
+        # Set proportions (40% results, 60% charts)
+        middle_splitter.setSizes([600, 900])
+        main_layout.addWidget(middle_splitter, 3)  # Give more space to middle section
         
-        main_layout.addWidget(self.splitter)
+        # 4. BOTTOM SECTION - Analysis Grids
+        bottom_widget = self._create_bottom_grids()
+        main_layout.addWidget(bottom_widget, 2)  # Give less space to bottom section
         
-        # Bottom status and report section
-        bottom_layout = QHBoxLayout()
+        # 5. STATUS BAR
+        status_widget = self._create_status_bar()
+        main_layout.addWidget(status_widget)
         
-        # Overall status bar
-        self.status_label = QLabel("Ready")
-        bottom_layout.addWidget(self.status_label)
+        # Connect result selection to detail viewer
+        self.multi_result_viewer.result_selected.connect(self._show_detailed_result)
         
-        bottom_layout.addStretch()
+    def _create_header_section(self) -> QWidget:
+        """Create the header section with input controls"""
+        header = QGroupBox("Analysis Configuration")
+        header.setMaximumHeight(150)  # Increased from 120
+        layout = QVBoxLayout(header)
         
-        # Report buttons
-        self.generate_report_button = QPushButton("Generate Data Report")
-        self.generate_report_button.clicked.connect(self.generate_data_report)
-        self.generate_report_button.setEnabled(False)
-        bottom_layout.addWidget(self.generate_report_button)
-        
-        self.clear_cache_button = QPushButton("Clear Cache")
-        self.clear_cache_button.clicked.connect(self.clear_cache)
-        bottom_layout.addWidget(self.clear_cache_button)
-        
-        bottom_widget = QWidget()
-        bottom_widget.setLayout(bottom_layout)
-        main_layout.addWidget(bottom_widget)
-        
-        # Initially hide single result viewer and progress widget
-        self.single_result_viewer.setVisible(False)
-        self.progress_widget.setVisible(False)
-        
-    def _create_controls(self) -> QWidget:
-        """Create simplified control panel"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        
-        # Single row with all controls
-        control_layout = QHBoxLayout()
+        # Main controls row
+        controls_layout = QHBoxLayout()
+        controls_layout.setSpacing(15)
         
         # Symbol input
-        control_layout.addWidget(QLabel("Symbol:"))
+        symbol_group = QWidget()
+        symbol_layout = QVBoxLayout(symbol_group)
+        symbol_layout.setSpacing(2)
+        symbol_label = QLabel("Symbol")
+        symbol_label.setStyleSheet("font-weight: bold;")
+        symbol_layout.addWidget(symbol_label)
         self.symbol_input = QLineEdit()
         self.symbol_input.setPlaceholderText("TSLA")
         self.symbol_input.setText("TSLA")
-        self.symbol_input.setMaximumWidth(80)
-        control_layout.addWidget(self.symbol_input)
+        self.symbol_input.setMinimumHeight(30)  # Set minimum height
+        self.symbol_input.setMaximumWidth(100)
+        self.symbol_input.setStyleSheet("font-size: 14px; padding: 5px;")
+        symbol_layout.addWidget(self.symbol_input)
+        controls_layout.addWidget(symbol_group)
         
         # DateTime input
-        control_layout.addWidget(QLabel("Entry Time (UTC):"))
+        time_group = QWidget()
+        time_layout = QVBoxLayout(time_group)
+        time_layout.setSpacing(2)
+        time_label = QLabel("Entry Time (UTC)")
+        time_label.setStyleSheet("font-weight: bold;")
+        time_layout.addWidget(time_label)
         self.datetime_input = QDateTimeEdit()
         self.datetime_input.setDateTime(QDateTime.currentDateTimeUtc().addSecs(-3600))
         self.datetime_input.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.datetime_input.setCalendarPopup(True)
-        control_layout.addWidget(self.datetime_input)
+        self.datetime_input.setMinimumHeight(30)  # Set minimum height
+        self.datetime_input.setMinimumWidth(200)  # Set minimum width for date
+        self.datetime_input.setStyleSheet("font-size: 14px; padding: 5px;")
+        time_layout.addWidget(self.datetime_input)
+        controls_layout.addWidget(time_group)
         
         # Direction
-        control_layout.addWidget(QLabel("Direction:"))
+        direction_group = QWidget()
+        direction_layout = QVBoxLayout(direction_group)
+        direction_layout.setSpacing(2)
+        direction_label = QLabel("Direction")
+        direction_label.setStyleSheet("font-weight: bold;")
+        direction_layout.addWidget(direction_label)
         self.direction_combo = QComboBox()
         self.direction_combo.addItems(["LONG", "SHORT"])
+        self.direction_combo.setMinimumHeight(30)  # Set minimum height
         self.direction_combo.setMaximumWidth(100)
-        control_layout.addWidget(self.direction_combo)
+        self.direction_combo.setStyleSheet("font-size: 14px; padding: 5px;")
+        direction_layout.addWidget(self.direction_combo)
+        controls_layout.addWidget(direction_group)
         
-        # Plugin selection dropdown
-        control_layout.addWidget(QLabel("Analysis:"))
+        # Plugin selection
+        plugin_group = QWidget()
+        plugin_layout = QVBoxLayout(plugin_group)
+        plugin_layout.setSpacing(2)
+        plugin_label = QLabel("Analysis Type")
+        plugin_label.setStyleSheet("font-weight: bold;")
+        plugin_layout.addWidget(plugin_label)
         self.plugin_combo = QComboBox()
-        self.plugin_combo.setMinimumWidth(250)
-        
-        # Add "All Plugins" option first
+        self.plugin_combo.setMinimumWidth(300)  # Increased from 250
+        self.plugin_combo.setMinimumHeight(30)  # Set minimum height
+        self.plugin_combo.setStyleSheet("font-size: 14px; padding: 5px;")
         self.plugin_combo.addItem("All Plugins")
         self.plugin_combo.insertSeparator(1)
-        
-        # Add individual plugins
         for plugin_name in self.available_plugins:
             self.plugin_combo.addItem(plugin_name)
-            
-        control_layout.addWidget(self.plugin_combo)
+        plugin_layout.addWidget(self.plugin_combo)
+        controls_layout.addWidget(plugin_group)
         
         # Run button
         self.run_button = QPushButton("Run Analysis")
         self.run_button.clicked.connect(self.run_analysis)
         self.run_button.setMinimumWidth(120)
-        control_layout.addWidget(self.run_button)
+        self.run_button.setMinimumHeight(45)  # Increased from 40
+        self.run_button.setStyleSheet("""
+            QPushButton {
+                font-size: 16px;
+                font-weight: bold;
+                padding: 8px;
+            }
+        """)
+        controls_layout.addWidget(self.run_button)
         
-        control_layout.addStretch()
-        layout.addLayout(control_layout)
+        controls_layout.addStretch()
         
-        # Optional: Show plugin order info
-        if len(self.available_plugins) > 1:
-            order_label = QLabel(f"Plugin execution order: {' → '.join(self.available_plugins[:3])}...")
-            order_label.setStyleSheet("color: #888; font-size: 11px;")
-            layout.addWidget(order_label)
+        # Additional controls row
+        extra_controls = QHBoxLayout()
         
-        return widget
+        # Cache controls
+        self.clear_cache_button = QPushButton("Clear Cache")
+        self.clear_cache_button.clicked.connect(self.clear_cache)
+        self.clear_cache_button.setMinimumHeight(28)
+        extra_controls.addWidget(self.clear_cache_button)
+        
+        # Report button
+        self.generate_report_button = QPushButton("Generate Report")
+        self.generate_report_button.clicked.connect(self.generate_data_report)
+        self.generate_report_button.setEnabled(False)
+        self.generate_report_button.setMinimumHeight(28)
+        extra_controls.addWidget(self.generate_report_button)
+        
+        extra_controls.addStretch()
+        
+        layout.addLayout(controls_layout)
+        layout.addLayout(extra_controls)
+        
+        return header
     
+    def _create_charts_section(self) -> QWidget:
+        """Create the charts section with three visible charts in a grid"""
+        charts_group = QGroupBox("Chart Analysis")
+        main_layout = QVBoxLayout(charts_group)
+        
+        # Create a widget to hold the charts
+        charts_widget = QWidget()
+        charts_layout = QHBoxLayout(charts_widget)
+        charts_layout.setSpacing(10)
+        
+        # Chart 1: Buy/Sell Ratio Chart
+        buy_sell_container = QGroupBox("Buy/Sell Ratio")
+        buy_sell_layout = QVBoxLayout(buy_sell_container)
+        self.buy_sell_chart = ChartPlaceholder("Buy/Sell Ratio Chart")
+        buy_sell_layout.addWidget(self.buy_sell_chart)
+        charts_layout.addWidget(buy_sell_container, 1)  # stretch factor 1
+        
+        # Chart 2: Large Order Viewer
+        large_order_container = QGroupBox("Large Orders")
+        large_order_layout = QVBoxLayout(large_order_container)
+        self.large_order_chart = ChartPlaceholder("Large Order Viewer")
+        large_order_layout.addWidget(self.large_order_chart)
+        charts_layout.addWidget(large_order_container, 1)  # stretch factor 1
+        
+        # Chart 3: Additional Analysis
+        additional_container = QGroupBox("Additional Analysis")
+        additional_layout = QVBoxLayout(additional_container)
+        self.additional_chart = ChartPlaceholder("Additional Analysis Chart")
+        additional_layout.addWidget(self.additional_chart)
+        charts_layout.addWidget(additional_container, 1)  # stretch factor 1
+        
+        main_layout.addWidget(charts_widget)
+        
+        return charts_group
+    
+    def _create_bottom_grids(self) -> QWidget:
+        """Create the bottom section with three analysis grids"""
+        bottom_widget = QWidget()
+        layout = QHBoxLayout(bottom_widget)
+        layout.setSpacing(10)
+        
+        # HVN Zone Grid
+        hvn_group = QGroupBox("HVN Zone Grid")
+        hvn_layout = QVBoxLayout(hvn_group)
+        self.hvn_grid = AnalysisGrid("HVN")
+        hvn_layout.addWidget(self.hvn_grid)
+        layout.addWidget(hvn_group)
+        
+        # Order Block Grid
+        order_group = QGroupBox("Order Block Grid")
+        order_layout = QVBoxLayout(order_group)
+        self.order_block_grid = AnalysisGrid("Order Block")
+        order_layout.addWidget(self.order_block_grid)
+        layout.addWidget(order_group)
+        
+        # Supply and Demand Grid
+        supply_group = QGroupBox("Supply & Demand Grid")
+        supply_layout = QVBoxLayout(supply_group)
+        self.supply_demand_grid = AnalysisGrid("S&D")
+        supply_layout.addWidget(self.supply_demand_grid)
+        layout.addWidget(supply_group)
+        
+        return bottom_widget
+    
+    def _create_status_bar(self) -> QWidget:
+        """Create status bar widget"""
+        status_widget = QWidget()
+        layout = QHBoxLayout(status_widget)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        self.status_label = QLabel("Ready")
+        layout.addWidget(self.status_label)
+        
+        layout.addStretch()
+        
+        return status_widget
+        
     def _create_progress_widget(self) -> QWidget:
         """Create widget for tracking plugin progress"""
         widget = QGroupBox("Analysis Progress")
@@ -250,7 +427,7 @@ class BacktestDashboard(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidget(self.progress_container)
         scroll.setWidgetResizable(True)
-        scroll.setMaximumHeight(200)
+        scroll.setMaximumHeight(150)
         
         layout.addWidget(scroll)
         
@@ -285,7 +462,7 @@ class BacktestDashboard(QMainWindow):
         
         # Details label
         details_label = QLabel("")
-        details_label.setMinimumWidth(300)
+        details_label.setMinimumWidth(200)
         layout.addWidget(details_label)
         
         layout.addStretch()
@@ -338,6 +515,9 @@ class BacktestDashboard(QMainWindow):
             widgets['details_label'].setText(
                 f"{signal_dir} - Strength: {strength:.0f}%, Confidence: {confidence:.0f}%"
             )
+            
+        # Update chart if this is a chart plugin
+        self._update_chart_if_applicable(plugin_name, result)
     
     def on_plugin_error(self, plugin_name: str, error_message: str):
         """Handle plugin error"""
@@ -351,8 +531,46 @@ class BacktestDashboard(QMainWindow):
                 error_message[:50] + "..." if len(error_message) > 50 else error_message
             )
     
+    def _update_chart_if_applicable(self, plugin_name: str, result: dict):
+        """Update chart if plugin provides chart data"""
+        display_data = result.get('display_data', {})
+        chart_config = display_data.get('chart_widget')
+        
+        if chart_config and plugin_name == "Bid/Ask Ratio Tracker":
+            # Replace placeholder with actual chart
+            try:
+                # Import the chart module
+                module = importlib.import_module(chart_config['module'])
+                ChartClass = getattr(module, chart_config['type'])
+                
+                # Create chart instance
+                chart = ChartClass()
+                chart.update_data(chart_config['data'])
+                
+                # Add entry marker
+                if 'entry_time' in chart_config:
+                    chart.add_marker(30, "Entry", "#ff0000")
+                
+                # Find the buy/sell container and replace its content
+                buy_sell_container = self.buy_sell_chart.parent()
+                if buy_sell_container:
+                    # Remove placeholder
+                    layout = buy_sell_container.layout()
+                    layout.removeWidget(self.buy_sell_chart)
+                    self.buy_sell_chart.deleteLater()
+                    
+                    # Add real chart
+                    self.buy_sell_chart = chart
+                    layout.addWidget(chart)
+                    
+                    # Store reference
+                    self.chart_widgets['buy_sell_ratio'] = chart
+                
+            except Exception as e:
+                logger.error(f"Error loading chart: {e}")
+    
     def run_analysis(self):
-        """Run the selected analysis (all plugins or single)"""
+        """Run the selected analysis"""
         # Get inputs
         symbol = self.symbol_input.text().strip().upper()
         if not symbol:
@@ -393,15 +611,13 @@ class BacktestDashboard(QMainWindow):
         
         # Clear previous results
         self.multi_result_viewer.clear_results()
-        self.single_result_viewer.display_result({})
-        self.single_result_viewer.setVisible(False)
         
         # Run plugins asynchronously
         asyncio.create_task(self._run_plugins_async(selected_plugins, symbol, entry_time, direction))
         
     async def _run_plugins_async(self, plugin_names: List[str], symbol: str, 
                                entry_time: datetime, direction: str):
-        """Run plugins asynchronously in the specified order"""
+        """Run plugins asynchronously"""
         try:
             results = []
             
@@ -451,49 +667,23 @@ class BacktestDashboard(QMainWindow):
                     }
                     results.append(error_result)
             
-            # Generate data report automatically after all plugins run
-            try:
-                logger.info("Generating data report after plugin execution...")
-                json_file, summary_file = self.data_manager.generate_data_report()
-                
-                # Show report location in status
-                report_msg = f" | Report: {Path(summary_file).name}"
-                
-                # Check for critical issues in the report
-                with open(summary_file, 'r') as f:
-                    report_content = f.read()
-                    if "CRITICAL ISSUES FOUND" in report_content:
-                        report_msg += " ⚠️"
-                
-            except Exception as e:
-                logger.error(f"Failed to generate data report: {e}")
-                report_msg = ""
-            
             # Update final status
             successful = sum(1 for r in results if 'error' not in r)
             failed = len(results) - successful
             
             if len(plugin_names) == 1:
                 if successful == 1:
-                    self.status_label.setText(f"Analysis complete for {symbol}{report_msg}")
+                    self.status_label.setText(f"Analysis complete for {symbol}")
                 else:
-                    self.status_label.setText(f"Analysis failed for {symbol}{report_msg}")
+                    self.status_label.setText(f"Analysis failed for {symbol}")
             else:
                 status_msg = f"Completed: {successful}/{len(plugin_names)} plugins successful"
                 if failed > 0:
                     status_msg += f" ({failed} failed)"
-                status_msg += report_msg
                 self.status_label.setText(status_msg)
             
             # Enable report button
             self.generate_report_button.setEnabled(True)
-            
-            # Auto-show single result if only one plugin was run
-            if len(results) == 1 and 'error' not in results[0]:
-                self._show_detailed_result(results[0])
-            
-            # Connect row selection to show details
-            self.multi_result_viewer.result_selected.connect(self._show_detailed_result)
                 
         except Exception as e:
             logger.error(f"Error running plugins: {e}")
@@ -508,24 +698,17 @@ class BacktestDashboard(QMainWindow):
     
     def _show_detailed_result(self, result: Dict[str, Any]):
         """Show detailed view of selected result"""
-        self.single_result_viewer.display_result(result)
-        self.single_result_viewer.setVisible(True)
-        # Adjust splitter to show both views
-        self.splitter.setSizes([300, 400])
+        # Create a dialog or update a detail panel
+        # For now, we'll log it
+        logger.info(f"Selected result: {result.get('plugin_name')}")
     
     def generate_data_report(self):
-        """Generate data manager report manually"""
+        """Generate data manager report"""
         try:
             json_file, summary_file = self.data_manager.generate_data_report()
             
             # Show message with report location
             msg = f"Data report generated:\n\nSummary: {summary_file}\nJSON: {json_file}"
-            
-            # Check for issues in the report
-            with open(summary_file, 'r') as f:
-                report_content = f.read()
-                if "CRITICAL ISSUES FOUND" in report_content:
-                    msg += "\n\n⚠️ Critical issues found in data requests!"
             
             QMessageBox.information(self, "Report Generated", msg)
             
@@ -575,6 +758,7 @@ class BacktestDashboard(QMainWindow):
                 margin-top: 10px;
                 padding-top: 10px;
                 font-weight: bold;
+                font-size: 14px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -587,6 +771,7 @@ class BacktestDashboard(QMainWindow):
                 padding: 8px;
                 border-radius: 4px;
                 font-weight: bold;
+                font-size: 13px;
             }
             QPushButton:hover {
                 background-color: #14a085;
@@ -601,8 +786,12 @@ class BacktestDashboard(QMainWindow):
             QLineEdit, QComboBox, QDateTimeEdit {
                 background-color: #2b2b2b;
                 border: 1px solid #444;
-                padding: 5px;
+                padding: 6px;
                 border-radius: 3px;
+                font-size: 13px;
+            }
+            QComboBox::drop-down {
+                width: 20px;
             }
             QComboBox QAbstractItemView {
                 background-color: #2b2b2b;
@@ -641,5 +830,25 @@ class BacktestDashboard(QMainWindow):
             QScrollArea {
                 background-color: #2b2b2b;
                 border: 1px solid #444;
+            }
+            QTabWidget::pane {
+                border: 1px solid #444;
+                background-color: #2b2b2b;
+            }
+            QTabBar::tab {
+                background-color: #2b2b2b;
+                padding: 8px 16px;
+                margin-right: 2px;
+                border: 1px solid #444;
+                border-bottom: none;
+            }
+            QTabBar::tab:selected {
+                background-color: #0d7377;
+            }
+            QTabBar::tab:hover {
+                background-color: #323232;
+            }
+            QLabel {
+                font-size: 13px;
             }
         """)

@@ -1,25 +1,39 @@
 """
 Result Viewer - Displays plugin results without transformation
+Enhanced with chart support for plugins that provide chart data
 """
 
-from typing import Dict, Any
+import logging
+import importlib
+from typing import Dict, Any, Optional
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QTableWidget, QTableWidgetItem, QTextEdit, QLabel
+    QTableWidget, QTableWidgetItem, QTextEdit, QLabel,
+    QSplitter
 )
 from PyQt6.QtCore import Qt
 
+logger = logging.getLogger(__name__)
+
 
 class ResultViewer(QWidget):
-    """Widget for displaying plugin results"""
+    """Widget for displaying plugin results with optional chart support"""
     
     def __init__(self):
         super().__init__()
+        self.current_chart = None
         self.init_ui()
         
     def init_ui(self):
         """Initialize the UI"""
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
+        
+        # Create horizontal splitter for result details and chart
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # Left side - traditional result display
+        self.result_widget = QWidget()
+        result_layout = QVBoxLayout(self.result_widget)
         
         # Signal summary
         self.summary_group = QGroupBox("Signal Summary")
@@ -33,7 +47,7 @@ class ResultViewer(QWidget):
         self.description_label.setWordWrap(True)
         summary_layout.addWidget(self.description_label)
         
-        layout.addWidget(self.summary_group)
+        result_layout.addWidget(self.summary_group)
         
         # Details table
         self.details_group = QGroupBox("Signal Details")
@@ -45,7 +59,7 @@ class ResultViewer(QWidget):
         self.details_table.horizontalHeader().setStretchLastSection(True)
         details_layout.addWidget(self.details_table)
         
-        layout.addWidget(self.details_group)
+        result_layout.addWidget(self.details_group)
         
         # Raw data viewer (optional)
         self.raw_group = QGroupBox("Raw Plugin Output")
@@ -56,17 +70,38 @@ class ResultViewer(QWidget):
         self.raw_text.setMaximumHeight(150)
         raw_layout.addWidget(self.raw_text)
         
-        layout.addWidget(self.raw_group)
+        result_layout.addWidget(self.raw_group)
         self.raw_group.setVisible(False)  # Hidden by default
         
+        # Add left widget to splitter
+        self.splitter.addWidget(self.result_widget)
+        
+        # Right side - chart container
+        self.chart_container = QGroupBox("Chart Visualization")
+        self.chart_layout = QVBoxLayout(self.chart_container)
+        self.splitter.addWidget(self.chart_container)
+        
+        # Initially hide chart container
+        self.chart_container.setVisible(False)
+        
+        # Add splitter to main layout
+        main_layout.addWidget(self.splitter)
+        
+        # Set initial splitter sizes (60/40 split when chart is shown)
+        self.splitter.setSizes([600, 400])
+        
     def display_result(self, result: Dict[str, Any]):
-        """Display plugin result"""
+        """Display plugin result with optional chart"""
+        # Clear any existing chart first
+        self._clear_chart()
+        
         # Check for error
         if 'error' in result:
             self.summary_label.setText(f"Error: {result['error']}")
             self.summary_label.setStyleSheet("color: #ff6b6b; font-size: 14pt; font-weight: bold;")
             self.description_label.setText("")
             self.details_table.setRowCount(0)
+            self._hide_chart()
             return
             
         # Display summary
@@ -100,6 +135,67 @@ class ResultViewer(QWidget):
             self.details_table.setItem(i, 0, QTableWidgetItem(str(key)))
             self.details_table.setItem(i, 1, QTableWidgetItem(str(value)))
             
+        # Handle chart if present
+        chart_config = display_data.get('chart_widget')
+        if chart_config:
+            self._display_chart(chart_config)
+        else:
+            self._hide_chart()
+            
         # Raw data (for debugging)
         import json
         self.raw_text.setText(json.dumps(result, indent=2, default=str))
+    
+    def _display_chart(self, chart_config: Dict[str, Any]):
+        """Display a chart based on configuration"""
+        try:
+            # Import the chart module dynamically
+            module_name = chart_config.get('module')
+            chart_class_name = chart_config.get('type')
+            
+            if not module_name or not chart_class_name:
+                logger.error("Invalid chart configuration")
+                return
+                
+            # Import and create chart
+            module = importlib.import_module(module_name)
+            ChartClass = getattr(module, chart_class_name)
+            
+            # Create chart instance
+            self.current_chart = ChartClass()
+            self.chart_layout.addWidget(self.current_chart)
+            
+            # Update chart with data
+            chart_data = chart_config.get('data', [])
+            self.current_chart.update_data(chart_data)
+            
+            # Add entry marker if specified
+            if 'entry_time' in chart_config:
+                # Add marker at the end (30 minutes for bid/ask ratio)
+                self.current_chart.add_marker(30, "Entry", "#ff0000")
+            
+            # Show chart container
+            self.chart_container.setVisible(True)
+            
+            # Adjust splitter to show both sides
+            self.splitter.setSizes([500, 500])
+            
+        except Exception as e:
+            logger.error(f"Error displaying chart: {e}")
+            import traceback
+            traceback.print_exc()
+            self._hide_chart()
+    
+    def _clear_chart(self):
+        """Clear current chart"""
+        if self.current_chart:
+            self.chart_layout.removeWidget(self.current_chart)
+            self.current_chart.deleteLater()
+            self.current_chart = None
+    
+    def _hide_chart(self):
+        """Hide chart container"""
+        self._clear_chart()
+        self.chart_container.setVisible(False)
+        # Reset splitter to full width for results
+        self.splitter.setSizes([1000, 0])

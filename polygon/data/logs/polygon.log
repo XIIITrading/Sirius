@@ -42195,3 +42195,18 @@ to 2025-07-01
 2025-07-04 15:50:12 - polygon.fetcher - INFO - Fetching CRCL 1min data from 2025-06-27 to 2025-06-27
 2025-07-04 15:50:13 - polygon.fetcher - INFO - Filled 32 small gaps in data
 2025-07-04 15:50:13 - polygon.fetcher - INFO - Returned 951 rows for CRCL 1min
+2025-07-04 18:17:56 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-04 18:17:56 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2024-01-15 to 2024-01-15
+2025-07-04 18:17:56 - polygon.core - WARNING - No results in aggregate response for AAPL
+2025-07-04 18:17:56 - polygon.fetcher - WARNING - No data returned for AAPL 2024-01-15 to 2024-01-15
+2025-07-04 18:17:56 - polygon.fetcher - INFO - Returned 0 rows for AAPL 1min
+2025-07-04 18:18:34 - polygon.storage - INFO - Storage initialized at C:\Users\codyc\XIIITrading_Systems\Sirius\polygon\data
+2025-07-04 18:18:34 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2024-06-27 to 2024-06-27
+2025-07-04 18:18:35 - polygon.fetcher - INFO - Filled 57 small gaps in data
+2025-07-04 18:18:35 - polygon.fetcher - INFO - Returned 814 rows for AAPL 1min
+2025-07-04 18:18:35 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2024-06-27 to 2024-06-27
+2025-07-04 18:18:35 - polygon.fetcher - INFO - Filled 57 small gaps in data
+2025-07-04 18:18:35 - polygon.fetcher - INFO - Returned 814 rows for AAPL 1min
+2025-07-04 18:18:36 - polygon.fetcher - INFO - Fetching AAPL 1min data from 2024-06-27 to 2024-06-27
+2025-07-04 18:18:36 - polygon.fetcher - INFO - Filled 57 small gaps in data
+2025-07-04 18:18:36 - polygon.fetcher - INFO - Returned 814 rows for AAPL 1min

@@ -8,11 +8,12 @@ Features: State management, rate limiting, data availability checking, fallback 
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Callable, Any, Tuple
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Callable, Any, Tuple, Union
+from dataclasses import dataclass, field, asdict
 from enum import Enum
 from collections import deque
 import time
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,16 @@ class RequestResult:
     failure_type: Optional[FailureType] = None
     response_time: Optional[float] = None
     error: Optional[Exception] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization"""
+        return {
+            'timestamp': self.timestamp,
+            'success': self.success,
+            'failure_type': self.failure_type.value if self.failure_type else None,
+            'response_time': self.response_time,
+            'error': str(self.error) if self.error else None
+        }
 
 
 @dataclass
@@ -52,6 +63,16 @@ class DataAvailabilityStatus:
     check_duration: float
     sample_count: int
     metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization"""
+        return {
+            'has_data': self.has_data,
+            'last_checked': self.last_checked.isoformat(),
+            'check_duration': self.check_duration,
+            'sample_count': self.sample_count,
+            'metadata': self.metadata
+        }
 
 
 class CircuitBreakerError(Exception):
@@ -85,6 +106,7 @@ class DataAvailabilityChecker:
         self.cache_duration = timedelta(minutes=cache_duration_minutes)
         self.availability_cache: Dict[str, DataAvailabilityStatus] = {}
         self.no_data_cache: Dict[str, List[Tuple[datetime, datetime]]] = {}
+        self._lock = threading.Lock()  # Thread safety
         
     async def check_data_availability(self, 
                                     data_fetcher: Callable,
@@ -98,12 +120,13 @@ class DataAvailabilityChecker:
         """
         cache_key = f"{symbol}_{data_type}_{start_time.date()}_{end_time.date()}"
         
-        # Check cache first
-        if cache_key in self.availability_cache:
-            cached_status = self.availability_cache[cache_key]
-            if datetime.now(timezone.utc) - cached_status.last_checked < self.cache_duration:
-                logger.debug(f"Using cached availability status for {cache_key}")
-                return cached_status
+        # Check cache first (thread-safe)
+        with self._lock:
+            if cache_key in self.availability_cache:
+                cached_status = self.availability_cache[cache_key]
+                if datetime.now(timezone.utc) - cached_status.last_checked < self.cache_duration:
+                    logger.debug(f"Using cached availability status for {cache_key}")
+                    return cached_status
         
         # Check if we've marked this range as having no data
         if self._is_in_no_data_cache(symbol, start_time, end_time):
@@ -122,11 +145,13 @@ class DataAvailabilityChecker:
         start = time.time()
         
         try:
-            # Probe with a minimal time window (1 hour for bars, 5 minutes for tick data)
+            # Probe with a minimal time window
             if data_type == "bars":
                 probe_window = timedelta(hours=1)
-            else:  # trades/quotes
+            elif data_type in ["trades", "quotes"]:
                 probe_window = timedelta(minutes=5)
+            else:
+                probe_window = timedelta(minutes=15)
             
             probe_end = min(start_time + probe_window, end_time)
             
@@ -138,22 +163,30 @@ class DataAvailabilityChecker:
             )
             
             check_duration = time.time() - start
-            has_data = probe_data is not None and len(probe_data) > 0
+            
+            # Handle both DataFrame and empty results
+            if hasattr(probe_data, 'empty'):
+                has_data = not probe_data.empty
+                sample_count = len(probe_data) if not probe_data.empty else 0
+            else:
+                has_data = probe_data is not None and len(probe_data) > 0
+                sample_count = len(probe_data) if probe_data is not None else 0
             
             status = DataAvailabilityStatus(
                 has_data=has_data,
                 last_checked=datetime.now(timezone.utc),
                 check_duration=check_duration,
-                sample_count=len(probe_data) if probe_data is not None else 0,
+                sample_count=sample_count,
                 metadata={
                     'probe_window': probe_window.total_seconds(),
-                    'actual_start': probe_data.index.min() if has_data else None,
-                    'actual_end': probe_data.index.max() if has_data else None
+                    'actual_start': probe_data.index.min().isoformat() if has_data and hasattr(probe_data, 'index') else None,
+                    'actual_end': probe_data.index.max().isoformat() if has_data and hasattr(probe_data, 'index') else None
                 }
             )
             
-            # Cache the result
-            self.availability_cache[cache_key] = status
+            # Cache the result (thread-safe)
+            with self._lock:
+                self.availability_cache[cache_key] = status
             
             # If no data found, add to no-data cache
             if not has_data:
@@ -177,23 +210,25 @@ class DataAvailabilityChecker:
     def _is_in_no_data_cache(self, symbol: str, start_time: datetime, 
                             end_time: datetime) -> bool:
         """Check if time range is marked as having no data"""
-        if symbol not in self.no_data_cache:
-            return False
-        
-        for cached_start, cached_end in self.no_data_cache[symbol]:
-            if cached_start <= start_time and cached_end >= end_time:
-                return True
+        with self._lock:
+            if symbol not in self.no_data_cache:
+                return False
+            
+            for cached_start, cached_end in self.no_data_cache[symbol]:
+                if cached_start <= start_time and cached_end >= end_time:
+                    return True
         return False
     
     def _add_to_no_data_cache(self, symbol: str, start_time: datetime, 
                              end_time: datetime):
         """Add time range to no-data cache"""
-        if symbol not in self.no_data_cache:
-            self.no_data_cache[symbol] = []
-        
-        # Merge overlapping ranges
-        self.no_data_cache[symbol].append((start_time, end_time))
-        self._merge_no_data_ranges(symbol)
+        with self._lock:
+            if symbol not in self.no_data_cache:
+                self.no_data_cache[symbol] = []
+            
+            # Merge overlapping ranges
+            self.no_data_cache[symbol].append((start_time, end_time))
+            self._merge_no_data_ranges(symbol)
     
     def _merge_no_data_ranges(self, symbol: str):
         """Merge overlapping no-data ranges for efficiency"""
@@ -215,6 +250,21 @@ class DataAvailabilityChecker:
                 merged.append((current_start, current_end))
         
         self.no_data_cache[symbol] = merged
+    
+    def clear_cache(self, symbol: Optional[str] = None):
+        """Clear availability cache"""
+        with self._lock:
+            if symbol:
+                # Clear specific symbol
+                keys_to_remove = [k for k in self.availability_cache if k.startswith(f"{symbol}_")]
+                for key in keys_to_remove:
+                    del self.availability_cache[key]
+                if symbol in self.no_data_cache:
+                    del self.no_data_cache[symbol]
+            else:
+                # Clear all
+                self.availability_cache.clear()
+                self.no_data_cache.clear()
 
 
 class RateLimiter:
@@ -223,18 +273,20 @@ class RateLimiter:
     def __init__(self, rate_per_minute: int, burst_size: int = 10):
         self.rate_per_minute = rate_per_minute
         self.burst_size = burst_size
-        self.tokens = burst_size
+        self.tokens = float(burst_size)
         self.last_refill = time.time()
         self.refill_rate = rate_per_minute / 60.0  # tokens per second
+        self._lock = threading.Lock()
         
     def try_acquire(self, tokens: int = 1) -> bool:
         """Try to acquire tokens, return True if successful"""
-        self._refill()
-        
-        if self.tokens >= tokens:
-            self.tokens -= tokens
-            return True
-        return False
+        with self._lock:
+            self._refill()
+            
+            if self.tokens >= tokens:
+                self.tokens -= tokens
+                return True
+            return False
     
     def _refill(self):
         """Refill tokens based on elapsed time"""
@@ -250,13 +302,25 @@ class RateLimiter:
     
     def time_until_available(self, tokens: int = 1) -> float:
         """Return seconds until tokens will be available"""
-        self._refill()
-        
-        if self.tokens >= tokens:
-            return 0
-        
-        needed = tokens - self.tokens
-        return needed / self.refill_rate
+        with self._lock:
+            self._refill()
+            
+            if self.tokens >= tokens:
+                return 0
+            
+            needed = tokens - self.tokens
+            return needed / self.refill_rate
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current rate limiter status"""
+        with self._lock:
+            self._refill()
+            return {
+                'tokens_available': self.tokens,
+                'rate_per_minute': self.rate_per_minute,
+                'burst_size': self.burst_size,
+                'refill_rate': self.refill_rate
+            }
 
 
 class CircuitBreaker:
@@ -297,9 +361,11 @@ class CircuitBreaker:
         self.last_state_change = time.time()
         self.consecutive_failure_count = 0
         self.recovery_attempts = 0
+        self._state_lock = threading.Lock()
         
         # Request tracking
         self.request_history = deque(maxlen=sliding_window_size)
+        self._history_lock = threading.Lock()
         
         # Rate limiters
         self.rate_limiters = {}
@@ -324,6 +390,7 @@ class CircuitBreaker:
             'last_failure_time': None,
             'last_failure_type': None
         }
+        self._metrics_lock = threading.Lock()
         
         logger.info(f"CircuitBreaker initialized: threshold={failure_threshold}, "
                    f"consecutive={consecutive_failures}, timeout={recovery_timeout}s")
@@ -349,7 +416,8 @@ class CircuitBreaker:
         
         # Check circuit state
         if not self._should_allow_request():
-            self.metrics['circuit_opens'] += 1
+            with self._metrics_lock:
+                self.metrics['circuit_opens'] += 1
             raise CircuitBreakerError(
                 f"Circuit breaker is {self.state.value}. "
                 f"Recovery attempt in {self._time_until_recovery():.1f}s"
@@ -358,7 +426,8 @@ class CircuitBreaker:
         # Check rate limit
         if operation_type in self.rate_limiters:
             if not self.rate_limiters[operation_type].try_acquire():
-                self.metrics['rate_limit_hits'] += 1
+                with self._metrics_lock:
+                    self.metrics['rate_limit_hits'] += 1
                 wait_time = self.rate_limiters[operation_type].time_until_available()
                 raise RateLimitError(
                     f"Rate limit exceeded for {operation_type}. "
@@ -369,7 +438,8 @@ class CircuitBreaker:
         if self._should_check_availability(func, kwargs):
             availability = await self._check_data_availability(func, kwargs)
             if not availability.has_data:
-                self.metrics['no_data_responses'] += 1
+                with self._metrics_lock:
+                    self.metrics['no_data_responses'] += 1
                 self._record_no_data_result(kwargs)
                 raise NoDataAvailableError(
                     symbol=kwargs.get('symbol'),
@@ -379,7 +449,8 @@ class CircuitBreaker:
         
         # Execute the function
         start_time = time.time()
-        self.metrics['total_requests'] += 1
+        with self._metrics_lock:
+            self.metrics['total_requests'] += 1
         
         try:
             result = await func(*args, **kwargs)
@@ -387,9 +458,14 @@ class CircuitBreaker:
             
             # Record success
             self._record_success(response_time)
-            self.metrics['successful_requests'] += 1
+            with self._metrics_lock:
+                self.metrics['successful_requests'] += 1
             
             return result
+            
+        except NoDataAvailableError:
+            # Re-raise without recording as failure
+            raise
             
         except Exception as e:
             response_time = time.time() - start_time
@@ -399,28 +475,30 @@ class CircuitBreaker:
             
             # Record failure
             self._record_failure(failure_type, e)
-            self.metrics['failed_requests'] += 1
-            self.metrics['last_failure_time'] = datetime.now(timezone.utc)
-            self.metrics['last_failure_type'] = failure_type.value
+            with self._metrics_lock:
+                self.metrics['failed_requests'] += 1
+                self.metrics['last_failure_time'] = datetime.now(timezone.utc)
+                self.metrics['last_failure_type'] = failure_type.value
             
             # Re-raise the error
             raise
     
     def _should_allow_request(self) -> bool:
         """Check if request should be allowed based on circuit state"""
-        if self.state == CircuitState.CLOSED:
-            return True
-        
-        elif self.state == CircuitState.OPEN:
-            # Check if we should transition to HALF_OPEN
-            if self._should_attempt_recovery():
-                self._transition_to_half_open()
+        with self._state_lock:
+            if self.state == CircuitState.CLOSED:
                 return True
-            return False
-        
-        elif self.state == CircuitState.HALF_OPEN:
-            # Allow one request to test recovery
-            return True
+            
+            elif self.state == CircuitState.OPEN:
+                # Check if we should transition to HALF_OPEN
+                if self._should_attempt_recovery():
+                    self._transition_to_half_open()
+                    return True
+                return False
+            
+            elif self.state == CircuitState.HALF_OPEN:
+                # Allow one request to test recovery
+                return True
         
         return False
     
@@ -432,9 +510,10 @@ class CircuitBreaker:
     
     def _time_until_recovery(self) -> float:
         """Calculate seconds until next recovery attempt"""
-        backoff_time = self.recovery_timeout * (2 ** min(self.recovery_attempts, 5))
-        elapsed = time.time() - self.last_state_change
-        return max(0, backoff_time - elapsed)
+        with self._state_lock:
+            backoff_time = self.recovery_timeout * (2 ** min(self.recovery_attempts, 5))
+            elapsed = time.time() - self.last_state_change
+            return max(0, backoff_time - elapsed)
     
     def _should_check_availability(self, func: Callable, kwargs: Dict) -> bool:
         """Determine if we should check data availability"""
@@ -473,41 +552,45 @@ class CircuitBreaker:
     
     def _record_success(self, response_time: float):
         """Record successful request"""
-        self.request_history.append(RequestResult(
-            timestamp=time.time(),
-            success=True,
-            response_time=response_time
-        ))
+        with self._history_lock:
+            self.request_history.append(RequestResult(
+                timestamp=time.time(),
+                success=True,
+                response_time=response_time
+            ))
         
-        # Reset consecutive failures
-        self.consecutive_failure_count = 0
-        
-        # Handle state transitions
-        if self.state == CircuitState.HALF_OPEN:
-            # Success in HALF_OPEN means we can close the circuit
-            self._transition_to_closed()
+        with self._state_lock:
+            # Reset consecutive failures
+            self.consecutive_failure_count = 0
+            
+            # Handle state transitions
+            if self.state == CircuitState.HALF_OPEN:
+                # Success in HALF_OPEN means we can close the circuit
+                self._transition_to_closed()
     
     def _record_failure(self, failure_type: FailureType, error: Exception):
         """Record failed request and check if circuit should open"""
-        self.request_history.append(RequestResult(
-            timestamp=time.time(),
-            success=False,
-            failure_type=failure_type,
-            error=error
-        ))
+        with self._history_lock:
+            self.request_history.append(RequestResult(
+                timestamp=time.time(),
+                success=False,
+                failure_type=failure_type,
+                error=error
+            ))
         
-        # Increment consecutive failures
-        self.consecutive_failure_count += 1
-        
-        # Check if we should open the circuit
-        if self.state == CircuitState.CLOSED:
-            if (self.consecutive_failure_count >= self.consecutive_failures or
-                self._calculate_failure_rate() >= self.failure_threshold):
+        with self._state_lock:
+            # Increment consecutive failures
+            self.consecutive_failure_count += 1
+            
+            # Check if we should open the circuit
+            if self.state == CircuitState.CLOSED:
+                if (self.consecutive_failure_count >= self.consecutive_failures or
+                    self._calculate_failure_rate() >= self.failure_threshold):
+                    self._transition_to_open()
+            
+            elif self.state == CircuitState.HALF_OPEN:
+                # Failure in HALF_OPEN means back to OPEN
                 self._transition_to_open()
-        
-        elif self.state == CircuitState.HALF_OPEN:
-            # Failure in HALF_OPEN means back to OPEN
-            self._transition_to_open()
     
     def _record_no_data_result(self, kwargs: Dict):
         """Record when no data is available"""
@@ -518,19 +601,20 @@ class CircuitBreaker:
     
     def _calculate_failure_rate(self) -> float:
         """Calculate current failure rate"""
-        if not self.request_history:
-            return 0.0
-        
-        # Only consider recent requests based on time window
-        recent_cutoff = time.time() - 300  # Last 5 minutes
-        recent_requests = [r for r in self.request_history 
-                          if r.timestamp > recent_cutoff]
-        
-        if not recent_requests:
-            return 0.0
-        
-        failures = sum(1 for r in recent_requests if not r.success)
-        return failures / len(recent_requests)
+        with self._history_lock:
+            if not self.request_history:
+                return 0.0
+            
+            # Only consider recent requests based on time window
+            recent_cutoff = time.time() - 300  # Last 5 minutes
+            recent_requests = [r for r in self.request_history 
+                              if r.timestamp > recent_cutoff]
+            
+            if not recent_requests:
+                return 0.0
+            
+            failures = sum(1 for r in recent_requests if not r.success)
+            return failures / len(recent_requests)
     
     def _classify_error(self, error: Exception) -> FailureType:
         """Classify error type for different handling"""
@@ -556,7 +640,8 @@ class CircuitBreaker:
         self.state = CircuitState.OPEN
         self.last_state_change = time.time()
         self.recovery_attempts += 1
-        self.metrics['circuit_opens'] += 1
+        with self._metrics_lock:
+            self.metrics['circuit_opens'] += 1
     
     def _transition_to_half_open(self):
         """Transition to HALF_OPEN state"""
@@ -576,18 +661,24 @@ class CircuitBreaker:
     
     def get_status(self) -> Dict[str, Any]:
         """Get current circuit breaker status"""
+        with self._state_lock:
+            state = self.state.value
+            consecutive_failures = self.consecutive_failure_count
+            recovery_attempts = self.recovery_attempts
+            time_until_recovery = self._time_until_recovery() if self.state == CircuitState.OPEN else 0
+        
+        with self._metrics_lock:
+            metrics = dict(self.metrics)
+        
         return {
-            'state': self.state.value,
+            'state': state,
             'failure_rate': self._calculate_failure_rate(),
-            'consecutive_failures': self.consecutive_failure_count,
-            'recovery_attempts': self.recovery_attempts,
-            'time_until_recovery': self._time_until_recovery() if self.state == CircuitState.OPEN else 0,
-            'metrics': self.metrics,
+            'consecutive_failures': consecutive_failures,
+            'recovery_attempts': recovery_attempts,
+            'time_until_recovery': time_until_recovery,
+            'metrics': metrics,
             'rate_limits': {
-                name: {
-                    'tokens_available': limiter.tokens,
-                    'rate_per_minute': limiter.rate_per_minute
-                }
+                name: limiter.get_status()
                 for name, limiter in self.rate_limiters.items()
             }
         }
@@ -596,13 +687,89 @@ class CircuitBreaker:
         """Reset circuit breaker to initial state"""
         logger.info("Circuit breaker reset requested")
         
-        self.state = CircuitState.CLOSED
-        self.last_state_change = time.time()
-        self.consecutive_failure_count = 0
-        self.recovery_attempts = 0
-        self.request_history.clear()
+        with self._state_lock:
+            self.state = CircuitState.CLOSED
+            self.last_state_change = time.time()
+            self.consecutive_failure_count = 0
+            self.recovery_attempts = 0
+        
+        with self._history_lock:
+            self.request_history.clear()
         
         # Reset rate limiters
         for limiter in self.rate_limiters.values():
             limiter.tokens = limiter.burst_size
             limiter.last_refill = time.time()
+        
+        # Clear availability cache
+        self.availability_checker.clear_cache()
+        
+        logger.info("Circuit breaker reset completed")
+
+
+# Integration helper for the new modular PolygonDataManager
+def create_circuit_breaker_for_data_manager(config: Optional[Dict[str, Any]] = None) -> CircuitBreaker:
+    """
+    Create a circuit breaker configured for use with PolygonDataManager
+    
+    Args:
+        config: Optional configuration overrides
+        
+    Returns:
+        Configured CircuitBreaker instance
+    """
+    default_config = {
+        'failure_threshold': 0.5,
+        'consecutive_failures': 5,
+        'recovery_timeout': 60,
+        'sliding_window_size': 100,
+        'rate_limits': {
+            'bars': {'per_minute': 100, 'burst': 10},
+            'trades': {'per_minute': 50, 'burst': 5},
+            'quotes': {'per_minute': 50, 'burst': 5}
+        }
+    }
+    
+    if config:
+        default_config.update(config)
+    
+    return CircuitBreaker(**default_config)
+
+
+if __name__ == "__main__":
+    # Example usage
+    async def example():
+        # Create circuit breaker
+        breaker = create_circuit_breaker_for_data_manager()
+        
+        # Example protected function
+        async def fetch_data(symbol: str, start_time: datetime, end_time: datetime):
+            # Simulate API call
+            await asyncio.sleep(0.1)
+            return {"data": "example"}
+        
+        # Use circuit breaker
+        try:
+            result = await breaker.call(
+                fetch_data,
+                symbol="AAPL",
+                start_time=datetime.now(timezone.utc) - timedelta(hours=1),
+                end_time=datetime.now(timezone.utc),
+                operation_type='bars'
+            )
+            print(f"Success: {result}")
+        except CircuitBreakerError as e:
+            print(f"Circuit open: {e}")
+        except RateLimitError as e:
+            print(f"Rate limited: {e}")
+        except NoDataAvailableError as e:
+            print(f"No data: {e}")
+        
+        # Check status
+        status = breaker.get_status()
+        print(f"\nCircuit Breaker Status:")
+        print(f"  State: {status['state']}")
+        print(f"  Failure Rate: {status['failure_rate']:.1%}")
+        print(f"  Total Requests: {status['metrics']['total_requests']}")
+    
+    asyncio.run(example())

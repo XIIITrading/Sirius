@@ -24,8 +24,8 @@ class ValidationLevel(Enum):
     CRITICAL = "CRITICAL"
 
 
-class DataType(Enum):
-    """Types of data to validate"""
+class ValidationType(Enum):
+    """Types of data to validate (renamed to avoid conflict with request_aggregator.DataType)"""
     BARS = "bars"
     TRADES = "trades"
     QUOTES = "quotes"
@@ -45,7 +45,7 @@ class ValidationIssue:
 @dataclass
 class ValidationReport:
     """Complete validation report for a dataset"""
-    data_type: DataType
+    data_type: ValidationType
     symbol: str
     start_time: datetime
     end_time: datetime
@@ -128,7 +128,7 @@ class DataValidator:
         - Zero/negative prices
         """
         report = ValidationReport(
-            data_type=DataType.BARS,
+            data_type=ValidationType.BARS,
             symbol=symbol,
             start_time=df.index.min() if len(df) > 0 else datetime.now(timezone.utc),
             end_time=df.index.max() if len(df) > 0 else datetime.now(timezone.utc),
@@ -186,7 +186,7 @@ class DataValidator:
         - Duplicate trades
         """
         report = ValidationReport(
-            data_type=DataType.TRADES,
+            data_type=ValidationType.TRADES,
             symbol=symbol,
             start_time=df.index.min() if len(df) > 0 else datetime.now(timezone.utc),
             end_time=df.index.max() if len(df) > 0 else datetime.now(timezone.utc),
@@ -238,7 +238,7 @@ class DataValidator:
         - Crossed markets
         """
         report = ValidationReport(
-            data_type=DataType.QUOTES,
+            data_type=ValidationType.QUOTES,
             symbol=symbol,
             start_time=df.index.min() if len(df) > 0 else datetime.now(timezone.utc),
             end_time=df.index.max() if len(df) > 0 else datetime.now(timezone.utc),
@@ -695,3 +695,30 @@ class DataValidator:
             lines.append("=" * 80)
         
         return "\n".join(lines)
+
+
+# Integration with the new modular PolygonDataManager
+async def validate_fetched_data(data_manager, symbol: str, start_time: datetime, end_time: datetime):
+    """
+    Example of how to integrate DataValidator with the new modular PolygonDataManager
+    """
+    from .polygon_data_manager import PolygonDataManager
+    
+    # Fetch data
+    bars = await data_manager.load_bars(symbol, start_time, end_time)
+    trades = await data_manager.load_trades(symbol, start_time, end_time)
+    quotes = await data_manager.load_quotes(symbol, start_time, end_time)
+    
+    # Validate
+    validator = DataValidator()
+    reports = validator.validate_data_quality(
+        bars_df=bars if not bars.empty else None,
+        trades_df=trades if not trades.empty else None,
+        quotes_df=quotes if not quotes.empty else None,
+        symbol=symbol
+    )
+    
+    # Get summary
+    summary = validator.create_summary_report(reports)
+    
+    return reports, summary

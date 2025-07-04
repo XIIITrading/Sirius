@@ -48,5 +48,55 @@
     "cached_at": "2025-07-04T15:50:13.566732+00:00",
     "data_points": 1335,
     "cache_key": "f0e0dd3b0fc3ecd4e28a31f2b8745be5"
+  },
+  "bc77bfe3a8920ac023695ac40f037c6f": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2024-06-27T03:15:00+00:00",
+    "end_time": "2024-06-27T20:55:00+00:00",
+    "cached_at": "2025-07-04T18:18:35.330080+00:00",
+    "data_points": 814,
+    "cache_key": "bc77bfe3a8920ac023695ac40f037c6f"
+  },
+  "092140abf51ce95335a8e36760ae83e9": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2024-06-27T03:15:00+00:00",
+    "end_time": "2024-06-27T21:55:00+00:00",
+    "cached_at": "2025-07-04T18:18:35.545067+00:00",
+    "data_points": 814,
+    "cache_key": "092140abf51ce95335a8e36760ae83e9"
+  },
+  "785ea362e93a598ae9d7d1d3ef5fa211": {
+    "symbol": "AAPL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2024-06-27T13:30:00+00:00",
+    "end_time": "2024-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-04T18:18:36.624261+00:00",
+    "data_points": 25234,
+    "cache_key": "785ea362e93a598ae9d7d1d3ef5fa211"
+  },
+  "9eb3abfd0f3bf3e0cf5526786bb9a594": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2024-06-27T05:11:00+00:00",
+    "end_time": "2024-06-27T21:51:00+00:00",
+    "cached_at": "2025-07-04T18:18:36.932072+00:00",
+    "data_points": 814,
+    "cache_key": "9eb3abfd0f3bf3e0cf5526786bb9a594"
+  },
+  "b49a07d7ac301d5f0fdeca6e175c5caa": {
+    "symbol": "AAPL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2024-06-27T13:33:00+00:00",
+    "end_time": "2024-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-04T18:18:37.664231+00:00",
+    "data_points": 8827,
+    "cache_key": "b49a07d7ac301d5f0fdeca6e175c5caa"
   }
 }

@@ -58,7 +58,8 @@ class ProtectedDataManager:
                        symbol: str,
                        start_time: datetime,
                        end_time: datetime,
-                       timeframe: str = '1min') -> pd.DataFrame:
+                       timeframe: str = '1min',
+                       use_cache: bool = True) -> pd.DataFrame:
         """
         Load bars with circuit breaker protection.
         
@@ -96,7 +97,8 @@ class ProtectedDataManager:
     async def load_trades(self,
                          symbol: str,
                          start_time: datetime,
-                         end_time: datetime) -> pd.DataFrame:
+                         end_time: datetime,
+                         use_cache: bool = True) -> pd.DataFrame:
         """Load trades with circuit breaker protection"""
         try:
             return await self.circuit_breaker.call(
@@ -118,7 +120,8 @@ class ProtectedDataManager:
     async def load_quotes(self,
                          symbol: str,
                          start_time: datetime,
-                         end_time: datetime) -> pd.DataFrame:
+                         end_time: datetime,
+                         use_cache: bool = True) -> pd.DataFrame:
         """Load quotes with circuit breaker protection"""
         try:
             return await self.circuit_breaker.call(
@@ -141,23 +144,16 @@ class ProtectedDataManager:
                               end_time: datetime, timeframe: str) -> pd.DataFrame:
         """Attempt to get bars from cache when circuit is open"""
         try:
-            # Access the cache directly, bypassing API calls
-            cache_key = self.data_manager._generate_cache_key(
+            # With the new modular structure, access cache manager directly
+            cached_data = self.data_manager.cache_manager.get(
                 symbol, 'bars', timeframe, start_time, end_time
             )
             
-            cached_data = self.data_manager.memory_cache.get(cache_key)
             if cached_data is not None:
                 logger.info(f"Returning cached bars for {symbol}")
-                return cached_data
-            
-            # Try file cache
-            file_data = self.data_manager._get_from_file_cache(
-                symbol, 'bars', timeframe, start_time, end_time
-            )
-            if file_data is not None:
-                logger.info(f"Returning file-cached bars for {symbol}")
-                return file_data
+                # Filter to requested range
+                return self.data_manager._filter_timerange(cached_data, start_time, end_time)
+                
         except Exception as e:
             logger.error(f"Error accessing cache: {e}")
         
@@ -169,20 +165,15 @@ class ProtectedDataManager:
                                end_time: datetime) -> pd.DataFrame:
         """Attempt to get trades from cache"""
         try:
-            cache_key = self.data_manager._generate_cache_key(
+            # With the new modular structure, access cache manager directly
+            cached_data = self.data_manager.cache_manager.get(
                 symbol, 'trades', 'tick', start_time, end_time
             )
             
-            cached_data = self.data_manager.memory_cache.get(cache_key)
             if cached_data is not None:
+                logger.info(f"Returning cached trades for {symbol}")
                 return cached_data
-            
-            # Try file cache
-            file_data = self.data_manager._get_from_file_cache(
-                symbol, 'trades', 'tick', start_time, end_time
-            )
-            if file_data is not None:
-                return file_data
+                
         except Exception as e:
             logger.error(f"Error accessing cache: {e}")
         
@@ -192,20 +183,15 @@ class ProtectedDataManager:
                                end_time: datetime) -> pd.DataFrame:
         """Attempt to get quotes from cache"""
         try:
-            cache_key = self.data_manager._generate_cache_key(
+            # With the new modular structure, access cache manager directly
+            cached_data = self.data_manager.cache_manager.get(
                 symbol, 'quotes', 'tick', start_time, end_time
             )
             
-            cached_data = self.data_manager.memory_cache.get(cache_key)
             if cached_data is not None:
+                logger.info(f"Returning cached quotes for {symbol}")
                 return cached_data
-            
-            # Try file cache
-            file_data = self.data_manager._get_from_file_cache(
-                symbol, 'quotes', 'tick', start_time, end_time
-            )
-            if file_data is not None:
-                return file_data
+                
         except Exception as e:
             logger.error(f"Error accessing cache: {e}")
         
@@ -235,3 +221,105 @@ class ProtectedDataManager:
     def __getattr__(self, name):
         """Delegate undefined methods to PolygonDataManager"""
         return getattr(self.data_manager, name)
+
+
+# Example usage showing integration with new structure
+async def create_protected_manager(api_key: str, **config) -> ProtectedDataManager:
+    """
+    Factory function to create a ProtectedDataManager with custom configuration
+    """
+    # Create base PolygonDataManager
+    polygon_manager = PolygonDataManager(
+        api_key=api_key,
+        cache_dir=config.get('cache_dir', './cache'),
+        memory_cache_size=config.get('memory_cache_size', 100),
+        file_cache_hours=config.get('file_cache_hours', 24),
+        extend_window_bars=config.get('extend_window_bars', 500),
+        report_dir=config.get('report_dir', './temp')
+    )
+    
+    # Wrap with circuit breaker protection
+    circuit_config = config.get('circuit_breaker', {})
+    protected_manager = ProtectedDataManager(
+        polygon_data_manager=polygon_manager,
+        circuit_breaker_config=circuit_config
+    )
+    
+    return protected_manager
+
+
+# Advanced usage example with custom error handling
+class EnhancedProtectedDataManager(ProtectedDataManager):
+    """
+    Enhanced version with additional features like retry logic and notifications
+    """
+    
+    def __init__(self, polygon_data_manager: PolygonDataManager,
+                 circuit_breaker_config: Optional[Dict[str, Any]] = None,
+                 max_retries: int = 3,
+                 retry_delay: float = 1.0):
+        super().__init__(polygon_data_manager, circuit_breaker_config)
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        
+    async def load_bars_with_retry(self, symbol: str, start_time: datetime,
+                                   end_time: datetime, timeframe: str = '1min') -> pd.DataFrame:
+        """Load bars with automatic retry on transient failures"""
+        import asyncio
+        
+        for attempt in range(self.max_retries):
+            try:
+                return await self.load_bars(symbol, start_time, end_time, timeframe)
+            except (CircuitBreakerError, RateLimitError) as e:
+                # Don't retry on circuit open or rate limit
+                raise
+            except Exception as e:
+                if attempt < self.max_retries - 1:
+                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+                    await asyncio.sleep(self.retry_delay * (attempt + 1))
+                else:
+                    logger.error(f"All {self.max_retries} attempts failed")
+                    raise
+        
+        return self._create_empty_bars_df()
+
+
+if __name__ == "__main__":
+    # Example usage
+    import asyncio
+    from datetime import timezone
+    
+    async def main():
+        # Create protected manager with custom config
+        config = {
+            'cache_dir': './cache',
+            'memory_cache_size': 200,
+            'circuit_breaker': {
+                'failure_threshold': 0.3,  # More sensitive
+                'consecutive_failures': 3,
+                'recovery_timeout': 30,
+                'rate_limits': {
+                    'bars': {'per_minute': 200, 'burst': 20},
+                    'trades': {'per_minute': 100, 'burst': 10},
+                    'quotes': {'per_minute': 100, 'burst': 10}
+                }
+            }
+        }
+        
+        manager = await create_protected_manager('your_api_key', **config)
+        
+        # Test data fetching
+        symbol = 'AAPL'
+        end_time = datetime(2024, 1, 15, 11, 0, 0, tzinfo=timezone.utc)
+        start_time = end_time - timedelta(hours=1)
+        
+        # This will be protected by circuit breaker
+        bars = await manager.load_bars(symbol, start_time, end_time)
+        print(f"Fetched {len(bars)} bars")
+        
+        # Check circuit status
+        status = manager.get_circuit_status()
+        print(f"Circuit state: {status['state']}")
+        print(f"Failure rate: {status['failure_rate']:.1%}")
+        
+    asyncio.run(main())

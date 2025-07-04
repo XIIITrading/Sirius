@@ -8,7 +8,7 @@ Features: Request batching, intelligent merging, prefetch optimization, async ex
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Set, Tuple, Optional, Any, Callable
+from typing import Dict, List, Set, Tuple, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
 from collections import defaultdict
 import pandas as pd
@@ -137,6 +137,12 @@ class RequestAggregator:
         """Clear all pending needs and cache"""
         self.pending_needs.clear()
         self.data_cache.clear()
+        # Reset stats but keep running totals
+        self.stats.update({
+            'total_needs': 0,
+            'aggregated_requests': 0,
+            'api_calls_saved': 0
+        })
         logger.info("Cleared all pending needs and cache")
     
     def _aggregate_needs(self) -> List[AggregatedRequest]:
@@ -283,6 +289,11 @@ class RequestAggregator:
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(f"Error fetching data: {result}")
+                # Create empty DataFrame for failed requests
+                req = request_map[i]
+                for need in req.module_needs:
+                    data_key = f"{need.symbol}_{need.data_type.value}_{need.timeframe}"
+                    module_data[need.module_name][data_key] = pd.DataFrame()
                 continue
             
             req = request_map[i]
@@ -304,6 +315,12 @@ class RequestAggregator:
                         f"Distributed {len(filtered_data)} data points to "
                         f"{need.module_name} for {data_key}"
                     )
+            else:
+                # Handle empty results
+                for need in req.module_needs:
+                    data_key = f"{need.symbol}_{need.data_type.value}_{need.timeframe}"
+                    module_data[need.module_name][data_key] = pd.DataFrame()
+                    logger.warning(f"No data available for {data_key}")
         
         return dict(module_data)
     
@@ -375,71 +392,156 @@ class RequestAggregator:
                 report.append(f"  Modules: {', '.join(modules)}")
         
         return "\n".join(report)
+    
+    def get_pending_needs_summary(self) -> Dict[str, Any]:
+        """Get a summary of pending needs by module and data type"""
+        summary = {
+            'by_module': defaultdict(lambda: {'bars': 0, 'trades': 0, 'quotes': 0}),
+            'by_symbol': defaultdict(lambda: {'bars': 0, 'trades': 0, 'quotes': 0}),
+            'total_time_range': {},
+            'priority_distribution': defaultdict(int)
+        }
+        
+        for needs in self.pending_needs.values():
+            for need in needs:
+                # By module
+                summary['by_module'][need.module_name][need.data_type.value] += 1
+                
+                # By symbol
+                summary['by_symbol'][need.symbol][need.data_type.value] += 1
+                
+                # Priority distribution
+                summary['priority_distribution'][need.priority] += 1
+                
+                # Total time range per symbol
+                if need.symbol not in summary['total_time_range']:
+                    summary['total_time_range'][need.symbol] = {
+                        'start': need.start_time,
+                        'end': need.end_time
+                    }
+                else:
+                    summary['total_time_range'][need.symbol]['start'] = min(
+                        summary['total_time_range'][need.symbol]['start'],
+                        need.start_time
+                    )
+                    summary['total_time_range'][need.symbol]['end'] = max(
+                        summary['total_time_range'][need.symbol]['end'],
+                        need.end_time
+                    )
+        
+        return dict(summary)
 
 
-# Example usage for module development
-async def example_usage():
-    """Example of how to use the RequestAggregator"""
+# Example integration with the new modular PolygonDataManager
+async def example_with_modular_data_manager():
+    """Example showing integration with the new modular structure"""
+    from polygon_data_manager import PolygonDataManager
     
-    # Create aggregator (without data manager for this example)
-    aggregator = RequestAggregator(extend_window_pct=0.1)
+    # Create data manager with the new modular structure
+    data_manager = PolygonDataManager(
+        api_key='your_api_key',
+        cache_dir='./cache',
+        memory_cache_size=100,
+        file_cache_hours=24
+    )
     
-    # Simulate needs from different calculation modules
+    # Create aggregator
+    aggregator = RequestAggregator(
+        data_manager=data_manager,
+        extend_window_pct=0.15  # 15% extension
+    )
+    
+    # Simulate needs from multiple modules
     base_time = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
     
-    # Module 1: Trend Analysis needs 2 hours of 1-min bars
-    aggregator.register_need(DataNeed(
-        module_name="TrendAnalysis",
-        symbol="AAPL",
-        data_type=DataType.BARS,
-        timeframe="1min",
-        start_time=base_time - timedelta(hours=2),
-        end_time=base_time
-    ))
+    needs = [
+        # Trend Analysis Module
+        DataNeed(
+            module_name="TrendAnalysis",
+            symbol="AAPL",
+            data_type=DataType.BARS,
+            timeframe="1min",
+            start_time=base_time - timedelta(hours=2),
+            end_time=base_time,
+            priority=8
+        ),
+        DataNeed(
+            module_name="TrendAnalysis",
+            symbol="AAPL",
+            data_type=DataType.BARS,
+            timeframe="5min",
+            start_time=base_time - timedelta(hours=4),
+            end_time=base_time,
+            priority=7
+        ),
+        
+        # Order Flow Module
+        DataNeed(
+            module_name="OrderFlow",
+            symbol="AAPL",
+            data_type=DataType.TRADES,
+            timeframe="tick",
+            start_time=base_time - timedelta(minutes=30),
+            end_time=base_time,
+            priority=9
+        ),
+        DataNeed(
+            module_name="OrderFlow",
+            symbol="AAPL",
+            data_type=DataType.QUOTES,
+            timeframe="tick",
+            start_time=base_time - timedelta(minutes=30),
+            end_time=base_time,
+            priority=9
+        ),
+        
+        # Volume Analysis Module (overlapping with TrendAnalysis)
+        DataNeed(
+            module_name="VolumeAnalysis",
+            symbol="AAPL",
+            data_type=DataType.BARS,
+            timeframe="1min",
+            start_time=base_time - timedelta(hours=1, minutes=30),
+            end_time=base_time + timedelta(minutes=30),
+            priority=8
+        ),
+    ]
     
-    # Module 2: Order Flow needs 30 minutes of trades
-    aggregator.register_need(DataNeed(
-        module_name="OrderFlow",
-        symbol="AAPL",
-        data_type=DataType.TRADES,
-        timeframe="tick",
-        start_time=base_time - timedelta(minutes=30),
-        end_time=base_time
-    ))
+    # Register all needs
+    aggregator.register_needs(needs)
     
-    # Module 3: Market Structure needs 1 hour of 5-min bars
-    aggregator.register_need(DataNeed(
-        module_name="MarketStructure",
-        symbol="AAPL",
-        data_type=DataType.BARS,
-        timeframe="5min",
-        start_time=base_time - timedelta(hours=1),
-        end_time=base_time
-    ))
-    
-    # Module 4: Another module needs overlapping 1-min bars
-    aggregator.register_need(DataNeed(
-        module_name="VolumeAnalysis",
-        symbol="AAPL",
-        data_type=DataType.BARS,
-        timeframe="1min",
-        start_time=base_time - timedelta(hours=1, minutes=30),
-        end_time=base_time + timedelta(minutes=30)
-    ))
-    
-    # Show aggregation results
+    # Show pre-fetch report
     print(aggregator.create_request_report())
     
-    # Show what requests would be made
-    aggregated = aggregator._aggregate_needs()
-    print("\n\nAGGREGATED REQUESTS:")
+    # Get summary
+    summary = aggregator.get_pending_needs_summary()
+    print("\n\nPENDING NEEDS SUMMARY:")
+    print(f"By Module: {dict(summary['by_module'])}")
+    print(f"By Symbol: {dict(summary['by_symbol'])}")
+    print(f"Priority Distribution: {dict(summary['priority_distribution'])}")
+    
+    # Fetch all data
+    module_data = await aggregator.fetch_all_data()
+    
+    # Show results
+    print("\n\nFETCH RESULTS:")
     print("-" * 40)
-    for req in aggregated:
-        print(f"{req.symbol} {req.data_type.value} {req.timeframe}: "
-              f"{req.start_time.strftime('%H:%M')} to {req.end_time.strftime('%H:%M')} "
-              f"({len(req.requesting_modules)} modules)")
+    for module_name, data_dict in module_data.items():
+        print(f"\n{module_name}:")
+        for data_key, df in data_dict.items():
+            if not df.empty:
+                print(f"  {data_key}: {len(df)} rows [{df.index.min()} to {df.index.max()}]")
+            else:
+                print(f"  {data_key}: No data available")
+    
+    # Final stats
+    print("\n\nFINAL STATISTICS:")
+    final_stats = aggregator.get_stats()
+    print(f"Total API calls saved: {final_stats['api_calls_saved']}")
+    print(f"Total data points fetched: {final_stats['data_points_fetched']:,}")
+    print(f"Cached datasets: {final_stats['cached_datasets']}")
 
 
 if __name__ == "__main__":
     # Run the example
-    asyncio.run(example_usage())
+    asyncio.run(example_with_modular_data_manager())

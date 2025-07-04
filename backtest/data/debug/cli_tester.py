@@ -18,7 +18,7 @@ data_dir = os.path.dirname(current_dir)
 backtest_dir = os.path.dirname(data_dir)
 sys.path.insert(0, backtest_dir)
 
-from data.debug.test_utils import parse_datetime
+from backtest.data.debug.test_utils import parse_datetime
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -124,7 +124,7 @@ Examples:
     
     # Route to appropriate test
     if args.module == "aggregator":
-        from data.debug.test_request_aggregator import (
+        from backtest.data.debug.test_request_aggregator import (
             test_aggregator_efficiency,
             test_data_distribution,
             test_complex_scenario
@@ -141,7 +141,7 @@ Examples:
         asyncio.run(run())
     
     elif args.module == "integration":
-        from data.debug.test_integration import (
+        from backtest.data.debug.test_integration import (
             test_basic_integration,
             test_coordinator_integration,
             test_cache_efficiency
@@ -167,7 +167,7 @@ Examples:
         asyncio.run(run())
     
     elif args.module == "validator":
-        from data.debug.test_data_validator import (
+        from backtest.data.debug.test_data_validator import (
             test_validator_with_real_data,
             test_validator_edge_cases,
             test_validator_performance
@@ -194,7 +194,7 @@ Examples:
         asyncio.run(run())
     
     elif args.module == "aligner":
-        from data.debug.test_trade_quote_aligner import (
+        from backtest.data.debug.test_trade_quote_aligner import (
             test_aligner_with_real_data,
             test_aligner_edge_cases,
             test_aligner_performance,
@@ -240,10 +240,10 @@ Examples:
         console.print("=" * 80)
         
         # Import all test functions
-        from data.debug.test_request_aggregator import test_complex_scenario
-        from data.debug.test_integration import test_coordinator_integration
-        from data.debug.test_data_validator import test_validator_edge_cases
-        from data.debug.test_trade_quote_aligner import test_aligner_edge_cases
+        from backtest.data.debug.test_request_aggregator import test_complex_scenario
+        from backtest.data.debug.test_integration import test_coordinator_integration
+        from backtest.data.debug.test_data_validator import test_validator_edge_cases
+        from backtest.data.debug.test_trade_quote_aligner import test_aligner_edge_cases
         
         async def run_all():
             # Run RequestAggregator tests
@@ -313,7 +313,7 @@ Examples:
 async def test_circuit_breaker_real_data(symbol: str, test_time: datetime, test_num: int):
     """Test circuit breaker functionality with REAL Polygon API"""
     try:
-        # Load from .env file
+        # Load from backtest.data.env file
         import os
         from dotenv import load_dotenv
         
@@ -328,9 +328,9 @@ async def test_circuit_breaker_real_data(symbol: str, test_time: datetime, test_
             console.print("[yellow]Please ensure your .env file contains: POLYGON_API_KEY=your_key_here[/yellow]")
             return
         
-        from data.polygon_data_manager import PolygonDataManager
-        from data.protected_data_manager import ProtectedDataManager
-        from data.circuit_breaker import NoDataAvailableError
+        from backtest.data.polygon_data_manager import PolygonDataManager
+        from backtest.data.protected_data_manager import ProtectedDataManager
+        from backtest.data.circuit_breaker import NoDataAvailableError
     except ImportError as e:
         console.print(f"[red]Import error: {e}[/red]")
         if "dotenv" in str(e):

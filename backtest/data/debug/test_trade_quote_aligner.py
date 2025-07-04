@@ -18,9 +18,9 @@ data_dir = os.path.dirname(current_dir)
 backtest_dir = os.path.dirname(data_dir)
 sys.path.insert(0, backtest_dir)
 
-from data.trade_quote_aligner import TradeQuoteAligner, TradeSide
+from backtest.data.trade_quote_aligner import TradeQuoteAligner, TradeSide
 from backtest.data.polygon_data_manager import PolygonDataManager
-from data.debug.test_utils import parse_datetime, print_dataframe_summary
+from backtest.data.debug.test_utils import parse_datetime, print_dataframe_summary
 
 
 async def test_aligner_with_real_data(symbol: str, entry_time: datetime):

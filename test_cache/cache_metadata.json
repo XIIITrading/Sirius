@@ -1,0 +1,11 @@
+{
+  "518cd58dc2ed68fec89cdceb1af032ed": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-01-15T02:05:00+00:00",
+    "end_time": "2025-01-15T18:50:00+00:00",
+    "cached_at": "2025-07-04T20:44:22.109205+00:00",
+    "data_points": 396
+  }
+}

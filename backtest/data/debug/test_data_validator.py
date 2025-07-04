@@ -18,9 +18,9 @@ data_dir = os.path.dirname(current_dir)
 backtest_dir = os.path.dirname(data_dir)
 sys.path.insert(0, backtest_dir)
 
-from data.data_validator import DataValidator, ValidationLevel
+from backtest.data.data_validator import DataValidator, ValidationLevel
 from backtest.data.polygon_data_manager import PolygonDataManager
-from data.debug.test_utils import (
+from backtest.data.debug.test_utils import (
     parse_datetime, 
     create_sample_bars,      # Fixed function names
     create_sample_trades, 

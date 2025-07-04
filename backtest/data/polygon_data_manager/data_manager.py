@@ -7,11 +7,15 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Tuple
 import pandas as pd
+from dotenv import load_dotenv
 
 from .api_client import PolygonAPIClient
 from .cache_manager import CacheManager
 from .request_tracker import RequestTracker
 from .models import DataRequest
+
+# Ensure environment is loaded
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +38,30 @@ class PolygonDataManager:
         Initialize with modular components.
         
         Args:
-            api_key: Polygon API key
+            api_key: Polygon API key (uses env var if not provided)
             cache_dir: Directory for file cache
             memory_cache_size: Max items in memory cache
             file_cache_hours: Hours to keep file cache valid
             extend_window_bars: Extra bars to fetch for caching
             report_dir: Directory for reports
         """
-        # Initialize components
+        # Get API key with proper validation
+        if api_key is None:
+            api_key = os.environ.get('POLYGON_API_KEY')
+            if not api_key:
+                # Try one more time with explicit load
+                load_dotenv()
+                api_key = os.environ.get('POLYGON_API_KEY')
+                
+        if not api_key:
+            raise ValueError(
+                "Polygon API key not found. Please either:\n"
+                "1. Pass api_key parameter to PolygonDataManager\n"
+                "2. Set POLYGON_API_KEY environment variable\n"
+                "3. Create a .env file with POLYGON_API_KEY=your_key"
+            )
+            
+        # Initialize components with validated key
         self.api_client = PolygonAPIClient(api_key)
         
         # Set up cache directory
@@ -61,7 +81,7 @@ class PolygonDataManager:
         self.api_calls = 0
         self.cache_hits = 0
         
-        logger.info("PolygonDataManager initialized")
+        logger.info("PolygonDataManager initialized with API key")
         
     def set_current_plugin(self, plugin_name: str):
         """Set the current plugin making requests"""

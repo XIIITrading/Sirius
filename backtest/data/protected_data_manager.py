@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any
 import pandas as pd
 
 from .circuit_breaker import CircuitBreaker, CircuitBreakerError, RateLimitError, NoDataAvailableError
-from .polygon_data_manager.data_manager import PolygonDataManager
+from .polygon_data_manager import PolygonDataManager
 
 logger = logging.getLogger(__name__)
 

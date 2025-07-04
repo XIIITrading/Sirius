@@ -16,6 +16,7 @@ data_dir = os.path.dirname(current_dir)
 backtest_dir = os.path.dirname(data_dir)
 sys.path.insert(0, backtest_dir)
 
+from backtest.data.polygon_data_manager import PolygonDataManager
 from data.request_aggregator import RequestAggregator, DataNeed, DataType
 from data.debug.test_utils import (
     parse_datetime, MockPolygonDataManager, print_dataframe_summary

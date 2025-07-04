@@ -1,4 +1,4 @@
-# data/__init__.py
+# backtest/data/__init__.py
 """
 Backtest Data Module - Intelligent data management for backtesting
 """
@@ -9,6 +9,7 @@ from .protected_data_manager import ProtectedDataManager
 from .circuit_breaker import CircuitBreaker, CircuitBreakerError, RateLimitError, NoDataAvailableError
 from .data_validator import DataValidator, ValidationReport
 from .trade_quote_aligner import TradeQuoteAligner, TradeSide
+from .unified_data_system import UnifiedDataSystem, create_data_system
 
 __all__ = [
     'PolygonDataManager',
@@ -24,5 +25,7 @@ __all__ = [
     'DataValidator',
     'ValidationReport',
     'TradeQuoteAligner',
-    'TradeSide'
+    'TradeSide',
+    'UnifiedDataSystem',
+    'create_data_system'
 ]

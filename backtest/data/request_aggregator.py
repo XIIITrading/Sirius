@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from collections import defaultdict
 import pandas as pd
 from enum import Enum
+from typing import Union
 
 logger = logging.getLogger(__name__)
 

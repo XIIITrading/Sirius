@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List, Any
+from backtest.data.polygon_data_manager import PolygonDataManager
 
 
 def parse_datetime(dt_str: str) -> datetime:

@@ -19,7 +19,7 @@ backtest_dir = os.path.dirname(data_dir)
 sys.path.insert(0, backtest_dir)
 
 from data.trade_quote_aligner import TradeQuoteAligner, TradeSide
-from data.polygon_data_manager.data_manager import PolygonDataManager  # Fixed import
+from backtest.data.polygon_data_manager import PolygonDataManager
 from data.debug.test_utils import parse_datetime, print_dataframe_summary
 
 

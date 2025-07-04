@@ -1,345 +1,141 @@
-"""Main PolygonDataManager coordinating all components"""
-import os
-import time
-import logging
-from pathlib import Path
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
-import pandas as pd
+# backtest/data/data_coordinator.py
+"""
+Module: Data Coordinator
+Purpose: Coordinates data requests from multiple calculation modules
+Features: Module registration, need aggregation, concurrent fetching, report generation
+"""
 
-from .api_client import PolygonAPIClient
-from .cache_manager import CacheManager
-from .request_tracker import RequestTracker
-from .models import DataRequest
-from typing import Optional, Dict, Any, Tuple
+import logging
+import asyncio
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, Any, Tuple
+from collections import defaultdict
+import json
+from pathlib import Path
+
+from .request_aggregator import RequestAggregator, DataNeed, DataType
+from .polygon_data_manager import PolygonDataManager
+from .protected_data_manager import ProtectedDataManager
 
 logger = logging.getLogger(__name__)
 
 
-class PolygonDataManager:
+class DataCoordinator:
     """
-    Simplified data manager that coordinates API calls and caching.
-    
-    This is now a clean coordinator that delegates to specialized components.
+    Coordinates data requests from multiple calculation modules.
+    Acts as the central hub for data management in the backtesting system.
     """
     
-    def __init__(self,
-                 api_key: Optional[str] = None,
-                 cache_dir: Optional[str] = None,
-                 memory_cache_size: int = 100,
-                 file_cache_hours: int = 24,
-                 extend_window_bars: int = 500,
-                 report_dir: Optional[str] = None):
+    def __init__(self, data_manager: Union[PolygonDataManager, ProtectedDataManager]):
         """
-        Initialize with modular components.
+        Initialize coordinator with a data manager.
         
         Args:
-            api_key: Polygon API key
-            cache_dir: Directory for file cache
-            memory_cache_size: Max items in memory cache
-            file_cache_hours: Hours to keep file cache valid
-            extend_window_bars: Extra bars to fetch for caching
-            report_dir: Directory for reports
+            data_manager: Either PolygonDataManager or ProtectedDataManager instance
         """
-        # Initialize components
-        self.api_client = PolygonAPIClient(api_key)
+        self.data_manager = data_manager
+        self.aggregator = RequestAggregator(data_manager=data_manager)
+        self.registered_modules = {}
         
-        # Set up cache directory
-        if cache_dir is None:
-            cache_dir = Path(__file__).parent.parent.parent / 'cache' / 'polygon_data'
-        self.cache_manager = CacheManager(cache_dir, memory_cache_size, file_cache_hours)
+        logger.info("DataCoordinator initialized")
+    
+    def register_module(self, module_name: str, module_config: Dict[str, Any]):
+        """Register a calculation module"""
+        self.registered_modules[module_name] = module_config
+        logger.info(f"Registered module: {module_name}")
+    
+    def _generate_module_needs(self, symbol: str, entry_time: datetime, 
+                              direction: str) -> List[DataNeed]:
+        """Generate data needs for all registered modules"""
+        needs = []
         
-        # Request tracking
-        if report_dir is None:
-            report_dir = Path(__file__).parent.parent.parent / 'temp'
-        self.request_tracker = RequestTracker(report_dir)
-        
-        # Configuration
-        self.extend_window_bars = extend_window_bars
-        
-        # Statistics
-        self.api_calls = 0
-        self.cache_hits = 0
-        
-        logger.info("PolygonDataManager initialized")
-        
-    def set_current_plugin(self, plugin_name: str):
-        """Set the current plugin making requests"""
-        self.request_tracker.set_current_plugin(plugin_name)
-        
-    async def load_bars(self, symbol: str, start_time: datetime, 
-                       end_time: datetime, timeframe: str = '1min') -> pd.DataFrame:
-        """Load bar data with caching"""
-        start_tracking = time.time()
-        
-        # Ensure UTC
-        if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
-        if end_time.tzinfo is None:
-            end_time = end_time.replace(tzinfo=timezone.utc)
+        # Generate needs based on module types
+        for module_name in self.registered_modules:
+            if module_name == "TrendAnalysis":
+                needs.extend([
+                    DataNeed(module_name, symbol, DataType.BARS, "1min",
+                            entry_time - timedelta(hours=2), entry_time),
+                    DataNeed(module_name, symbol, DataType.BARS, "5min",
+                            entry_time - timedelta(hours=4), entry_time),
+                    DataNeed(module_name, symbol, DataType.BARS, "15min",
+                            entry_time - timedelta(hours=6), entry_time),
+                ])
             
-        # Create request object
-        request = DataRequest(
-            request_id=f"{self.request_tracker.current_plugin}_{symbol}_{timeframe}_{int(time.time()*1000)}",
-            plugin_name=self.request_tracker.current_plugin,
-            symbol=symbol,
-            data_type='bars',
-            timeframe=timeframe,
-            start_time=start_time,
-            end_time=end_time,
-            requested_at=datetime.now(timezone.utc),
-            source='pending',
-            success=False,
-            returned_count=0
-        )
-        
-        # Add extension for efficiency
-        minutes_per_bar = self._get_minutes_per_bar(timeframe)
-        extended_start = start_time - timedelta(minutes=self.extend_window_bars * minutes_per_bar)
-        extended_end = end_time + timedelta(minutes=self.extend_window_bars * minutes_per_bar)
-        
-        try:
-            # Check cache
-            df = self.cache_manager.get(symbol, 'bars', timeframe, extended_start, extended_end)
+            elif module_name == "MarketStructure":
+                needs.append(
+                    DataNeed(module_name, symbol, DataType.BARS, "1min",
+                            entry_time - timedelta(hours=1), 
+                            entry_time + timedelta(minutes=30))
+                )
             
-            if df is not None:
-                self.cache_hits += 1
-                request.source = 'cache'
-                filtered = self._filter_timerange(df, start_time, end_time)
-                request.success = True
-                request.returned_count = len(filtered)
-                if len(filtered) > 0:
-                    request.actual_start = filtered.index.min()
-                    request.actual_end = filtered.index.max()
-            else:
-                # Fetch from API
-                logger.info(f"Fetching {symbol} bars from Polygon API")
-                request.source = 'polygon_api'
-                self.api_calls += 1
-                
-                df = await self.api_client.fetch_bars(symbol, extended_start, extended_end, timeframe)
-                
-                if df is not None and not df.empty:
-                    # Cache the data
-                    self.cache_manager.put(symbol, 'bars', timeframe, extended_start, extended_end, df)
-                    
-                    # Return filtered range
-                    filtered = self._filter_timerange(df, start_time, end_time)
-                    request.success = True
-                    request.returned_count = len(filtered)
-                    if len(filtered) > 0:
-                        request.actual_start = filtered.index.min()
-                        request.actual_end = filtered.index.max()
-                else:
-                    filtered = pd.DataFrame()
-                    request.success = False
-                    request.error = "No data returned from API"
-                    
-        except Exception as e:
-            logger.error(f"Error loading bars: {e}")
-            filtered = pd.DataFrame()
-            request.success = False
-            request.error = str(e)
+            elif module_name == "OrderFlow":
+                needs.extend([
+                    DataNeed(module_name, symbol, DataType.TRADES, "tick",
+                            entry_time - timedelta(minutes=30), entry_time),
+                    DataNeed(module_name, symbol, DataType.QUOTES, "tick",
+                            entry_time - timedelta(minutes=30), entry_time),
+                ])
             
-        # Track request
-        request.processing_time_ms = (time.time() - start_tracking) * 1000
-        self.request_tracker.track_request(request)
+            elif module_name == "VolumeAnalysis":
+                needs.extend([
+                    DataNeed(module_name, symbol, DataType.BARS, "1min",
+                            entry_time - timedelta(hours=1, minutes=30), entry_time),
+                    DataNeed(module_name, symbol, DataType.TRADES, "tick",
+                            entry_time - timedelta(minutes=45), entry_time),
+                ])
         
-        return filtered
+        return needs
+    
+    async def fetch_all_module_data(self, symbol: str, entry_time: datetime, 
+                                   direction: str) -> Dict[str, Dict[str, pd.DataFrame]]:
+        """
+        Fetch all data needed by registered modules.
         
-    async def load_trades(self, symbol: str, start_time: datetime,
-                         end_time: datetime) -> pd.DataFrame:
-        """Load trade data with caching"""
-        start_tracking = time.time()
+        Returns:
+            Dict mapping module_name -> data_key -> DataFrame
+        """
+        # Clear previous needs
+        self.aggregator.clear_needs()
         
-        # Ensure UTC
-        if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
-        if end_time.tzinfo is None:
-            end_time = end_time.replace(tzinfo=timezone.utc)
-            
-        # Create request object
-        request = DataRequest(
-            request_id=f"{self.request_tracker.current_plugin}_{symbol}_trades_{int(time.time()*1000)}",
-            plugin_name=self.request_tracker.current_plugin,
-            symbol=symbol,
-            data_type='trades',
-            timeframe='tick',
-            start_time=start_time,
-            end_time=end_time,
-            requested_at=datetime.now(timezone.utc),
-            source='pending',
-            success=False,
-            returned_count=0
-        )
+        # Generate needs for all modules
+        needs = self._generate_module_needs(symbol, entry_time, direction)
         
-        try:
-            # Check cache
-            df = self.cache_manager.get(symbol, 'trades', 'tick', start_time, end_time)
-            
-            if df is not None:
-                self.cache_hits += 1
-                request.source = 'cache'
-                request.success = True
-                request.returned_count = len(df)
-                if len(df) > 0:
-                    request.actual_start = df.index.min()
-                    request.actual_end = df.index.max()
-            else:
-                # Fetch from API
-                logger.info(f"Fetching {symbol} trades from Polygon API")
-                request.source = 'polygon_api'
-                self.api_calls += 1
-                
-                df = await self.api_client.fetch_trades(symbol, start_time, end_time)
-                
-                if df is not None and not df.empty:
-                    # Cache the data
-                    self.cache_manager.put(symbol, 'trades', 'tick', start_time, end_time, df)
-                    request.success = True
-                    request.returned_count = len(df)
-                    request.actual_start = df.index.min()
-                    request.actual_end = df.index.max()
-                else:
-                    df = pd.DataFrame()
-                    request.success = False
-                    request.error = "No data returned from API"
-                    
-        except Exception as e:
-            logger.error(f"Error loading trades: {e}")
-            df = pd.DataFrame()
-            request.success = False
-            request.error = str(e)
-            
-        # Track request
-        request.processing_time_ms = (time.time() - start_tracking) * 1000
-        self.request_tracker.track_request(request)
+        # Register needs with aggregator
+        self.aggregator.register_needs(needs)
         
-        return df
+        # Fetch all data efficiently
+        module_data = await self.aggregator.fetch_all_data()
         
-    async def load_quotes(self, symbol: str, start_time: datetime,
-                         end_time: datetime) -> pd.DataFrame:
-        """Load quote data with caching"""
-        start_tracking = time.time()
-        
-        # Ensure UTC
-        if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
-        if end_time.tzinfo is None:
-            end_time = end_time.replace(tzinfo=timezone.utc)
-            
-        # Create request object
-        request = DataRequest(
-            request_id=f"{self.request_tracker.current_plugin}_{symbol}_quotes_{int(time.time()*1000)}",
-            plugin_name=self.request_tracker.current_plugin,
-            symbol=symbol,
-            data_type='quotes',
-            timeframe='tick',
-            start_time=start_time,
-            end_time=end_time,
-            requested_at=datetime.now(timezone.utc),
-            source='pending',
-            success=False,
-            returned_count=0
-        )
-        
-        try:
-            # Check cache
-            df = self.cache_manager.get(symbol, 'quotes', 'tick', start_time, end_time)
-            
-            if df is not None:
-                self.cache_hits += 1
-                request.source = 'cache'
-                request.success = True
-                request.returned_count = len(df)
-                if len(df) > 0:
-                    request.actual_start = df.index.min()
-                    request.actual_end = df.index.max()
-            else:
-                # Fetch from API
-                logger.info(f"Fetching {symbol} quotes from Polygon API")
-                request.source = 'polygon_api'
-                self.api_calls += 1
-                
-                df = await self.api_client.fetch_quotes(symbol, start_time, end_time)
-                
-                if df is not None and not df.empty:
-                    # Cache the data
-                    self.cache_manager.put(symbol, 'quotes', 'tick', start_time, end_time, df)
-                    request.success = True
-                    request.returned_count = len(df)
-                    request.actual_start = df.index.min()
-                    request.actual_end = df.index.max()
-                else:
-                    df = pd.DataFrame()
-                    request.success = False
-                    request.error = "No data returned from API"
-                    
-        except Exception as e:
-            logger.error(f"Error loading quotes: {e}")
-            df = pd.DataFrame()
-            request.success = False
-            request.error = str(e)
-            
-        # Track request
-        request.processing_time_ms = (time.time() - start_tracking) * 1000
-        self.request_tracker.track_request(request)
-        
-        return df
-        
-    def _get_minutes_per_bar(self, timeframe: str) -> int:
-        """Convert timeframe string to minutes"""
-        timeframe_map = {
-            '1min': 1,
-            '5min': 5,
-            '15min': 15,
-            '30min': 30,
-            '1hour': 60,
-            'hour': 60,
-            'day': 1440
-        }
-        return timeframe_map.get(timeframe, 1)
-        
-    def _filter_timerange(self, df: pd.DataFrame, 
-                         start_time: datetime, end_time: datetime) -> pd.DataFrame:
-        """Filter dataframe to requested time range"""
-        if df.empty:
-            return df
-            
-        # Ensure timezone aware comparison
-        if start_time.tzinfo is None:
-            start_time = pd.Timestamp(start_time).tz_localize('UTC')
-        else:
-            start_time = pd.Timestamp(start_time)
-            
-        if end_time.tzinfo is None:
-            end_time = pd.Timestamp(end_time).tz_localize('UTC')
-        else:
-            end_time = pd.Timestamp(end_time)
-        
-        mask = (df.index >= start_time) & (df.index <= end_time)
-        return df[mask].copy()
-        
+        return module_data
+    
+    def get_summary_report(self) -> str:
+        """Get summary report from aggregator"""
+        return self.aggregator.create_request_report()
+    
     def generate_data_report(self) -> Tuple[str, str]:
-        """Generate comprehensive data request report"""
-        return self.request_tracker.generate_report()
-        
-    def get_cache_stats(self) -> Dict[str, Any]:
-        """Get cache and API statistics"""
-        cache_stats = self.cache_manager.get_stats()
-        tracker_stats = self.request_tracker.get_stats()
-        
-        return {
-            **cache_stats,
-            'api_stats': {
-                'api_calls': self.api_calls,
-                'cache_hits': self.cache_hits,
-                'total_requests': tracker_stats['total_requests'],
-                'cache_hit_rate': (self.cache_hits / max(1, tracker_stats['total_requests'])) * 100
+        """Generate detailed data report"""
+        if hasattr(self.data_manager, 'generate_data_report'):
+            return self.data_manager.generate_data_report()
+        else:
+            # Fallback for when using basic PolygonDataManager
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            report_dir = Path('./temp')
+            report_dir.mkdir(exist_ok=True)
+            
+            # Create simple report
+            json_file = report_dir / f"data_report_{timestamp}.json"
+            summary_file = report_dir / f"data_report_{timestamp}_summary.txt"
+            
+            report_data = {
+                "timestamp": timestamp,
+                "aggregator_stats": self.aggregator.get_stats(),
+                "registered_modules": list(self.registered_modules.keys())
             }
-        }
-        
-    def clear_cache(self, symbol: Optional[str] = None):
-        """Clear cache data"""
-        self.cache_manager.clear(symbol)
-        logger.info(f"Cache cleared for {symbol if symbol else 'all symbols'}")
+            
+            with open(json_file, 'w') as f:
+                json.dump(report_data, f, indent=2)
+            
+            with open(summary_file, 'w') as f:
+                f.write(self.get_summary_report())
+            
+            return str(json_file), str(summary_file)

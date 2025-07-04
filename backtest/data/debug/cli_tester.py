@@ -328,7 +328,7 @@ async def test_circuit_breaker_real_data(symbol: str, test_time: datetime, test_
             console.print("[yellow]Please ensure your .env file contains: POLYGON_API_KEY=your_key_here[/yellow]")
             return
         
-        from data.polygon_data_manager.data_manager import PolygonDataManager  # Fixed import
+        from backtest.data.polygon_data_manager import PolygonDataManager
         from data.protected_data_manager import ProtectedDataManager
         from data.circuit_breaker import NoDataAvailableError
     except ImportError as e:

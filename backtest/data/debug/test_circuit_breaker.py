@@ -17,7 +17,7 @@ from backtest.data.circuit_breaker import (
     DataAvailabilityChecker
 )
 from backtest.data.protected_data_manager import ProtectedDataManager
-from backtest.data.polygon_data_manager.data_manager import PolygonDataManager  # Fixed import
+from backtest.data.polygon_data_manager import PolygonDataManager
 
 logger = logging.getLogger(__name__)
 

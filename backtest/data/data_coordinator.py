@@ -1,9 +1,20 @@
-# Example usage with the new modular structure
-import asyncio
-from datetime import datetime, timezone
-from backtest.data.polygon_data_manager import PolygonDataManager
-from backtest.data.data_coordinator import DataCoordinator
-from backtest.data.protected_data_manager import ProtectedDataManager
+"""
+Module: Data Coordinator
+Purpose: Coordinates data requests from multiple calculation modules
+Features: Module registration, need aggregation, concurrent fetching, report generation
+"""
+
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, Any, Tuple
+from collections import defaultdict
+import json
+from pathlib import Path
+
+from .request_aggregator import RequestAggregator, DataNeed, DataType
+from .polygon_data_manager import PolygonDataManager
+
+logger = logging.getLogger(__name__)
 
 async def main():
     # Option 1: Direct usage

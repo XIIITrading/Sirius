@@ -8,9 +8,10 @@ from typing import Optional, Dict, Any
 import pandas as pd
 
 from .api_client import PolygonAPIClient
-from .cache import CacheManager
+from .cache_manager import CacheManager
 from .request_tracker import RequestTracker
 from .models import DataRequest
+from typing import Optional, Dict, Any, Tuple
 
 logger = logging.getLogger(__name__)
 

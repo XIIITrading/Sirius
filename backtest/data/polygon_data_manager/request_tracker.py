@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 from .models import DataRequest
 

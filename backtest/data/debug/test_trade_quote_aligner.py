@@ -19,7 +19,7 @@ backtest_dir = os.path.dirname(data_dir)
 sys.path.insert(0, backtest_dir)
 
 from data.trade_quote_aligner import TradeQuoteAligner, TradeSide
-from data.polygon_data_manager import PolygonDataManager
+from data.polygon_data_manager.data_manager import PolygonDataManager  # Fixed import
 from data.debug.test_utils import parse_datetime, print_dataframe_summary
 
 
@@ -38,8 +38,8 @@ async def test_aligner_with_real_data(symbol: str, entry_time: datetime):
     
     data_manager = PolygonDataManager(
         memory_cache_size=50,
-        file_cache_hours=24,
-        disable_polygon_cache=True
+        file_cache_hours=24
+        # Removed disable_polygon_cache=True as it doesn't exist
     )
     
     print(f"\nFetching trades and quotes for {symbol} at {entry_time}...")
@@ -48,6 +48,9 @@ async def test_aligner_with_real_data(symbol: str, entry_time: datetime):
         # Fetch 30 minutes of tick data
         start_time = entry_time - timedelta(minutes=30)
         end_time = entry_time
+        
+        # Set the plugin name for tracking
+        data_manager.set_current_plugin("TradeQuoteAligner_Test")
         
         # Fetch trades
         print("Fetching trades...")
@@ -86,7 +89,10 @@ async def test_aligner_with_real_data(symbol: str, entry_time: datetime):
                           'quote_bid', 'quote_ask', 'spread', 'trade_side', 
                           'confidence', 'quote_age_ms']
             
-            sample_df = aligned_df[sample_cols].head(10)
+            # Check which columns actually exist
+            available_cols = [col for col in sample_cols if col in aligned_df.columns]
+            
+            sample_df = aligned_df[available_cols].head(10)
             print(sample_df.to_string(float_format='%.4f'))
         
     except Exception as e:
@@ -262,13 +268,15 @@ async def test_order_flow_analysis(symbol: str, entry_time: datetime):
     
     data_manager = PolygonDataManager(
         memory_cache_size=50,
-        file_cache_hours=24,
-        disable_polygon_cache=True
+        file_cache_hours=24
     )
     
     print(f"\nAnalyzing order flow for {symbol} at {entry_time}...")
     
     try:
+        # Set plugin name for tracking
+        data_manager.set_current_plugin("OrderFlowAnalysis_Test")
+        
         # Test different time windows
         windows = [5, 15, 30]  # minutes
         

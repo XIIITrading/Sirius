@@ -17,7 +17,7 @@ data_dir = os.path.dirname(current_dir)
 backtest_dir = os.path.dirname(data_dir)
 sys.path.insert(0, backtest_dir)
 
-from data.polygon_data_manager import PolygonDataManager
+from data.polygon_data_manager.data_manager import PolygonDataManager  # Fixed import
 from data.request_aggregator import RequestAggregator, DataNeed, DataType
 from data.data_coordinator import DataCoordinator
 from data.debug.test_utils import parse_datetime, print_dataframe_summary
@@ -34,8 +34,8 @@ async def test_basic_integration(symbol: str, entry_time: datetime):
     data_manager = PolygonDataManager(
         memory_cache_size=50,
         file_cache_hours=24,
-        extend_window_bars=100,
-        disable_polygon_cache=True
+        extend_window_bars=100
+        # Removed disable_polygon_cache=True
     )
     
     # Create aggregator
@@ -82,7 +82,8 @@ async def test_basic_integration(symbol: str, entry_time: datetime):
         print(f"\nCache Performance:")
         print(f"  Cache hits: {cache_stats['api_stats']['cache_hits']}")
         print(f"  API calls: {cache_stats['api_stats']['api_calls']}")
-        print(f"  Hit rate: {cache_stats['memory_cache']['hit_rate']:.1f}%")
+        if cache_stats['api_stats']['total_requests'] > 0:
+            print(f"  Hit rate: {cache_stats['api_stats']['cache_hit_rate']:.1f}%")
             
     except Exception as e:
         print(f"\nError during data fetch: {e}")
@@ -101,8 +102,7 @@ async def test_coordinator_integration(symbol: str, entry_time: datetime):
     data_manager = PolygonDataManager(
         memory_cache_size=100,
         file_cache_hours=24,
-        extend_window_bars=200,
-        disable_polygon_cache=True
+        extend_window_bars=200
     )
     
     # Create coordinator
@@ -147,7 +147,7 @@ async def test_coordinator_integration(symbol: str, entry_time: datetime):
         
         # Generate detailed report
         print("\nGenerating detailed data report...")
-        json_file, summary_file = data_manager.generate_data_report()
+        json_file, summary_file = coordinator.data_manager.generate_data_report()
         print(f"Reports saved to:")
         print(f"  JSON: {json_file}")
         print(f"  Summary: {summary_file}")
@@ -167,8 +167,7 @@ async def test_cache_efficiency(symbol: str, entry_time: datetime):
     # Use real API to see actual caching
     data_manager = PolygonDataManager(
         memory_cache_size=50,
-        file_cache_hours=24,
-        disable_polygon_cache=True
+        file_cache_hours=24
     )
     
     aggregator = RequestAggregator(data_manager=data_manager)
@@ -199,6 +198,12 @@ async def test_cache_efficiency(symbol: str, entry_time: datetime):
         print(f"Cache hits: {cache_stats['api_stats']['cache_hits']}")
         print(f"API calls: {cache_stats['api_stats']['api_calls']}")
         print(f"Memory cache items: {cache_stats['memory_cache']['cached_items']}")
+        
+        # Calculate hit rate for this iteration
+        total_requests = cache_stats['api_stats']['total_requests']
+        if total_requests > 0:
+            hit_rate = (cache_stats['api_stats']['cache_hits'] / total_requests) * 100
+            print(f"Cache hit rate: {hit_rate:.1f}%")
     
     print("\nCache efficiency demonstrated - subsequent requests should be much faster!")
 
@@ -214,11 +219,16 @@ async def test_real_world_scenario(symbol: str, entry_time: datetime):
     data_manager = PolygonDataManager(
         memory_cache_size=200,
         file_cache_hours=24,
-        extend_window_bars=500,  # Larger extension for production
-        disable_polygon_cache=True
+        extend_window_bars=500  # Larger extension for production
     )
     
     coordinator = DataCoordinator(data_manager)
+    
+    # Register modules
+    coordinator.register_module("TrendAnalysis", {})
+    coordinator.register_module("MarketStructure", {})
+    coordinator.register_module("OrderFlow", {})
+    coordinator.register_module("VolumeAnalysis", {})
     
     # Test with different entry times throughout the day
     test_scenarios = [
@@ -234,6 +244,9 @@ async def test_real_world_scenario(symbol: str, entry_time: datetime):
         
         # Clear previous needs
         coordinator.aggregator.clear_needs()
+        
+        # Set plugin name for tracking
+        data_manager.set_current_plugin(f"RealWorld_{scenario_name.replace(' ', '_')}")
         
         # Fetch data
         try:
@@ -252,7 +265,8 @@ async def test_real_world_scenario(symbol: str, entry_time: datetime):
             
             # Show cache performance
             cache_stats = data_manager.get_cache_stats()
-            print(f"Cache hit rate: {cache_stats['memory_cache']['hit_rate']:.1f}%")
+            if cache_stats['api_stats']['total_requests'] > 0:
+                print(f"Cache hit rate: {cache_stats['api_stats']['cache_hit_rate']:.1f}%")
             
         except Exception as e:
             print(f"Error in {scenario_name}: {e}")

@@ -328,9 +328,9 @@ async def test_circuit_breaker_real_data(symbol: str, test_time: datetime, test_
             console.print("[yellow]Please ensure your .env file contains: POLYGON_API_KEY=your_key_here[/yellow]")
             return
         
-        from backtest.data.polygon_data_manager import PolygonDataManager
-        from backtest.data.protected_data_manager import ProtectedDataManager
-        from backtest.data.circuit_breaker import NoDataAvailableError
+        from data.polygon_data_manager.data_manager import PolygonDataManager  # Fixed import
+        from data.protected_data_manager import ProtectedDataManager
+        from data.circuit_breaker import NoDataAvailableError
     except ImportError as e:
         console.print(f"[red]Import error: {e}[/red]")
         if "dotenv" in str(e):
@@ -347,8 +347,9 @@ async def test_circuit_breaker_real_data(symbol: str, test_time: datetime, test_
     console.print("\n[bold cyan]Testing Circuit Breaker with REAL Polygon API[/bold cyan]")
     console.print(f"Symbol: {symbol}, Time: {test_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
     
-    # Create real PolygonDataManager - NO PARAMETERS
+    # Create real PolygonDataManager
     polygon_manager = PolygonDataManager()
+    polygon_manager.set_current_plugin("CircuitBreakerTest")  # Set plugin name
     
     # Create protected manager with specific circuit breaker config
     circuit_config = {
@@ -475,7 +476,7 @@ async def test_circuit_breaker_real_data(symbol: str, test_time: datetime, test_
         
         console.print(f"  Circuit state after failures: [red]{protected_manager.circuit_breaker.state.value}[/red]")
         
-       # Additional test: Try data from the last 2 minutes before test time
+        # Additional test: Try data from the last 2 minutes before test time
         console.print("\n[yellow]Test 5: Recent quotes (last 2 minutes before test time)[/yellow]")
         very_recent_end = test_time.replace(tzinfo=timezone.utc)
         very_recent_start = very_recent_end - timedelta(minutes=2)

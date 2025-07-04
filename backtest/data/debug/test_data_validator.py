@@ -19,8 +19,13 @@ backtest_dir = os.path.dirname(data_dir)
 sys.path.insert(0, backtest_dir)
 
 from data.data_validator import DataValidator, ValidationLevel
-from data.polygon_data_manager import PolygonDataManager
-from data.debug.test_utils import parse_datetime, generate_mock_bars, generate_mock_trades, generate_mock_quotes
+from data.polygon_data_manager.data_manager import PolygonDataManager  # Fixed import
+from data.debug.test_utils import (
+    parse_datetime, 
+    create_sample_bars,      # Fixed function names
+    create_sample_trades, 
+    create_sample_quotes
+)
 
 
 async def test_validator_with_real_data(symbol: str, entry_time: datetime):
@@ -39,11 +44,14 @@ async def test_validator_with_real_data(symbol: str, entry_time: datetime):
     
     data_manager = PolygonDataManager(
         memory_cache_size=50,
-        file_cache_hours=24,
-        disable_polygon_cache=True
+        file_cache_hours=24
+        # Removed disable_polygon_cache=True
     )
     
     print(f"\nFetching data for {symbol} at {entry_time}...")
+    
+    # Set plugin name for tracking
+    data_manager.set_current_plugin("DataValidator_Test")
     
     # Fetch different types of data
     try:
@@ -75,7 +83,7 @@ async def test_validator_with_real_data(symbol: str, entry_time: datetime):
         # Validate all data
         print("\nValidating data quality...")
         reports = validator.validate_data_quality(
-            bars_df=bars_1min,
+            bars_df=bars_1min if not bars_1min.empty else None,
             trades_df=trades if not trades.empty else None,
             quotes_df=quotes if not quotes.empty else None,
             symbol=symbol
@@ -134,9 +142,12 @@ async def test_validator_edge_cases(symbol: str):
     
     # Test Case 2: Invalid OHLC relationships
     print("\n2. Testing invalid OHLC relationships...")
-    invalid_bars = generate_mock_bars(symbol, 
-                                    datetime(2025, 1, 15, 9, 30, 0, tzinfo=timezone.utc),
-                                    datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc))
+    invalid_bars = create_sample_bars(
+        num_bars=30,
+        base_price=100.0,
+        start_time=datetime(2025, 1, 15, 9, 30, 0, tzinfo=timezone.utc),
+        timeframe='1min'
+    )
     
     # Introduce errors
     invalid_bars.loc[invalid_bars.index[5], 'high'] = invalid_bars.loc[invalid_bars.index[5], 'low'] - 1
@@ -148,9 +159,12 @@ async def test_validator_edge_cases(symbol: str):
     
     # Test Case 3: Crossed quotes
     print("\n3. Testing crossed quotes...")
-    quotes = generate_mock_quotes(symbol,
-                                datetime(2025, 1, 15, 9, 30, 0, tzinfo=timezone.utc),
-                                datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc))
+    quotes = create_sample_quotes(
+        num_quotes=100,
+        base_price=100.0,
+        spread=0.02,
+        start_time=datetime(2025, 1, 15, 9, 30, 0, tzinfo=timezone.utc)
+    )
     
     # Create crossed quotes
     crossed_indices = quotes.index[10:15]
@@ -162,9 +176,12 @@ async def test_validator_edge_cases(symbol: str):
     
     # Test Case 4: Price spikes
     print("\n4. Testing price spikes...")
-    spike_bars = generate_mock_bars(symbol,
-                                  datetime(2025, 1, 15, 9, 30, 0, tzinfo=timezone.utc),
-                                  datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc))
+    spike_bars = create_sample_bars(
+        num_bars=30,
+        base_price=100.0,
+        start_time=datetime(2025, 1, 15, 9, 30, 0, tzinfo=timezone.utc),
+        timeframe='1min'
+    )
     
     # Create 20% spike
     spike_idx = spike_bars.index[15]
@@ -190,23 +207,43 @@ async def test_validator_performance(symbol: str, entry_time: datetime):
     # Generate large datasets
     print("\nGenerating large datasets...")
     
-    # 1 day of 1-minute bars (390 bars)
-    bars = generate_mock_bars(symbol,
-                            entry_time - timedelta(days=1),
-                            entry_time,
-                            '1min')
+    # 1 day of 1-minute bars (390 bars for market hours)
+    bars = create_sample_bars(
+        num_bars=390,
+        base_price=100.0,
+        start_time=entry_time - timedelta(days=1),
+        timeframe='1min'
+    )
     
-    # 30k trades
-    trades = generate_mock_trades(symbol,
-                                entry_time - timedelta(hours=1),
-                                entry_time,
-                                trades_per_minute=500)
+    # Generate many trades (30k trades over 1 hour)
+    print("Generating 30k trades...")
+    trades_list = []
+    current_time = entry_time - timedelta(hours=1)
+    for i in range(30000):
+        current_time += timedelta(seconds=0.12)  # ~500 trades per minute
+        trades_list.append({
+            'timestamp': current_time,
+            'price': 100 + np.random.randn() * 0.5,
+            'size': np.random.randint(100, 5000)
+        })
+    trades = pd.DataFrame(trades_list).set_index('timestamp')
     
-    # 60k quotes
-    quotes = generate_mock_quotes(symbol,
-                                entry_time - timedelta(hours=1),
-                                entry_time,
-                                quotes_per_minute=1000)
+    # Generate many quotes (60k quotes over 1 hour)
+    print("Generating 60k quotes...")
+    quotes_list = []
+    current_time = entry_time - timedelta(hours=1)
+    for i in range(60000):
+        current_time += timedelta(seconds=0.06)  # ~1000 quotes per minute
+        mid = 100 + np.random.randn() * 0.5
+        spread = np.random.uniform(0.01, 0.05)
+        quotes_list.append({
+            'timestamp': current_time,
+            'bid': mid - spread/2,
+            'ask': mid + spread/2,
+            'bid_size': np.random.randint(100, 1000),
+            'ask_size': np.random.randint(100, 1000)
+        })
+    quotes = pd.DataFrame(quotes_list).set_index('timestamp')
     
     print(f"Generated: {len(bars)} bars, {len(trades)} trades, {len(quotes)} quotes")
     

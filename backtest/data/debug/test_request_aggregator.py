@@ -125,7 +125,7 @@ async def test_data_distribution(symbol: str, entry_time: datetime):
     
     # Show API efficiency
     print("\n" + "-" * 60)
-    mock_manager.print_call_summary()
+    print(f"Mock API calls made: {mock_manager.call_count}")
     
     stats = aggregator.get_stats()
     print(f"\nAggregator Statistics:")

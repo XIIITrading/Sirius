@@ -175,5 +175,23 @@
     "end_time": "2025-06-27T21:51:00+00:00",
     "cached_at": "2025-07-04T21:03:41.075213+00:00",
     "data_points": 787
+  },
+  "311941fe4fa8fd7657209bc9f56576c1": {
+    "symbol": "TSLA",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:15:00+00:00",
+    "end_time": "2025-06-27T20:55:00+00:00",
+    "cached_at": "2025-07-04T21:24:56.619596+00:00",
+    "data_points": 742
+  },
+  "39e98b5e377d3a29bf04b25ac27e30b6": {
+    "symbol": "TSLA",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:15:00+00:00",
+    "end_time": "2025-06-27T21:55:00+00:00",
+    "cached_at": "2025-07-04T21:24:56.768113+00:00",
+    "data_points": 802
   }
 }

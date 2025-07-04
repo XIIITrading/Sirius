@@ -1,53 +1,202 @@
-# backtest/plugins/m1_ema/__init__.py
+# backtest/plugins/m1_ema_crossover/__init__.py
 """
 M1 EMA Crossover Plugin
-Complete self-contained plugin for 1-minute EMA crossover analysis.
+Interprets signals from dashboard and coordinates with data system
 """
 
 import logging
-from datetime import datetime
-from typing import Dict, Any
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, Callable
 
-from .plugin import M1EMAPlugin
+from backtest.data.polygon_data_manager import PolygonDataManager
+from modules.calculations.indicators.m1_ema import EMACalculator, EMAResult
 
 logger = logging.getLogger(__name__)
 
-# Create plugin instance
-_plugin = M1EMAPlugin()
+# Plugin metadata
+PLUGIN_NAME = "1-Min EMA Crossover"
+PLUGIN_VERSION = "1.0.0"
 
-# Export the main interface
+# Global data manager instance (will be set by dashboard)
+_data_manager: Optional[PolygonDataManager] = None
+
+
+def set_data_manager(data_manager: PolygonDataManager):
+    """Set the data manager instance"""
+    global _data_manager
+    _data_manager = data_manager
+
+
 async def run_analysis(symbol: str, entry_time: datetime, direction: str) -> Dict[str, Any]:
     """
-    Run M1 EMA Crossover analysis.
+    Run analysis for the dashboard
     
-    This is the single entry point for the plugin.
-    External systems only need to call this function.
+    Args:
+        symbol: Stock symbol
+        entry_time: Entry time for analysis
+        direction: Trade direction (LONG/SHORT)
+        
+    Returns:
+        Standardized signal dictionary
     """
     try:
-        # Validate inputs
-        if not _plugin.validate_inputs(symbol, entry_time, direction):
-            raise ValueError("Invalid input parameters")
+        if not _data_manager:
+            raise ValueError("Data manager not set. Call set_data_manager first.")
         
-        # Run analysis
-        result = await _plugin.run_analysis(symbol, entry_time, direction)
+        # Set current plugin for tracking
+        _data_manager.set_current_plugin(PLUGIN_NAME)
         
-        logger.info(f"M1 EMA analysis complete for {symbol} at {entry_time}")
-        return result
+        # Define data requirements
+        lookback_minutes = 120  # 2 hours for EMA calculation
+        start_time = entry_time - timedelta(minutes=lookback_minutes)
+        
+        # Fetch data through data manager (with circuit breaker protection)
+        bars = await _data_manager.load_bars(
+            symbol=symbol,
+            start_time=start_time,
+            end_time=entry_time,
+            timeframe='1min'
+        )
+        
+        if bars.empty:
+            return _create_error_signal(entry_time, "No data available")
+        
+        # Extract closing prices
+        closes = bars['close'].tolist()
+        
+        # Run calculation
+        calculator = EMACalculator(short_period=9, long_period=21)
+        result = calculator.calculate(closes)
+        
+        if not result:
+            return _create_error_signal(entry_time, "Insufficient data for calculation")
+        
+        # Interpret result into signal
+        return _interpret_signal(result, entry_time, direction, closes[-1])
         
     except Exception as e:
-        logger.error(f"Error in M1 EMA analysis: {e}")
-        # Return error result in standard format
-        return {
-            'plugin_name': _plugin.name,
-            'timestamp': entry_time,
-            'error': str(e),
-            'signal': {
-                'direction': 'NEUTRAL',
-                'strength': 0,
-                'confidence': 0
-            }
-        }
+        logger.error(f"Error in {PLUGIN_NAME}: {e}")
+        return _create_error_signal(entry_time, str(e))
 
-# Export metadata for plugin discovery
-PLUGIN_NAME = _plugin.name
-PLUGIN_VERSION = _plugin.version
+
+async def run_analysis_with_progress(symbol: str, entry_time: datetime, 
+                                   direction: str, 
+                                   progress_callback: Optional[Callable[[int, str], None]] = None) -> Dict[str, Any]:
+    """
+    Run analysis with progress reporting
+    
+    Args:
+        symbol: Stock symbol
+        entry_time: Entry time
+        direction: Trade direction
+        progress_callback: Optional callback for progress updates
+        
+    Returns:
+        Standardized signal dictionary
+    """
+    if progress_callback:
+        progress_callback(0, "Starting analysis...")
+    
+    if progress_callback:
+        progress_callback(20, "Fetching data...")
+    
+    # Run the analysis
+    result = await run_analysis(symbol, entry_time, direction)
+    
+    if progress_callback:
+        progress_callback(100, "Complete")
+    
+    return result
+
+
+def _interpret_signal(result: EMAResult, entry_time: datetime, 
+                     direction: str, last_price: float) -> Dict[str, Any]:
+    """Interpret calculation result into standardized signal"""
+    
+    # Determine signal direction
+    if result.is_bullish:
+        if last_price > result.ema_short:
+            signal_direction = "BULLISH"
+            strength = result.trend_strength
+        else:
+            signal_direction = "NEUTRAL"
+            strength = 30
+    else:
+        if last_price < result.ema_short:
+            signal_direction = "BEARISH" 
+            strength = result.trend_strength
+        else:
+            signal_direction = "NEUTRAL"
+            strength = 30
+    
+    # Build display data
+    table_data = [
+        ["EMA 9", f"${result.ema_short:.2f}"],
+        ["EMA 21", f"${result.ema_long:.2f}"],
+        ["Spread", f"${result.spread:.2f} ({result.spread_pct:.2f}%)"],
+        ["Trend Strength", f"{result.trend_strength:.0f}%"],
+        ["Signal Strength", f"{strength:.0f}%"]
+    ]
+    
+    if result.is_crossover:
+        table_data.append(["Crossover", result.crossover_type.title()])
+    
+    # Direction alignment
+    alignment = "Neutral"
+    if signal_direction != "NEUTRAL":
+        if (direction == "LONG" and signal_direction == "BULLISH") or \
+           (direction == "SHORT" and signal_direction == "BEARISH"):
+            alignment = "Aligned ✓"
+        else:
+            alignment = "Opposed ✗"
+    table_data.append(["Direction Alignment", alignment])
+    
+    # Build reason
+    reason_parts = []
+    if result.is_bullish:
+        reason_parts.append(f"EMA 9 ({result.ema_short:.2f}) > EMA 21 ({result.ema_long:.2f})")
+    else:
+        reason_parts.append(f"EMA 9 ({result.ema_short:.2f}) < EMA 21 ({result.ema_long:.2f})")
+    
+    if result.is_crossover:
+        reason_parts.append(f"Recent {result.crossover_type} crossover")
+    
+    reason = " | ".join(reason_parts)
+    
+    return {
+        'plugin_name': PLUGIN_NAME,
+        'timestamp': entry_time,
+        'signal': {
+            'direction': signal_direction,
+            'strength': float(strength),
+            'confidence': float(strength)
+        },
+        'details': {
+            'ema_9': result.ema_short,
+            'ema_21': result.ema_long,
+            'ema_spread': result.spread,
+            'ema_spread_pct': result.spread_pct,
+            'trend_strength': result.trend_strength,
+            'is_crossover': result.is_crossover,
+            'crossover_type': result.crossover_type
+        },
+        'display_data': {
+            'summary': f"EMA 9/21 - {signal_direction}",
+            'description': reason,
+            'table_data': table_data
+        }
+    }
+
+
+def _create_error_signal(entry_time: datetime, error_msg: str) -> Dict[str, Any]:
+    """Create error signal response"""
+    return {
+        'plugin_name': PLUGIN_NAME,
+        'timestamp': entry_time,
+        'error': error_msg,
+        'signal': {
+            'direction': 'NEUTRAL',
+            'strength': 0,
+            'confidence': 0
+        }
+    }

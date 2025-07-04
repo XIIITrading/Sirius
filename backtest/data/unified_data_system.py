@@ -5,6 +5,9 @@ import os
 from typing import Optional, Dict, Any
 from datetime import datetime
 
+from typing import Tuple
+import pandas as pd
+
 from .polygon_data_manager import PolygonDataManager
 from .protected_data_manager import ProtectedDataManager
 from .data_coordinator import DataCoordinator

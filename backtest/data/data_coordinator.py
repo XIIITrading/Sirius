@@ -5,8 +5,9 @@ Features: Module registration, need aggregation, concurrent fetching, report gen
 """
 
 import logging
+import pandas as pd
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 from collections import defaultdict
 import json
 from pathlib import Path

@@ -157,7 +157,17 @@ def create_sample_trades(num_trades: int,
     df.set_index('timestamp', inplace=True)
     return df
 
-
+def print_dataframe_summary(df: pd.DataFrame, label: str = "DataFrame"):
+    """Print a summary of a dataframe"""
+    if df.empty:
+        print(f"{label}: Empty DataFrame")
+    else:
+        print(f"{label}: {len(df)} rows")
+        print(f"  Time range: {df.index.min()} to {df.index.max()}")
+        if 'close' in df.columns:
+            print(f"  Price range: ${df['close'].min():.2f} - ${df['close'].max():.2f}")
+        if 'volume' in df.columns:
+            print(f"  Total volume: {df['volume'].sum():,}")
 def create_sample_quotes(num_quotes: int,
                         base_price: float = 100.0,
                         spread: float = 0.02,

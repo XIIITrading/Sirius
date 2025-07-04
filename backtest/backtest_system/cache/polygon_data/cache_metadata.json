@@ -1,0 +1,262 @@
+{
+  "81ce2ebe87413f3d35f2c49e00394896": {
+    "symbol": "ORCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-07-02T13:45:00.056000+00:00",
+    "end_time": "2025-07-02T14:15:00.056000+00:00",
+    "cached_at": "2025-07-03T22:18:59.333761+00:00",
+    "data_points": 18724,
+    "cache_key": "81ce2ebe87413f3d35f2c49e00394896"
+  },
+  "d9423242f0e61352ac1070e2d658250d": {
+    "symbol": "ORCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-07-02T13:45:00.056000+00:00",
+    "end_time": "2025-07-02T14:15:00.056000+00:00",
+    "cached_at": "2025-07-03T22:19:00.107431+00:00",
+    "data_points": 6323,
+    "cache_key": "d9423242f0e61352ac1070e2d658250d"
+  },
+  "240d29f8e4f38e252d26580bbd77a1ec": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-07-02T13:15:00.056000+00:00",
+    "end_time": "2025-07-02T13:45:00.056000+00:00",
+    "cached_at": "2025-07-03T22:35:48.355246+00:00",
+    "data_points": 30183,
+    "cache_key": "240d29f8e4f38e252d26580bbd77a1ec"
+  },
+  "8128163c0bd4258b38215057b5a183df": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-07-02T13:15:00.056000+00:00",
+    "end_time": "2025-07-02T13:45:00.056000+00:00",
+    "cached_at": "2025-07-03T22:35:49.090941+00:00",
+    "data_points": 5603,
+    "cache_key": "8128163c0bd4258b38215057b5a183df"
+  },
+  "61853831aa908798839b1fd81010c080": {
+    "symbol": "ORCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-07-02T05:20:00+00:00",
+    "end_time": "2025-07-02T22:00:00+00:00",
+    "cached_at": "2025-07-03T23:58:40.656604+00:00",
+    "data_points": 698,
+    "cache_key": "61853831aa908798839b1fd81010c080"
+  },
+  "964bdfed1834899f8821ca6238859af8": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-07-02T05:00:00+00:00",
+    "end_time": "2025-07-02T21:55:00+00:00",
+    "cached_at": "2025-07-04T00:10:51.030556+00:00",
+    "data_points": 882,
+    "cache_key": "964bdfed1834899f8821ca6238859af8"
+  },
+  "2fdb544da905a6c2f9524465906194e8": {
+    "symbol": "AAPL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-07-02T13:05:00.476000+00:00",
+    "end_time": "2025-07-02T13:35:00.476000+00:00",
+    "cached_at": "2025-07-04T00:12:09.882416+00:00",
+    "data_points": 41922,
+    "cache_key": "2fdb544da905a6c2f9524465906194e8"
+  },
+  "4c308ac16be4753c529b35ddb31a86f1": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-01-15T11:17:30+00:00",
+    "end_time": "2025-01-15T15:37:30+00:00",
+    "cached_at": "2025-07-04T12:53:27.306389+00:00",
+    "data_points": 721,
+    "cache_key": "4c308ac16be4753c529b35ddb31a86f1"
+  },
+  "d8b6669bec871af27d10964083f474ee": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "5min",
+    "start_time": "2025-01-15T03:27:00+00:00",
+    "end_time": "2025-01-15T22:07:00+00:00",
+    "cached_at": "2025-07-04T12:53:27.454536+00:00",
+    "data_points": 185,
+    "cache_key": "d8b6669bec871af27d10964083f474ee"
+  },
+  "c4cfddc497bab70002a4114be225a029": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-01-15T08:28:00+00:00",
+    "end_time": "2025-01-15T18:08:00+00:00",
+    "cached_at": "2025-07-04T12:54:00.936360+00:00",
+    "data_points": 772,
+    "cache_key": "c4cfddc497bab70002a4114be225a029"
+  },
+  "64d6b05bb3e491d7bb7442dcc931c7ab": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "5min",
+    "start_time": "2024-12-30T11:32:00+00:00",
+    "end_time": "2025-01-17T16:52:00+00:00",
+    "cached_at": "2025-07-04T12:54:01.337117+00:00",
+    "data_points": 2434,
+    "cache_key": "64d6b05bb3e491d7bb7442dcc931c7ab"
+  },
+  "0d46ca7e6ac5a37f201a409b2cec1cb9": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "15min",
+    "start_time": "2025-01-13T05:12:00+00:00",
+    "end_time": "2025-01-17T17:12:00+00:00",
+    "cached_at": "2025-07-04T12:54:01.492462+00:00",
+    "data_points": 320,
+    "cache_key": "0d46ca7e6ac5a37f201a409b2cec1cb9"
+  },
+  "9462178dc97bf99b6c6e004cbf2af405": {
+    "symbol": "AAPL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-01-15T12:55:30+00:00",
+    "end_time": "2025-01-15T13:49:30+00:00",
+    "cached_at": "2025-07-04T12:54:02.194006+00:00",
+    "data_points": 7089,
+    "cache_key": "9462178dc97bf99b6c6e004cbf2af405"
+  },
+  "f6c636d5622595fb5b10acc434abf286": {
+    "symbol": "AAPL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-01-15T12:55:30+00:00",
+    "end_time": "2025-01-15T13:49:30+00:00",
+    "cached_at": "2025-07-04T12:54:02.821724+00:00",
+    "data_points": 5071,
+    "cache_key": "f6c636d5622595fb5b10acc434abf286"
+  },
+  "eecdf85ede0db12fc26b6e2b03daf097": {
+    "symbol": "AAPL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-01-15T04:16:00+00:00",
+    "end_time": "2025-01-15T21:56:00+00:00",
+    "cached_at": "2025-07-04T12:55:46.481131+00:00",
+    "data_points": 772,
+    "cache_key": "eecdf85ede0db12fc26b6e2b03daf097"
+  },
+  "e56f3595faafd3ec83c15c952ed12327": {
+    "symbol": "AAPL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-07-02T13:05:00+00:00",
+    "end_time": "2025-07-02T13:35:00+00:00",
+    "cached_at": "2025-07-04T14:12:27.418293+00:00",
+    "data_points": 41922,
+    "cache_key": "e56f3595faafd3ec83c15c952ed12327"
+  },
+  "85bb52fc07555a2c1b0929f5dab7859b": {
+    "symbol": "TSLA",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-07-02T13:05:00+00:00",
+    "end_time": "2025-07-02T13:35:00+00:00",
+    "cached_at": "2025-07-04T14:13:11.988838+00:00",
+    "data_points": 195322,
+    "cache_key": "85bb52fc07555a2c1b0929f5dab7859b"
+  },
+  "17240d2cee59f66bd4e30a433f30d389": {
+    "symbol": "TSLA",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-04T14:13:45.871629+00:00",
+    "data_points": 82528,
+    "cache_key": "17240d2cee59f66bd4e30a433f30d389"
+  },
+  "ba8836e902c222a0b3dfb5a03cdd676e": {
+    "symbol": "TSLA",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-04T14:13:46.921415+00:00",
+    "data_points": 25968,
+    "cache_key": "ba8836e902c222a0b3dfb5a03cdd676e"
+  },
+  "4c6ae0a80642b904724d931fe56c017d": {
+    "symbol": "AAPL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:30:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-04T14:22:16.166717+00:00",
+    "data_points": 32806,
+    "cache_key": "4c6ae0a80642b904724d931fe56c017d"
+  },
+  "5747c44761b1b9df30a047b780b7028b": {
+    "symbol": "AAPL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:30:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-04T14:22:17.046325+00:00",
+    "data_points": 15820,
+    "cache_key": "5747c44761b1b9df30a047b780b7028b"
+  },
+  "9724c28f3001ba4df6f08ee17287be12": {
+    "symbol": "AAPL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:20:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-04T14:22:18.243806+00:00",
+    "data_points": 33468,
+    "cache_key": "9724c28f3001ba4df6f08ee17287be12"
+  },
+  "04dd0c134e44735c8c0698df9e787595": {
+    "symbol": "AAPL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:20:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-04T14:22:19.149536+00:00",
+    "data_points": 16136,
+    "cache_key": "04dd0c134e44735c8c0698df9e787595"
+  },
+  "0e86bb338563c13808ddd73e90cb0a87": {
+    "symbol": "AAPL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-04T14:22:20.420673+00:00",
+    "data_points": 34320,
+    "cache_key": "0e86bb338563c13808ddd73e90cb0a87"
+  },
+  "26a9c199a29f44f976ed672964c9c8fd": {
+    "symbol": "AAPL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-04T14:22:21.304067+00:00",
+    "data_points": 16424,
+    "cache_key": "26a9c199a29f44f976ed672964c9c8fd"
+  },
+  "cd78b3e5a6edf38ce8fe845228378e0b": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T03:15:00+00:00",
+    "end_time": "2025-06-27T20:55:00+00:00",
+    "cached_at": "2025-07-04T15:07:12.729260+00:00",
+    "data_points": 951,
+    "cache_key": "cd78b3e5a6edf38ce8fe845228378e0b"
+  }
+}

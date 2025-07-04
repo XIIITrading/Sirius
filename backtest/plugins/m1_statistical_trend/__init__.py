@@ -1,7 +1,7 @@
 # backtest/plugins/m1_statistical_trend/__init__.py
 """
 1-Minute Statistical Trend Plugin
-Self-contained plugin for multi-timeframe trend analysis using statistical methods.
+Self-contained plugin for statistical trend analysis using 1-minute bars.
 """
 
 import logging
@@ -60,7 +60,7 @@ async def run_analysis(symbol: str, entry_time: datetime, direction: str) -> Dic
 PLUGIN_NAME = _plugin.name
 PLUGIN_VERSION = _plugin.version
 
-# Optional: Export configuration function for UI
+# Export configuration function for UI
 def get_config():
     """Get plugin configuration for UI settings"""
     return _plugin.get_config()

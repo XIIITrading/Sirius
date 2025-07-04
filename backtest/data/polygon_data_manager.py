@@ -606,8 +606,8 @@ class PolygonDataManager:
             params = {
                 'apiKey': self.api_key,
                 'timestamp.gte': start_time.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                'timestamp.lte': end_time.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                'limit': 50000,  # Max limit for v3
+                'timestamp.lt': end_time.strftime('%Y-%m-%dT%H:%M:%S.000Z'),  # Changed from lte to lt
+                'limit': 50000,
                 'order': 'asc'
             }
             
@@ -658,8 +658,8 @@ class PolygonDataManager:
             return None
 
     async def _fetch_quotes_from_polygon(self, symbol: str,
-                                       start_time: datetime,
-                                       end_time: datetime) -> Optional[pd.DataFrame]:
+                                   start_time: datetime,
+                                   end_time: datetime) -> Optional[pd.DataFrame]:
         """Fetch quote (NBBO) data from Polygon API v3."""
         try:
             all_quotes = []
@@ -673,9 +673,10 @@ class PolygonDataManager:
             params = {
                 'apiKey': self.api_key,
                 'timestamp.gte': start_time.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                'timestamp.lte': end_time.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                'limit': 50000,  # Max limit for v3
-                'order': 'asc'
+                'timestamp.lt': end_time.strftime('%Y-%m-%dT%H:%M:%S.000Z'),  # Changed from lte to lt
+                'limit': 50000,
+                'order': 'asc',
+                'sort': 'timestamp'
             }
             
             # Paginate through results
@@ -694,14 +695,17 @@ class PolygonDataManager:
                 
                 # Process quotes
                 for quote in data['results']:
+                    # participant_timestamp is in nanoseconds
+                    timestamp = pd.Timestamp(quote['participant_timestamp'], unit='ns', tz='UTC')
+                    
                     all_quotes.append({
-                        'timestamp': pd.Timestamp(quote['participant_timestamp'], unit='ns', tz='UTC'),
-                        'bid': quote['bid_price'],
-                        'ask': quote['ask_price'],
-                        'bid_size': quote['bid_size'],
-                        'ask_size': quote['ask_size'],
-                        'bid_exchange': str(quote.get('bid_exchange', '')),
-                        'ask_exchange': str(quote.get('ask_exchange', ''))
+                        'timestamp': timestamp,
+                        'bid': quote.get('bid_price', 0),
+                        'ask': quote.get('ask_price', 0),
+                        'bid_size': quote.get('bid_size', 0),
+                        'ask_size': quote.get('ask_size', 0),
+                        'bid_exchange': quote.get('bid_exchange', 0),
+                        'ask_exchange': quote.get('ask_exchange', 0)
                     })
                 
                 # Check for next page

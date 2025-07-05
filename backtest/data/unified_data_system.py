@@ -49,7 +49,8 @@ class UnifiedDataSystem:
             api_key=self.api_key,
             cache_dir=cache_dir,
             memory_cache_size=memory_cache_size,
-            file_cache_hours=file_cache_hours
+            file_cache_hours=file_cache_hours,
+            extend_window_bars=2000
         )
         
         # Wrap with circuit breaker if requested

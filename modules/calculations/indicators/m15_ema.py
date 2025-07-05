@@ -1,670 +1,379 @@
 # modules/calculations/indicators/m15_ema.py
 """
-Module: EMA Crossover Analysis - 15 Minute
-Purpose: Detect trend direction using 9/21 EMA crossover on 15-minute charts
-Features: Real-time and historical data processing, hybrid EMA calculation
-Output: BULL/BEAR/NEUTRAL signals based on EMA position and price location
-Time Handling: All timestamps in UTC
+M15 EMA Crossover Calculation Module
+Handles 15-minute EMA calculations with optional 1-minute to 15-minute aggregation
+Follows the same pattern as M5 EMA for consistency
 """
 
-import asyncio
-import numpy as np
-from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Deque, Tuple
-from dataclasses import dataclass, field
-from collections import deque
 import logging
-import time
-import os
-import time as time_module
+from datetime import datetime, timezone
+from typing import List, Optional, Tuple
+from dataclasses import dataclass
+import pandas as pd
+import numpy as np
 
-# Enforce UTC for all operations
-os.environ['TZ'] = 'UTC'
-if hasattr(time_module, 'tzset'):
-    time_module.tzset()
-
-# Configure logging with UTC
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s UTC - %(name)s - %(levelname)s - %(message)s'
-)
-logging.Formatter.converter = time_module.gmtime  # Force UTC in logs
 logger = logging.getLogger(__name__)
 
-# UTC validation function
-def ensure_utc(dt: datetime) -> datetime:
-    """Ensure datetime is UTC-aware"""
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    elif dt.tzinfo != timezone.utc:
-        return dt.astimezone(timezone.utc)
-    return dt
-
 
 @dataclass
-class Candle:
-    """15-minute candle data"""
-    timestamp: datetime
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
-    vwap: Optional[float] = None
-    trades: Optional[int] = None
-
-
-@dataclass
-class EMAMetrics:
-    """EMA calculation metrics"""
+class M15EMAResult:
+    """Result of M15 EMA calculation"""
+    signal: str  # 'BULL', 'BEAR', 'NEUTRAL'
+    signal_strength: float
     ema_9: float
     ema_21: float
-    ema_9_previous: float
-    ema_21_previous: float
-    price_vs_ema9: str  # 'above', 'below', 'at'
-    ema_spread: float  # ema_9 - ema_21
-    ema_spread_pct: float  # spread as % of price
-    trend_strength: float  # 0-100 based on spread
-    candles_processed: int
-    last_crossover_time: Optional[datetime]
-    last_crossover_type: Optional[str]  # 'bullish' or 'bearish'
-
-
-@dataclass
-class VolumeSignal:
-    """Standard volume signal output"""
-    symbol: str
+    spread: float
+    spread_pct: float
+    trend_strength: float
+    is_crossover: bool
+    crossover_type: str  # 'bullish', 'bearish', or ''
+    price_position: str  # 'above', 'below', 'at'
+    reason: str
+    bars_processed: int
+    last_15min_close: float
+    last_15min_volume: float
     timestamp: datetime
-    signal: str  # 'BULL', 'BEAR', 'NEUTRAL'
-    strength: float  # 0-100
-    metrics: Dict  # Detailed metrics
-    reason: str  # Human-readable explanation
 
 
-class EMAAnalyzer15M:
+class M15EMACalculator:
     """
-    EMA crossover analyzer for 15-minute trend detection
-    All timestamps are in UTC.
+    Calculates 15-minute EMA crossover signals.
+    
+    Process:
+    1. Accept 15-minute bars (or aggregate from 1-minute bars)
+    2. Calculate 9 and 21 period EMAs on 15-minute data
+    3. Detect crossovers and trend strength
+    4. Generate trading signals with NEUTRAL override logic
     """
     
-    def __init__(self, 
-                 buffer_size: int = 40,   # 40 candles = 10 hours
-                 ema_short: int = 9,      # Short EMA period
-                 ema_long: int = 21,      # Long EMA period
-                 min_candles_required: int = 21):  # Minimum for valid signal
-        """
-        Initialize EMA analyzer for 15-minute bars
-        
-        Args:
-            buffer_size: Number of recent candles to maintain (default 40 = 10 hours)
-            ema_short: Short EMA period (default 9)
-            ema_long: Long EMA period (default 21)
-            min_candles_required: Minimum candles needed for analysis
-        """
-        self.buffer_size = buffer_size
+    def __init__(self, ema_short: int = 9, ema_long: int = 21):
         self.ema_short = ema_short
         self.ema_long = ema_long
-        self.min_candles_required = max(min_candles_required, ema_long)
-        self.timeframe = "15-minute"
+        self.min_bars_required = ema_long + 5  # Need extra bars for stable EMA
         
-        # Data storage
-        self.candles: Dict[str, Deque[Candle]] = {}
-        self.current_emas: Dict[str, Dict[str, float]] = {}
-        self.last_crossover: Dict[str, Tuple[datetime, str]] = {}
-        
-        # For incomplete candle handling
-        self.incomplete_candles: Dict[str, Dict] = {}
-        
-        # Performance tracking
-        self.candles_processed = 0
-        self.signals_generated = 0
-        
-        logger.info(f"EMA Analyzer (15-min) initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        logger.info(f"Settings: buffer={buffer_size} (≈{buffer_size*15/60:.1f} hours), EMA periods={ema_short}/{ema_long}, "
-                   f"min_candles={min_candles_required}")
-    
-    def _validate_timestamp(self, timestamp: datetime, source: str) -> datetime:
-        """Validate and ensure timestamp is UTC"""
-        if timestamp.tzinfo is None:
-            logger.warning(f"{source}: Naive datetime received, assuming UTC")
-            return timestamp.replace(tzinfo=timezone.utc)
-        elif timestamp.tzinfo != timezone.utc:
-            logger.warning(f"{source}: Non-UTC timezone {timestamp.tzinfo}, converting to UTC")
-            return timestamp.astimezone(timezone.utc)
-        return timestamp
-    
-    def process_candle(self, symbol: str, candle_data: Dict, 
-                      is_complete: bool = True) -> Optional[VolumeSignal]:
+    def calculate(self, bars: pd.DataFrame, timeframe: str = '15min') -> Optional[M15EMAResult]:
         """
-        Process incoming 15-minute candle and generate signal if conditions met
+        Main calculation method.
         
         Args:
-            symbol: Ticker symbol
-            candle_data: Candle data (dict with OHLCV)
-            is_complete: Whether candle is complete (default True)
+            bars: DataFrame with OHLCV data (index=timestamp)
+            timeframe: '1min' or '15min' - indicates input data timeframe
             
         Returns:
-            VolumeSignal if generated, None otherwise
+            M15EMAResult or None if insufficient data
         """
-        # Initialize buffers if needed
-        if symbol not in self.candles:
-            self.candles[symbol] = deque(maxlen=self.buffer_size)
-            self.current_emas[symbol] = {}
-            logger.info(f"Initialized buffers for {symbol} (15-min)")
-        
-        # Handle incomplete candles (for real-time updates)
-        if not is_complete:
-            self.incomplete_candles[symbol] = candle_data
-            logger.debug(f"{symbol}: Received incomplete 15-min candle")
-            return None
-        
-        # Extract candle info and ensure UTC
-        if 'timestamp' in candle_data:
-            timestamp = datetime.fromtimestamp(candle_data['timestamp'] / 1000, tz=timezone.utc)
-        else:
-            timestamp = candle_data.get('t', datetime.now(timezone.utc))
-            if isinstance(timestamp, (int, float)):
-                timestamp = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
-        
-        timestamp = self._validate_timestamp(timestamp, f"Candle-{symbol}")
-        
-        # Create candle object
-        candle = Candle(
-            timestamp=timestamp,
-            open=candle_data.get('o', candle_data.get('open')),
-            high=candle_data.get('h', candle_data.get('high')),
-            low=candle_data.get('l', candle_data.get('low')),
-            close=candle_data.get('c', candle_data.get('close')),
-            volume=candle_data.get('v', candle_data.get('volume')),
-            vwap=candle_data.get('vw', candle_data.get('vwap')),
-            trades=candle_data.get('n', candle_data.get('trades'))
-        )
-        
-        # Add to buffer
-        self.candles[symbol].append(candle)
-        self.candles_processed += 1
-        
-        logger.info(f"{symbol}: Processed 15-min candle at {timestamp.strftime('%H:%M:%S UTC')} "
-                   f"Close: {candle.close:.2f}, Volume: {candle.volume:,.0f}")
-        
-        # Calculate EMAs
-        self._calculate_emas(symbol)
-        
-        # Generate signal if enough data
-        if len(self.candles[symbol]) >= self.min_candles_required:
-            signal = self._generate_signal(symbol)
-            if signal:
-                logger.info(f"{symbol}: Generated {signal.signal} signal with strength {signal.strength:.0f}")
-            return signal
-        else:
-            logger.debug(f"{symbol}: Need {self.min_candles_required - len(self.candles[symbol])} more 15-min candles")
+        try:
+            # Validate input data
+            if bars.empty:
+                logger.warning("Empty DataFrame provided")
+                return None
+            
+            # Aggregate to 15-minute bars if needed
+            if timeframe == '1min':
+                bars_15min = self._aggregate_to_15min(bars)
+            else:
+                bars_15min = bars.copy()
+                
+            if len(bars_15min) < self.min_bars_required:
+                logger.warning(f"Insufficient 15-minute bars: {len(bars_15min)} < {self.min_bars_required}")
+                return None
+            
+            # Calculate EMAs
+            ema_short_series = self._calculate_ema(bars_15min['close'], self.ema_short)
+            ema_long_series = self._calculate_ema(bars_15min['close'], self.ema_long)
+            
+            # Get latest values
+            ema_9 = ema_short_series.iloc[-1]
+            ema_21 = ema_long_series.iloc[-1]
+            last_close = bars_15min['close'].iloc[-1]
+            last_volume = bars_15min['volume'].iloc[-1]
+            last_timestamp = bars_15min.index[-1]
+            
+            # Ensure timestamp is UTC
+            if last_timestamp.tzinfo is None:
+                last_timestamp = last_timestamp.replace(tzinfo=timezone.utc)
+            elif last_timestamp.tzinfo != timezone.utc:
+                last_timestamp = last_timestamp.astimezone(timezone.utc)
+            
+            # Calculate spread
+            spread = ema_9 - ema_21
+            spread_pct = (spread / ema_21) * 100 if ema_21 != 0 else 0
+            
+            # Determine base trend
+            is_bullish = ema_9 > ema_21
+            
+            # Check for crossover
+            is_crossover, crossover_type = self._detect_crossover(
+                ema_short_series, ema_long_series
+            )
+            
+            # Calculate trend strength
+            trend_strength = self._calculate_trend_strength(
+                bars_15min, ema_short_series, ema_long_series
+            )
+            
+            # Determine price position relative to EMA 9
+            if last_close > ema_9:
+                price_position = 'above'
+            elif last_close < ema_9:
+                price_position = 'below'
+            else:
+                price_position = 'at'
+            
+            # Determine signal with NEUTRAL override logic
+            signal = self._determine_signal(
+                is_bullish, price_position, last_close, ema_9
+            )
+            
+            # Calculate signal strength
+            signal_strength = self._calculate_signal_strength(
+                spread_pct, trend_strength, is_crossover, price_position, signal
+            )
+            
+            # Build reason
+            reason = self._build_reason(
+                signal, ema_9, ema_21, spread_pct, 
+                is_crossover, crossover_type, price_position,
+                is_bullish
+            )
+            
+            return M15EMAResult(
+                signal=signal,
+                signal_strength=signal_strength,
+                ema_9=round(ema_9, 2),
+                ema_21=round(ema_21, 2),
+                spread=round(spread, 2),
+                spread_pct=round(spread_pct, 2),
+                trend_strength=round(trend_strength, 1),
+                is_crossover=is_crossover,
+                crossover_type=crossover_type,
+                price_position=price_position,
+                reason=reason,
+                bars_processed=len(bars_15min),
+                last_15min_close=round(last_close, 2),
+                last_15min_volume=round(last_volume, 0),
+                timestamp=last_timestamp
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in M15 EMA calculation: {e}")
             return None
     
-    def process_historical_candles(self, symbol: str, candles: List[Dict]) -> Optional[VolumeSignal]:
+    def _aggregate_to_15min(self, bars_1min: pd.DataFrame) -> pd.DataFrame:
         """
-        Process a list of historical 15-minute candles
+        Aggregate 1-minute bars to 15-minute bars.
         
         Args:
-            symbol: Ticker symbol
-            candles: List of candle dictionaries
+            bars_1min: 1-minute OHLCV data
             
         Returns:
-            Final signal after processing all candles
+            15-minute aggregated bars
         """
-        logger.info(f"{symbol}: Processing {len(candles)} historical 15-minute candles")
+        # Define aggregation rules
+        agg_rules = {
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last',
+            'volume': 'sum'
+        }
         
-        final_signal = None
-        for candle_data in candles:
-            signal = self.process_candle(symbol, candle_data, is_complete=True)
-            if signal:
-                final_signal = signal
+        # Resample to 15-minute bars
+        bars_15min = bars_1min.resample('15T', label='right', closed='right').agg(agg_rules)
         
-        return final_signal
+        # Remove any bars with no data (NaN in OHLC)
+        bars_15min = bars_15min.dropna(subset=['open', 'high', 'low', 'close'])
+        
+        # Ensure volume is not NaN
+        bars_15min['volume'] = bars_15min['volume'].fillna(0)
+        
+        logger.info(f"Aggregated {len(bars_1min)} 1-min bars to {len(bars_15min)} 15-min bars")
+        
+        return bars_15min
     
-    def _calculate_emas(self, symbol: str):
-        """Calculate or update EMAs using hybrid approach"""
-        candles_list = list(self.candles[symbol])
-        
-        if len(candles_list) < self.ema_long:
-            return
-        
-        closes = [c.close for c in candles_list]
-        
-        # Check if we need full recalculation
-        if symbol not in self.current_emas or not self.current_emas[symbol]:
-            # Full calculation
-            logger.debug(f"{symbol}: Performing full EMA calculation (15-min)")
-            ema_9 = self._calculate_ema_full(closes, self.ema_short)
-            ema_21 = self._calculate_ema_full(closes, self.ema_long)
-            
-            self.current_emas[symbol] = {
-                'ema_9': ema_9[-1],
-                'ema_21': ema_21[-1],
-                'ema_9_prev': ema_9[-2] if len(ema_9) > 1 else ema_9[-1],
-                'ema_21_prev': ema_21[-2] if len(ema_21) > 1 else ema_21[-1]
-            }
-        else:
-            # Incremental update
-            last_close = closes[-1]
-            
-            # Store previous values
-            self.current_emas[symbol]['ema_9_prev'] = self.current_emas[symbol]['ema_9']
-            self.current_emas[symbol]['ema_21_prev'] = self.current_emas[symbol]['ema_21']
-            
-            # Update EMAs
-            self.current_emas[symbol]['ema_9'] = self._update_ema(
-                last_close, 
-                self.current_emas[symbol]['ema_9'], 
-                self.ema_short
-            )
-            self.current_emas[symbol]['ema_21'] = self._update_ema(
-                last_close, 
-                self.current_emas[symbol]['ema_21'], 
-                self.ema_long
-            )
-            
-            logger.debug(f"{symbol}: EMA Update (15-min) - 9: {self.current_emas[symbol]['ema_9']:.2f}, "
-                        f"21: {self.current_emas[symbol]['ema_21']:.2f}")
+    def _calculate_ema(self, series: pd.Series, period: int) -> pd.Series:
+        """Calculate Exponential Moving Average"""
+        return series.ewm(span=period, adjust=False).mean()
     
-    def _calculate_ema_full(self, prices: List[float], period: int) -> List[float]:
-        """Calculate EMA for entire price series"""
-        if len(prices) < period:
-            return []
-        
-        ema = []
-        multiplier = 2 / (period + 1)
-        
-        # Start with SMA
-        sma = sum(prices[:period]) / period
-        ema.append(sma)
-        
-        # Calculate EMA for rest
-        for i in range(period, len(prices)):
-            ema_val = (prices[i] - ema[-1]) * multiplier + ema[-1]
-            ema.append(ema_val)
-        
-        return ema
-    
-    def _update_ema(self, new_price: float, prev_ema: float, period: int) -> float:
-        """Update EMA with new price"""
-        multiplier = 2 / (period + 1)
-        return (new_price - prev_ema) * multiplier + prev_ema
-    
-    def _generate_signal(self, symbol: str) -> Optional[VolumeSignal]:
-        """Generate trading signal from current EMAs"""
-        if symbol not in self.current_emas or not self.current_emas[symbol]:
-            return None
-        
-        candles_list = list(self.candles[symbol])
-        last_candle = candles_list[-1]
-        
-        # Get current values
-        ema_9 = self.current_emas[symbol]['ema_9']
-        ema_21 = self.current_emas[symbol]['ema_21']
-        ema_9_prev = self.current_emas[symbol]['ema_9_prev']
-        ema_21_prev = self.current_emas[symbol]['ema_21_prev']
-        last_close = last_candle.close
-        
-        # Calculate metrics
-        metrics = self._calculate_metrics(
-            symbol, ema_9, ema_21, ema_9_prev, ema_21_prev, 
-            last_close, len(candles_list)
-        )
-        
-        # Determine signal
-        signal, strength, reason = self._determine_signal(
-            ema_9, ema_21, last_close, metrics
-        )
-        
-        # Check for crossover
-        self._check_crossover(symbol, ema_9, ema_21, ema_9_prev, ema_21_prev)
-        
-        self.signals_generated += 1
-        
-        return VolumeSignal(
-            symbol=symbol,
-            timestamp=datetime.now(timezone.utc),
-            signal=signal,
-            strength=strength,
-            metrics=metrics.__dict__,
-            reason=reason
-        )
-    
-    def _calculate_metrics(self, symbol: str, ema_9: float, ema_21: float,
-                          ema_9_prev: float, ema_21_prev: float,
-                          last_close: float, candles_count: int) -> EMAMetrics:
-        """Calculate comprehensive EMA metrics"""
-        # Price vs EMA9
-        if last_close > ema_9:
-            price_vs_ema9 = 'above'
-        elif last_close < ema_9:
-            price_vs_ema9 = 'below'
-        else:
-            price_vs_ema9 = 'at'
-        
-        # EMA spread
-        ema_spread = ema_9 - ema_21
-        ema_spread_pct = (ema_spread / last_close) * 100 if last_close > 0 else 0
-        
-        # Trend strength (0-100)
-        # Based on spread magnitude relative to typical ranges
-        trend_strength = min(100, abs(ema_spread_pct) * 20)  # 5% spread = 100 strength
-        
-        # Last crossover info
-        last_crossover_time = None
-        last_crossover_type = None
-        if symbol in self.last_crossover:
-            last_crossover_time, last_crossover_type = self.last_crossover[symbol]
-        
-        return EMAMetrics(
-            ema_9=ema_9,
-            ema_21=ema_21,
-            ema_9_previous=ema_9_prev,
-            ema_21_previous=ema_21_prev,
-            price_vs_ema9=price_vs_ema9,
-            ema_spread=ema_spread,
-            ema_spread_pct=ema_spread_pct,
-            trend_strength=trend_strength,
-            candles_processed=candles_count,
-            last_crossover_time=last_crossover_time,
-            last_crossover_type=last_crossover_type
-        )
-    
-    def _determine_signal(self, ema_9: float, ema_21: float, 
-                         last_close: float, metrics: EMAMetrics) -> Tuple[str, float, str]:
+    def _detect_crossover(self, ema_short: pd.Series, ema_long: pd.Series) -> Tuple[bool, str]:
         """
-        Determine trading signal from EMAs and price position
+        Detect if a crossover occurred in the last few bars.
         
         Returns:
-            (signal, strength, reason)
+            (is_crossover, crossover_type)
         """
+        if len(ema_short) < 3:
+            return False, ''
+        
+        # Check last 3 bars for crossover
+        for i in range(-3, -1):
+            prev_short = ema_short.iloc[i]
+            prev_long = ema_long.iloc[i]
+            curr_short = ema_short.iloc[i + 1]
+            curr_long = ema_long.iloc[i + 1]
+            
+            # Bullish crossover: short crosses above long
+            if prev_short <= prev_long and curr_short > curr_long:
+                return True, 'bullish'
+            
+            # Bearish crossover: short crosses below long
+            if prev_short >= prev_long and curr_short < curr_long:
+                return True, 'bearish'
+        
+        return False, ''
+    
+    def _calculate_trend_strength(self, bars: pd.DataFrame, 
+                                 ema_short: pd.Series, 
+                                 ema_long: pd.Series) -> float:
+        """
+        Calculate trend strength based on multiple factors.
+        
+        Returns:
+            Trend strength 0-100
+        """
+        # Factor 1: EMA separation (40% weight)
+        spread_pct = abs((ema_short.iloc[-1] - ema_long.iloc[-1]) / ema_long.iloc[-1] * 100)
+        spread_score = min(spread_pct * 10, 40)  # Max 40 points
+        
+        # Factor 2: EMA alignment over recent bars (30% weight)
+        recent_bars = min(10, len(ema_short))
+        aligned_bars = 0
+        for i in range(-recent_bars, 0):
+            if (ema_short.iloc[i] > ema_long.iloc[i]) == (ema_short.iloc[-1] > ema_long.iloc[-1]):
+                aligned_bars += 1
+        alignment_score = (aligned_bars / recent_bars) * 30
+        
+        # Factor 3: Price trend consistency (30% weight)
+        if len(bars) >= 10:
+            recent_closes = bars['close'].iloc[-10:]
+            price_trend = (recent_closes.iloc[-1] - recent_closes.iloc[0]) / recent_closes.iloc[0] * 100
+            ema_trend = (ema_short.iloc[-1] > ema_long.iloc[-1])
+            
+            if (price_trend > 0 and ema_trend) or (price_trend < 0 and not ema_trend):
+                consistency_score = 30
+            else:
+                consistency_score = 10
+        else:
+            consistency_score = 15
+        
+        trend_strength = spread_score + alignment_score + consistency_score
+        return min(100, max(0, trend_strength))
+    
+    def _determine_signal(self, is_bullish: bool, price_position: str, 
+                         last_close: float, ema_9: float) -> str:
+        """
+        Determine signal with NEUTRAL override logic.
+        
+        Returns:
+            'BULL', 'BEAR', or 'NEUTRAL'
+        """
+        if is_bullish:
+            # EMA 9 > EMA 21 (bullish setup)
+            if price_position == 'below':
+                # Price below EMA 9 in uptrend = NEUTRAL
+                return 'NEUTRAL'
+            else:
+                return 'BULL'
+        else:
+            # EMA 9 < EMA 21 (bearish setup)
+            if price_position == 'above':
+                # Price above EMA 9 in downtrend = NEUTRAL
+                return 'NEUTRAL'
+            else:
+                return 'BEAR'
+    
+    def _calculate_signal_strength(self, spread_pct: float, trend_strength: float,
+                                  is_crossover: bool, price_position: str, 
+                                  signal: str) -> float:
+        """
+        Calculate overall signal strength.
+        
+        Returns:
+            Signal strength 0-100
+        """
+        # Base strength from trend
+        strength = trend_strength
+        
+        # Adjust for crossover
+        if is_crossover:
+            strength = min(100, strength * 1.2)
+        
+        # NEUTRAL signals get lower strength
+        if signal == 'NEUTRAL':
+            strength = min(30, strength * 0.5)
+        
+        # Ensure minimum strength for clear trends
+        if abs(spread_pct) > 0.5 and signal != 'NEUTRAL' and strength < 30:
+            strength = 30
+        
+        return min(100, max(0, strength))
+    
+    def _build_reason(self, signal: str, ema_9: float, ema_21: float,
+                     spread_pct: float, is_crossover: bool, crossover_type: str,
+                     price_position: str, is_bullish: bool) -> str:
+        """Build human-readable reason for signal"""
         reasons = []
         
-        # Primary signal based on EMA position
-        if ema_9 > ema_21:
-            base_signal = 'BULL'
-            reasons.append(f"9 EMA ({ema_9:.2f}) > 21 EMA ({ema_21:.2f})")
-            
-            # Check price position for NEUTRAL override
-            if last_close < ema_9:
-                signal = 'NEUTRAL'
-                reasons.append(f"But price ({last_close:.2f}) below 9 EMA")
-                strength = 30  # Low strength for neutral
-            else:
-                signal = 'BULL'
-                strength = metrics.trend_strength
-                
-        else:  # ema_9 <= ema_21
-            base_signal = 'BEAR'
-            reasons.append(f"9 EMA ({ema_9:.2f}) < 21 EMA ({ema_21:.2f})")
-            
-            # Check price position for NEUTRAL override
-            if last_close > ema_9:
-                signal = 'NEUTRAL'
-                reasons.append(f"But price ({last_close:.2f}) above 9 EMA")
-                strength = 30
-            else:
-                signal = 'BEAR'
-                strength = metrics.trend_strength
+        # Primary trend
+        if is_bullish:
+            reasons.append(f"15m EMA 9 ({ema_9:.2f}) > EMA 21 ({ema_21:.2f})")
+        else:
+            reasons.append(f"15m EMA 9 ({ema_9:.2f}) < EMA 21 ({ema_21:.2f})")
         
-        # Add spread information
-        reasons.append(f"Spread: {metrics.ema_spread:.2f} ({metrics.ema_spread_pct:.1f}%)")
+        # NEUTRAL override explanation
+        if signal == 'NEUTRAL':
+            if is_bullish and price_position == 'below':
+                reasons.append(f"But price ({price_position} EMA 9) → NEUTRAL")
+            elif not is_bullish and price_position == 'above':
+                reasons.append(f"But price ({price_position} EMA 9) → NEUTRAL")
         
-        # Add crossover info if recent (within 75 minutes for 15-min bars)
-        if metrics.last_crossover_time:
-            time_since = datetime.now(timezone.utc) - metrics.last_crossover_time
-            if time_since.total_seconds() < 4500:  # Within 75 minutes (5 bars)
-                minutes_ago = time_since.total_seconds() / 60
-                reasons.append(f"Recent {metrics.last_crossover_type} crossover {minutes_ago:.1f}m ago")
-                strength = min(100, strength * 1.2)  # Boost strength for recent crossover
+        # Spread info
+        reasons.append(f"Spread: {abs(spread_pct):.2f}%")
         
-        reason = " | ".join(reasons)
-        return signal, strength, reason
-    
-    def _check_crossover(self, symbol: str, ema_9: float, ema_21: float,
-                        ema_9_prev: float, ema_21_prev: float):
-        """Check and record EMA crossovers"""
-        # Previous relationship
-        prev_bull = ema_9_prev > ema_21_prev
-        # Current relationship
-        curr_bull = ema_9 > ema_21
+        # Crossover
+        if is_crossover:
+            reasons.append(f"Recent {crossover_type} crossover")
         
-        # Detect crossover
-        if prev_bull != curr_bull:
-            crossover_type = 'bullish' if curr_bull else 'bearish'
-            self.last_crossover[symbol] = (datetime.now(timezone.utc), crossover_type)
-            logger.info(f"{symbol}: {crossover_type.upper()} crossover detected on 15-min chart!")
-    
-    def get_current_analysis(self, symbol: str) -> Optional[VolumeSignal]:
-        """Get current analysis for a symbol without new data"""
-        if symbol not in self.candles or len(self.candles[symbol]) < self.min_candles_required:
-            return None
+        # Price position (if not already mentioned for NEUTRAL)
+        if signal != 'NEUTRAL':
+            reasons.append(f"Price {price_position} EMA 9")
         
-        return self._generate_signal(symbol)
-    
-    def get_statistics(self) -> Dict:
-        """Get analyzer statistics"""
-        return {
-            'timeframe': self.timeframe,
-            'candles_processed': self.candles_processed,
-            'signals_generated': self.signals_generated,
-            'active_symbols': list(self.candles.keys()),
-            'buffer_sizes': {symbol: len(candles) for symbol, candles in self.candles.items()},
-            'current_emas': self.current_emas
-        }
+        return " | ".join(reasons)
 
 
-# ============= TEST FUNCTION =============
-async def test_ema_analyzer_15m():
-    """Test EMA analyzer with real-time 15-minute websocket data"""
-    import sys
-    import os
+def validate_15min_data(bars: pd.DataFrame, timeframe: str = '15min') -> Tuple[bool, str]:
+    """
+    Validate data before processing.
     
-    # Add parent directories to path for imports
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    modules_dir = os.path.dirname(os.path.dirname(current_dir))
-    vega_root = os.path.dirname(modules_dir)
-    if vega_root not in sys.path:
-        sys.path.insert(0, vega_root)
+    Args:
+        bars: Bar data
+        timeframe: Expected timeframe ('1min' or '15min')
+        
+    Returns:
+        (is_valid, error_message)
+    """
+    if bars.empty:
+        return False, "No data provided"
     
-    from polygon import PolygonWebSocketClient, PolygonClient
+    # Check required columns
+    required_columns = ['open', 'high', 'low', 'close', 'volume']
+    missing = [col for col in required_columns if col not in bars.columns]
+    if missing:
+        return False, f"Missing required columns: {missing}"
     
-    print("=== EMA CROSSOVER ANALYZER TEST (15-MINUTE) ===")
-    print("Analyzing 9/21 EMA crossover on 15-minute charts")
-    print(f"Current UTC time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
+    # Check minimum data points
+    if timeframe == '1min':
+        # Need at least 26*15 = 390 1-min bars
+        min_bars = 390
+    else:
+        # Need at least 26 15-min bars
+        min_bars = 26
+        
+    if len(bars) < min_bars:
+        return False, f"Insufficient data: {len(bars)} bars, need at least {min_bars}"
     
-    # Test configuration
-    TEST_SYMBOLS = ['AAPL', 'TSLA', 'SPY']
-    TEST_DURATION = 1800  # 30 minutes (to catch at least 2 candles)
-    USE_HISTORICAL = True  # Load historical data first
+    # Check for timezone awareness
+    if bars.index.tz is None:
+        return False, "Timestamps must be timezone-aware"
     
-    # Create analyzer
-    analyzer = EMAAnalyzer15M(
-        buffer_size=40,  # 40 15-min candles = 10 hours
-        ema_short=9,
-        ema_long=21,
-        min_candles_required=21
-    )
-    
-    # Track signals
-    signal_history = []
-    
-    # Load historical data if requested
-    if USE_HISTORICAL:
-        print("Loading historical 15-minute candles...")
-        rest_client = PolygonClient()
-        
-        for symbol in TEST_SYMBOLS:
-            # Get last 40 15-minute candles (10 hours)
-            end_time = datetime.now(timezone.utc)
-            start_time = end_time - timedelta(hours=12)
-            
-            try:
-                candles = rest_client.get_candles(
-                    symbol=symbol,
-                    timespan='minute',
-                    multiplier=15,  # 15-minute candles
-                    from_=start_time,
-                    to=end_time
-                )
-                
-                if candles:
-                    print(f"\n{symbol}: Loading {len(candles)} historical 15-min candles")
-                    signal = analyzer.process_historical_candles(symbol, candles)
-                    
-                    if signal:
-                        signal_history.append(signal)
-                        print(f"  Initial Signal: {signal.signal} (Strength: {signal.strength:.0f}%)")
-                        print(f"  Reason: {signal.reason}")
-                        
-            except Exception as e:
-                print(f"Error loading historical data for {symbol}: {e}")
-    
-    # Handle real-time candles
-    async def handle_candle(data: Dict):
-        """Process incoming 15-minute candle data"""
-        symbol = data['symbol']
-        
-        # Check if this is a complete 15-minute candle
-        # In real implementation, you'd track candle completion
-        is_complete = data.get('complete', True)
-        
-        # Process candle
-        signal = analyzer.process_candle(symbol, data, is_complete)
-        
-        if signal:
-            signal_history.append(signal)
-            
-            # Display based on signal type
-            if signal.signal == 'BULL':
-                emoji = '🟢'
-                color_code = '\033[92m'  # Green
-            elif signal.signal == 'BEAR':
-                emoji = '🔴'
-                color_code = '\033[91m'  # Red
-            else:
-                emoji = '⚪'
-                color_code = '\033[93m'  # Yellow
-            
-            print(f"\n{color_code}{'='*60}\033[0m")
-            print(f"{emoji} {signal.symbol} - Signal: {signal.signal} (Strength: {signal.strength:.0f}%)")
-            print(f"Time: {signal.timestamp.strftime('%H:%M:%S.%f UTC')[:-3]}")
-            print(f"Reason: {signal.reason}")
-            
-            # Display key metrics
-            m = signal.metrics
-            print(f"\nMetrics (15-min):")
-            print(f"  • 9 EMA: {m['ema_9']:.2f}")
-            print(f"  • 21 EMA: {m['ema_21']:.2f}")
-            print(f"  • EMA Spread: {m['ema_spread']:.2f} ({m['ema_spread_pct']:.2f}%)")
-            print(f"  • Price vs 9 EMA: {m['price_vs_ema9']}")
-            print(f"  • Trend Strength: {m['trend_strength']:.0f}")
-            
-            if m['last_crossover_time']:
-                print(f"  • Last Crossover: {m['last_crossover_type']} at "
-                      f"{m['last_crossover_time'].strftime('%H:%M:%S UTC')}")
-    
-    # Create WebSocket client
-    ws_client = PolygonWebSocketClient()
-    
-    try:
-        # Connect and authenticate
-        print(f"\nConnecting to Polygon WebSocket...")
-        await ws_client.connect()
-        print("✓ Connected and authenticated")
-        
-        # Subscribe to aggregates
-        print(f"\nSubscribing to 15-minute candles for: {', '.join(TEST_SYMBOLS)}")
-        
-        # For 15-minute aggregates, we need to use A.* with appropriate filtering
-        await ws_client.subscribe(
-            symbols=TEST_SYMBOLS,
-            channels=['A'],  # Aggregate channel
-            callback=handle_candle
-        )
-        print("✓ Subscribed successfully")
-        print("Note: Real-time 15-minute candles will appear at :00, :15, :30, :45")
-        
-        print(f"\n⏰ Running for {TEST_DURATION} seconds...")
-        print("Waiting for 15-minute candles...\n")
-        
-        # Create listen task
-        listen_task = asyncio.create_task(ws_client.listen())
-        
-        # Run for specified duration
-        start_time = time.time()
-        last_stats_time = start_time
-        
-        while time.time() - start_time < TEST_DURATION:
-            await asyncio.sleep(1)
-            
-            # Print stats every 300 seconds (5 minutes)
-            if time.time() - last_stats_time >= 300:
-                stats = analyzer.get_statistics()
-                print(f"\n📊 Stats: {stats['candles_processed']} 15-min candles, "
-                      f"{stats['signals_generated']} signals")
-                
-                # Show current EMAs
-                if stats['current_emas']:
-                    print("Current EMAs (15-min):")
-                    for sym, emas in stats['current_emas'].items():
-                        if emas:
-                            print(f"  {sym}: 9 EMA={emas['ema_9']:.2f}, "
-                                  f"21 EMA={emas['ema_21']:.2f}")
-                
-                print(f"Time: {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}")
-                last_stats_time = time.time()
-            
-            # Show countdown
-            remaining = TEST_DURATION - (time.time() - start_time)
-            print(f"\r⏳ Time remaining: {remaining:.0f}s ", end='', flush=True)
-        
-        print("\n\n🏁 Test complete!")
-        
-        # Final summary
-        stats = analyzer.get_statistics()
-        print(f"\n📊 Final Statistics:")
-        print(f"  • Timeframe: {stats['timeframe']}")
-        print(f"  • Total candles processed: {stats['candles_processed']}")
-        print(f"  • Signals generated: {stats['signals_generated']}")
-        print(f"  • Symbols tracked: {', '.join(stats['active_symbols'])}")
-        print(f"  • End time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        
-        # Signal summary
-        if signal_history:
-            print(f"\n📈 Signal Summary:")
-            bull_signals = [s for s in signal_history if s.signal == 'BULL']
-            bear_signals = [s for s in signal_history if s.signal == 'BEAR']
-            neutral_signals = [s for s in signal_history if s.signal == 'NEUTRAL']
-            
-            print(f"  • Bullish: {len(bull_signals)} ({len(bull_signals)/len(signal_history)*100:.0f}%)")
-            print(f"  • Bearish: {len(bear_signals)} ({len(bear_signals)/len(signal_history)*100:.0f}%)")
-            print(f"  • Neutral: {len(neutral_signals)} ({len(neutral_signals)/len(signal_history)*100:.0f}%)")
-            
-            # Show current positions
-            print(f"\n📍 Current Positions (15-min):")
-            for symbol in TEST_SYMBOLS:
-                current = analyzer.get_current_analysis(symbol)
-                if current:
-                    print(f"  • {symbol}: {current.signal} (Strength: {current.strength:.0f}%)")
-        
-        # Cancel listen task
-        listen_task.cancel()
-        await ws_client.disconnect()
-        
-    except KeyboardInterrupt:
-        print("\n\n⚠️ Test interrupted by user")
-        await ws_client.disconnect()
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        await ws_client.disconnect()
-
-
-if __name__ == "__main__":
-    print(f"Starting EMA Analyzer (15-minute) at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    print("This module detects trend using 9/21 EMA crossover on 15-minute charts")
-    print("All timestamps are in UTC\n")
-    
-    asyncio.run(test_ema_analyzer_15m())
+    return True, ""

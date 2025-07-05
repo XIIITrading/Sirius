@@ -51,7 +51,8 @@ class PolygonAPIClient:
                 'adjusted': 'true',
                 'sort': 'asc',
                 'limit': 50000,
-                'apiKey': self.api_key
+                'apiKey': self.api_key,
+                'extended': 'true'
             }
             
             all_bars = []

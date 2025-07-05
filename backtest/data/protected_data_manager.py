@@ -234,7 +234,7 @@ async def create_protected_manager(api_key: str, **config) -> ProtectedDataManag
         cache_dir=config.get('cache_dir', './cache'),
         memory_cache_size=config.get('memory_cache_size', 100),
         file_cache_hours=config.get('file_cache_hours', 24),
-        extend_window_bars=config.get('extend_window_bars', 500),
+        extend_window_bars=config.get('extend_window_bars', 2000),
         report_dir=config.get('report_dir', './temp')
     )
     

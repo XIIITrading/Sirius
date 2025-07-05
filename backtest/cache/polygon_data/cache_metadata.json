@@ -283,5 +283,59 @@
     "end_time": "2025-06-27T21:55:00.410000+00:00",
     "cached_at": "2025-07-05T16:21:11.864853+00:00",
     "data_points": 791
+  },
+  "3b37025690871c2b0b64883f592f871e": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T14:15:00+00:00",
+    "end_time": "2025-06-27T07:55:00+00:00",
+    "cached_at": "2025-07-05T17:37:39.277538+00:00",
+    "data_points": 568
+  },
+  "d2f6e4dbbc90c959381992ba742e0ca5": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T14:15:00+00:00",
+    "end_time": "2025-06-27T21:55:00+00:00",
+    "cached_at": "2025-07-05T17:37:39.527233+00:00",
+    "data_points": 1359
+  },
+  "7f649ea5ca9b709d9e6f2e74591a3624": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T13:15:00+00:00",
+    "end_time": "2025-06-28T08:55:00+00:00",
+    "cached_at": "2025-07-05T17:46:01.024111+00:00",
+    "data_points": 2470
+  },
+  "cd3c505641786e203482a24897db52e1": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T13:15:00+00:00",
+    "end_time": "2025-06-28T22:55:00+00:00",
+    "cached_at": "2025-07-05T17:46:01.190665+00:00",
+    "data_points": 2470
+  },
+  "fb556de376575a4f1519eacf6eb0f6b5": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T23:15:00+00:00",
+    "end_time": "2025-06-28T18:55:00+00:00",
+    "cached_at": "2025-07-05T17:47:18.756166+00:00",
+    "data_points": 1878
+  },
+  "a47fabfc3193e1d414ea7d3036cb6a47": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T23:15:00+00:00",
+    "end_time": "2025-06-28T22:55:00+00:00",
+    "cached_at": "2025-07-05T17:47:18.920392+00:00",
+    "data_points": 1878
   }
 }

@@ -32,7 +32,7 @@ class PolygonDataManager:
                  cache_dir: Optional[str] = None,
                  memory_cache_size: int = 100,
                  file_cache_hours: int = 24,
-                 extend_window_bars: int = 500,
+                 extend_window_bars: int = 2000,
                  report_dir: Optional[str] = None):
         """
         Initialize with modular components.

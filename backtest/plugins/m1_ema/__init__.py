@@ -1,4 +1,4 @@
-# backtest/plugins/m1_ema_crossover/__init__.py
+# backtest/plugins/m1_ema/__init__.py
 """
 M1 EMA Crossover Plugin
 Interprets signals from dashboard and coordinates with data system
@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Callable
 
 from backtest.data.polygon_data_manager import PolygonDataManager
-from modules.calculations.indicators.m1_ema import EMACalculator, EMAResult
+from modules.calculations.indicators.m1_ema import M1EMACalculator, M1EMAResult
 
 logger = logging.getLogger(__name__)
 
@@ -61,18 +61,15 @@ async def run_analysis(symbol: str, entry_time: datetime, direction: str) -> Dic
         if bars.empty:
             return _create_error_signal(entry_time, "No data available")
         
-        # Extract closing prices
-        closes = bars['close'].tolist()
-        
-        # Run calculation
-        calculator = EMACalculator(short_period=9, long_period=21)
-        result = calculator.calculate(closes)
+        # Run calculation - use correct parameter names
+        calculator = M1EMACalculator(ema_short=9, ema_long=21)
+        result = calculator.calculate(bars)
         
         if not result:
             return _create_error_signal(entry_time, "Insufficient data for calculation")
         
         # Interpret result into signal
-        return _interpret_signal(result, entry_time, direction, closes[-1])
+        return _interpret_signal(result, entry_time, direction)
         
     except Exception as e:
         logger.error(f"Error in {PLUGIN_NAME}: {e}")
@@ -109,33 +106,28 @@ async def run_analysis_with_progress(symbol: str, entry_time: datetime,
     return result
 
 
-def _interpret_signal(result: EMAResult, entry_time: datetime, 
-                     direction: str, last_price: float) -> Dict[str, Any]:
+def _interpret_signal(result: M1EMAResult, entry_time: datetime, 
+                     direction: str) -> Dict[str, Any]:
     """Interpret calculation result into standardized signal"""
     
-    # Determine signal direction
-    if result.is_bullish:
-        if last_price > result.ema_short:
-            signal_direction = "BULLISH"
-            strength = result.trend_strength
-        else:
-            signal_direction = "NEUTRAL"
-            strength = 30
-    else:
-        if last_price < result.ema_short:
-            signal_direction = "BEARISH" 
-            strength = result.trend_strength
-        else:
-            signal_direction = "NEUTRAL"
-            strength = 30
+    # Map internal signal to dashboard format
+    signal_map = {
+        'BULL': 'BULLISH',
+        'BEAR': 'BEARISH',
+        'NEUTRAL': 'NEUTRAL'
+    }
+    
+    signal_direction = signal_map.get(result.signal, 'NEUTRAL')
     
     # Build display data
     table_data = [
-        ["EMA 9", f"${result.ema_short:.2f}"],
-        ["EMA 21", f"${result.ema_long:.2f}"],
+        ["Timeframe", "1-Minute"],
+        ["EMA 9", f"${result.ema_9:.2f}"],
+        ["EMA 21", f"${result.ema_21:.2f}"],
         ["Spread", f"${result.spread:.2f} ({result.spread_pct:.2f}%)"],
         ["Trend Strength", f"{result.trend_strength:.0f}%"],
-        ["Signal Strength", f"{strength:.0f}%"]
+        ["Signal Strength", f"{result.signal_strength:.0f}%"],
+        ["Price Position", result.price_position.replace('_', ' ').title()]
     ]
     
     if result.is_crossover:
@@ -151,38 +143,33 @@ def _interpret_signal(result: EMAResult, entry_time: datetime,
             alignment = "Opposed ✗"
     table_data.append(["Direction Alignment", alignment])
     
-    # Build reason
-    reason_parts = []
-    if result.is_bullish:
-        reason_parts.append(f"EMA 9 ({result.ema_short:.2f}) > EMA 21 ({result.ema_long:.2f})")
-    else:
-        reason_parts.append(f"EMA 9 ({result.ema_short:.2f}) < EMA 21 ({result.ema_long:.2f})")
-    
-    if result.is_crossover:
-        reason_parts.append(f"Recent {result.crossover_type} crossover")
-    
-    reason = " | ".join(reason_parts)
+    # Add volume information
+    table_data.append(["Last Volume", f"{result.last_1min_volume:,.0f}"])
     
     return {
         'plugin_name': PLUGIN_NAME,
         'timestamp': entry_time,
         'signal': {
             'direction': signal_direction,
-            'strength': float(strength),
-            'confidence': float(strength)
+            'strength': float(result.signal_strength),
+            'confidence': float(result.signal_strength)
         },
         'details': {
-            'ema_9': result.ema_short,
-            'ema_21': result.ema_long,
+            'timeframe': '1-minute',
+            'ema_9': result.ema_9,
+            'ema_21': result.ema_21,
             'ema_spread': result.spread,
             'ema_spread_pct': result.spread_pct,
             'trend_strength': result.trend_strength,
             'is_crossover': result.is_crossover,
-            'crossover_type': result.crossover_type
+            'crossover_type': result.crossover_type,
+            'price_position': result.price_position,
+            'last_price': result.last_1min_close,
+            'bars_processed': result.bars_processed
         },
         'display_data': {
-            'summary': f"EMA 9/21 - {signal_direction}",
-            'description': reason,
+            'summary': f"1-Min EMA 9/21 - {signal_direction}",
+            'description': result.reason,
             'table_data': table_data
         }
     }

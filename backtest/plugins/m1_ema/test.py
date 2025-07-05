@@ -1,4 +1,4 @@
-# backtest/plugins/m1_ema_crossover/test_cli.py
+# backtest/plugins/m1_ema/test.py
 """
 Test CLI for M1 EMA Crossover Plugin
 Tests the complete workflow: Dashboard -> Plugin -> DataManager -> CircuitBreaker -> Signal
@@ -17,7 +17,7 @@ sys.path.insert(0, str(project_root))
 
 from backtest.data.polygon_data_manager import PolygonDataManager
 from backtest.data.protected_data_manager import ProtectedDataManager
-from modules.calculations.indicators.m1_ema import M1EMACalculator, validate_1min_data
+from modules.calculations.indicators.m1_ema import M1EMACalculator
 
 # Configure logging
 logging.basicConfig(
@@ -32,7 +32,7 @@ class PluginTester:
     
     def __init__(self):
         """Initialize the test environment"""
-        logger.info("Initializing Plugin Tester...")
+        logger.info("Initializing M1 EMA Plugin Tester...")
         
         # Create data manager with circuit breaker protection
         self.polygon_manager = PolygonDataManager()
@@ -52,7 +52,7 @@ class PluginTester:
         self.plugin_config = {
             'name': '1-Min EMA Crossover',
             'version': '1.0.0',
-            'lookback_minutes': 120,
+            'lookback_minutes': 120,  # 2 hours
             'ema_short': 9,
             'ema_long': 21
         }
@@ -71,7 +71,7 @@ class PluginTester:
         5. Returns signal to dashboard
         """
         logger.info(f"\n{'='*60}")
-        logger.info(f"Starting analysis for {symbol} at {entry_time}")
+        logger.info(f"Starting 1-minute EMA analysis for {symbol} at {entry_time}")
         logger.info(f"Direction: {direction}")
         logger.info(f"{'='*60}\n")
         
@@ -102,26 +102,21 @@ class PluginTester:
                 logger.error("No data received from data manager")
                 return self._create_error_signal(entry_time, "No data available")
             
-            logger.info(f"Received {len(bars)} bars")
+            logger.info(f"Received {len(bars)} 1-minute bars")
             
-            # Step 4: Plugin runs calculation
-            prices = bars['close'].tolist()
-            timestamps = bars.index.tolist()
+            # Step 4: Basic validation
+            if len(bars) < 26:
+                logger.error(f"Insufficient data: {len(bars)} bars, need at least 26")
+                return self._create_error_signal(entry_time, f"Insufficient data: {len(bars)} bars")
             
-            # Validate data
-            is_valid, error_msg = validate_1min_data(prices, timestamps)
-            if not is_valid:
-                logger.error(f"Data validation failed: {error_msg}")
-                return self._create_error_signal(entry_time, error_msg)
-            
-            # Run calculation
+            # Step 5: Plugin runs calculation
             calculator = M1EMACalculator()
-            result = calculator.calculate(prices, timestamps)
+            result = calculator.calculate(bars)
             
             if not result:
                 return self._create_error_signal(entry_time, "Insufficient data for calculation")
             
-            # Step 5: Plugin formats signal for dashboard
+            # Step 6: Plugin formats signal for dashboard
             signal = self._format_signal(result, entry_time, direction)
             
             return signal
@@ -158,6 +153,7 @@ class PluginTester:
                 'confidence': float(result.signal_strength)
             },
             'details': {
+                'timeframe': '1-minute',
                 'ema_9': result.ema_9,
                 'ema_21': result.ema_21,
                 'spread': result.spread,
@@ -166,17 +162,24 @@ class PluginTester:
                 'is_crossover': result.is_crossover,
                 'crossover_type': result.crossover_type,
                 'price_position': result.price_position,
+                'last_price': result.last_1min_close,
+                'last_volume': result.last_1min_volume,
+                'bars_processed': result.bars_processed,
                 'alignment': alignment
             },
             'display_data': {
-                'summary': f"EMA 9/21 - {signal_map[result.signal]}",
+                'summary': f"1-Min EMA 9/21 - {signal_map[result.signal]}",
                 'description': result.reason,
                 'table_data': [
+                    ['Timeframe', '1-Minute'],
                     ['EMA 9', f'${result.ema_9:.2f}'],
                     ['EMA 21', f'${result.ema_21:.2f}'],
                     ['Spread', f'${result.spread:.2f} ({result.spread_pct:.2f}%)'],
                     ['Trend Strength', f'{result.trend_strength:.0f}%'],
                     ['Signal Strength', f'{result.signal_strength:.0f}%'],
+                    ['Last Price', f'${result.last_1min_close:.2f}'],
+                    ['Last Volume', f'{result.last_1min_volume:,.0f}'],
+                    ['1m Bars', f'{result.bars_processed}'],
                     ['Direction Alignment', alignment]
                 ]
             }
@@ -215,15 +218,19 @@ class PluginTester:
         details = signal.get('details', {})
         if details:
             print("\n📈 DETAILS:")
+            print(f"   Timeframe: {details['timeframe']}")
             print(f"   EMA 9: ${details['ema_9']:.2f}")
             print(f"   EMA 21: ${details['ema_21']:.2f}")
             print(f"   Spread: ${details['spread']:.2f} ({details['spread_pct']:.2f}%)")
             print(f"   Trend Strength: {details['trend_strength']:.0f}%")
+            print(f"   Last Price: ${details['last_price']:.2f}")
+            print(f"   Last Volume: {details['last_volume']:,.0f}")
             
             if details.get('is_crossover'):
                 print(f"   🔄 Crossover: {details['crossover_type']}")
             
-            print(f"   Position: {details.get('price_position', 'N/A')}")
+            print(f"   Price Position: {details.get('price_position', 'N/A')}")
+            print(f"   1m Bars Processed: {details.get('bars_processed', 'N/A')}")
             print(f"   Alignment: {details.get('alignment', 'N/A')}")
         
         # Display data
@@ -264,13 +271,13 @@ async def main():
         epilog="""
 Examples:
   # Test with current time
-  python test_cli.py -s AAPL -d LONG
+  python test.py -s AAPL -d LONG
   
   # Test with specific time
-  python test_cli.py -s TSLA -d SHORT -t "2025-01-15 10:30:00"
+  python test.py -s TSLA -d SHORT -t "2025-01-15 10:30:00"
   
   # Test multiple scenarios
-  python test_cli.py -s SPY -d LONG --scenarios
+  python test.py -s SPY -d LONG --scenarios
         """
     )
     
@@ -338,6 +345,14 @@ if __name__ == "__main__":
     
     try:
         asyncio.run(main())
+
+
+
+
+
+
+
+        
     except KeyboardInterrupt:
         print("\n\nTest interrupted by user")
     except Exception as e:

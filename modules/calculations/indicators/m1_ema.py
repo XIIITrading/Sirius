@@ -1,315 +1,290 @@
 # modules/calculations/indicators/m1_ema.py
 """
-Module: 1-Minute EMA Crossover Calculation
-Purpose: Pure calculation logic for 9/21 EMA crossover on 1-minute data
-Features: EMA calculation, crossover detection, trend strength
-Output: Standardized calculation results
-Note: This is a pure calculation module - no data fetching, no testing
+M1 EMA Crossover Calculation Module
+Handles 1-minute EMA calculations directly on 1-minute data
+Follows the same pattern as M5 EMA for consistency
 """
 
+import logging
+from datetime import datetime, timezone
+from typing import List, Optional, Tuple
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple
+import pandas as pd
 import numpy as np
-from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
-class EMAResult:
-    """Result of 1-minute EMA calculation"""
-    timestamp: datetime
+class M1EMAResult:
+    """Result of M1 EMA calculation"""
+    signal: str  # 'BULL', 'BEAR', 'NEUTRAL'
+    signal_strength: float
     ema_9: float
     ema_21: float
-    ema_9_prev: float
-    ema_21_prev: float
-    last_price: float
-    is_bullish: bool
-    is_crossover: bool
-    crossover_type: Optional[str]  # 'bullish', 'bearish', None
     spread: float
     spread_pct: float
-    trend_strength: float  # 0-100
-    price_position: str  # 'above_ema9', 'below_ema9', 'between'
-    signal: str  # 'BULL', 'BEAR', 'NEUTRAL'
-    signal_strength: float  # 0-100
+    trend_strength: float
+    is_crossover: bool
+    crossover_type: str  # 'bullish', 'bearish', or ''
+    price_position: str  # 'above', 'below', 'at'
     reason: str
+    bars_processed: int
+    last_1min_close: float
+    last_1min_volume: float
 
 
 class M1EMACalculator:
     """
-    Pure 1-minute EMA crossover calculation logic.
-    No data fetching, no external dependencies.
+    Calculates 1-minute EMA crossover signals from 1-minute data.
+    
+    Process:
+    1. Use 1-minute bars directly (no aggregation needed)
+    2. Calculate 9 and 21 period EMAs on 1-minute data
+    3. Detect crossovers and trend strength
+    4. Generate trading signals
     """
     
-    def __init__(self, short_period: int = 9, long_period: int = 21):
+    def __init__(self, ema_short: int = 9, ema_long: int = 21):
+        self.ema_short = ema_short
+        self.ema_long = ema_long
+        self.min_bars_required = ema_long + 5  # Need extra bars for stable EMA
+        
+    def calculate(self, bars_1min: pd.DataFrame) -> Optional[M1EMAResult]:
         """
-        Initialize calculator with EMA periods
+        Main calculation method.
         
         Args:
-            short_period: Short EMA period (default 9)
-            long_period: Long EMA period (default 21)
-        """
-        self.short_period = short_period
-        self.long_period = long_period
-        self.min_periods = max(short_period, long_period)
-    
-    def calculate(self, prices: List[float], 
-                  timestamps: Optional[List[datetime]] = None) -> Optional[EMAResult]:
-        """
-        Calculate EMA crossover from 1-minute price series
-        
-        Args:
-            prices: List of closing prices (oldest to newest)
-            timestamps: Optional list of timestamps corresponding to prices
+            bars_1min: DataFrame with 1-minute OHLCV data (index=timestamp)
             
         Returns:
-            EMAResult if enough data, None otherwise
+            M1EMAResult or None if insufficient data
         """
-        if len(prices) < self.min_periods:
+        try:
+            # Validate input data
+            if bars_1min.empty:
+                logger.warning("Empty DataFrame provided")
+                return None
+                
+            # No aggregation needed for M1 - use 1-minute bars directly
+            if len(bars_1min) < self.min_bars_required:
+                logger.warning(f"Insufficient 1-minute bars: {len(bars_1min)} < {self.min_bars_required}")
+                return None
+            
+            # Calculate EMAs directly on 1-minute data
+            ema_short_series = self._calculate_ema(bars_1min['close'], self.ema_short)
+            ema_long_series = self._calculate_ema(bars_1min['close'], self.ema_long)
+            
+            # Get latest values
+            ema_9 = ema_short_series.iloc[-1]
+            ema_21 = ema_long_series.iloc[-1]
+            last_close = bars_1min['close'].iloc[-1]
+            last_volume = bars_1min['volume'].iloc[-1]
+            
+            # Calculate spread
+            spread = ema_9 - ema_21
+            spread_pct = (spread / ema_21) * 100 if ema_21 != 0 else 0
+            
+            # Determine trend and signal
+            is_bullish = ema_9 > ema_21
+            signal = 'BULL' if is_bullish else 'BEAR'
+            
+            # Check for crossover
+            is_crossover, crossover_type = self._detect_crossover(
+                ema_short_series, ema_long_series
+            )
+            
+            # Calculate trend strength
+            trend_strength = self._calculate_trend_strength(
+                bars_1min, ema_short_series, ema_long_series
+            )
+            
+            # Determine price position relative to EMA 9
+            if last_close > ema_9:
+                price_position = 'above'
+            elif last_close < ema_9:
+                price_position = 'below'
+            else:
+                price_position = 'at'
+            
+            # Calculate signal strength
+            signal_strength = self._calculate_signal_strength(
+                spread_pct, trend_strength, is_crossover, price_position, signal
+            )
+            
+            # Build reason
+            reason = self._build_reason(
+                signal, ema_9, ema_21, spread_pct, 
+                is_crossover, crossover_type, price_position
+            )
+            
+            return M1EMAResult(
+                signal=signal,
+                signal_strength=signal_strength,
+                ema_9=round(ema_9, 2),
+                ema_21=round(ema_21, 2),
+                spread=round(spread, 2),
+                spread_pct=round(spread_pct, 2),
+                trend_strength=round(trend_strength, 1),
+                is_crossover=is_crossover,
+                crossover_type=crossover_type,
+                price_position=price_position,
+                reason=reason,
+                bars_processed=len(bars_1min),
+                last_1min_close=round(last_close, 2),
+                last_1min_volume=round(last_volume, 0)
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in M1 EMA calculation: {e}")
             return None
+    
+    def _calculate_ema(self, series: pd.Series, period: int) -> pd.Series:
+        """Calculate Exponential Moving Average"""
+        return series.ewm(span=period, adjust=False).mean()
+    
+    def _detect_crossover(self, ema_short: pd.Series, ema_long: pd.Series) -> Tuple[bool, str]:
+        """
+        Detect if a crossover occurred in the last few bars.
         
-        # Calculate EMAs
-        ema_short_series = self._calculate_ema_series(prices, self.short_period)
-        ema_long_series = self._calculate_ema_series(prices, self.long_period)
+        Returns:
+            (is_crossover, crossover_type)
+        """
+        if len(ema_short) < 3:
+            return False, ''
         
-        if not ema_short_series or not ema_long_series:
-            return None
+        # Check last 3 bars for crossover
+        for i in range(-3, -1):
+            prev_short = ema_short.iloc[i]
+            prev_long = ema_long.iloc[i]
+            curr_short = ema_short.iloc[i + 1]
+            curr_long = ema_long.iloc[i + 1]
+            
+            # Bullish crossover: short crosses above long
+            if prev_short <= prev_long and curr_short > curr_long:
+                return True, 'bullish'
+            
+            # Bearish crossover: short crosses below long
+            if prev_short >= prev_long and curr_short < curr_long:
+                return True, 'bearish'
         
-        # Get current and previous values
-        current_short = ema_short_series[-1]
-        current_long = ema_long_series[-1]
-        prev_short = ema_short_series[-2] if len(ema_short_series) > 1 else current_short
-        prev_long = ema_long_series[-2] if len(ema_long_series) > 1 else current_long
-        last_price = prices[-1]
+        return False, ''
+    
+    def _calculate_trend_strength(self, bars: pd.DataFrame, 
+                                 ema_short: pd.Series, 
+                                 ema_long: pd.Series) -> float:
+        """
+        Calculate trend strength based on multiple factors.
         
-        # Determine trend and crossover
-        is_bullish = current_short > current_long
-        was_bullish = prev_short > prev_long
-        is_crossover = is_bullish != was_bullish
-        crossover_type = None
+        Returns:
+            Trend strength 0-100
+        """
+        # Factor 1: EMA separation (40% weight)
+        spread_pct = abs((ema_short.iloc[-1] - ema_long.iloc[-1]) / ema_long.iloc[-1] * 100)
+        spread_score = min(spread_pct * 10, 40)  # Max 40 points
         
+        # Factor 2: EMA alignment over recent bars (30% weight)
+        recent_bars = min(10, len(ema_short))
+        aligned_bars = 0
+        for i in range(-recent_bars, 0):
+            if (ema_short.iloc[i] > ema_long.iloc[i]) == (ema_short.iloc[-1] > ema_long.iloc[-1]):
+                aligned_bars += 1
+        alignment_score = (aligned_bars / recent_bars) * 30
+        
+        # Factor 3: Price trend consistency (30% weight)
+        if len(bars) >= 10:
+            recent_closes = bars['close'].iloc[-10:]
+            price_trend = (recent_closes.iloc[-1] - recent_closes.iloc[0]) / recent_closes.iloc[0] * 100
+            ema_trend = (ema_short.iloc[-1] > ema_long.iloc[-1])
+            
+            if (price_trend > 0 and ema_trend) or (price_trend < 0 and not ema_trend):
+                consistency_score = 30
+            else:
+                consistency_score = 10
+        else:
+            consistency_score = 15
+        
+        trend_strength = spread_score + alignment_score + consistency_score
+        return min(100, max(0, trend_strength))
+    
+    def _calculate_signal_strength(self, spread_pct: float, trend_strength: float,
+                                  is_crossover: bool, price_position: str, 
+                                  signal: str) -> float:
+        """
+        Calculate overall signal strength.
+        
+        Returns:
+            Signal strength 0-100
+        """
+        # Base strength from trend
+        strength = trend_strength
+        
+        # Adjust for crossover
         if is_crossover:
-            crossover_type = 'bullish' if is_bullish else 'bearish'
-        
-        # Calculate spread metrics
-        spread = current_short - current_long
-        spread_pct = (spread / last_price * 100) if last_price > 0 else 0
-        trend_strength = min(100, abs(spread_pct) * 20)  # 5% spread = 100 strength
-        
-        # Determine price position
-        price_position = self._get_price_position(last_price, current_short, current_long)
-        
-        # Generate signal
-        signal, signal_strength, reason = self._generate_signal(
-            is_bullish, last_price, current_short, current_long, 
-            spread_pct, trend_strength, is_crossover, crossover_type
-        )
-        
-        # Get timestamp
-        timestamp = timestamps[-1] if timestamps else datetime.utcnow()
-        
-        return EMAResult(
-            timestamp=timestamp,
-            ema_9=current_short,
-            ema_21=current_long,
-            ema_9_prev=prev_short,
-            ema_21_prev=prev_long,
-            last_price=last_price,
-            is_bullish=is_bullish,
-            is_crossover=is_crossover,
-            crossover_type=crossover_type,
-            spread=spread,
-            spread_pct=spread_pct,
-            trend_strength=trend_strength,
-            price_position=price_position,
-            signal=signal,
-            signal_strength=signal_strength,
-            reason=reason
-        )
-    
-    def calculate_batch(self, prices: List[float], 
-                       timestamps: Optional[List[datetime]] = None) -> List[EMAResult]:
-        """
-        Calculate EMA results for each point in the price series
-        
-        Args:
-            prices: List of closing prices
-            timestamps: Optional list of timestamps
-            
-        Returns:
-            List of EMAResult for each valid calculation point
-        """
-        results = []
-        
-        # Need at least min_periods to start
-        if len(prices) < self.min_periods:
-            return results
-        
-        # Calculate for each point from min_periods onwards
-        for i in range(self.min_periods, len(prices) + 1):
-            price_slice = prices[:i]
-            time_slice = timestamps[:i] if timestamps else None
-            
-            result = self.calculate(price_slice, time_slice)
-            if result:
-                results.append(result)
-        
-        return results
-    
-    def _calculate_ema_series(self, prices: List[float], period: int) -> List[float]:
-        """Calculate EMA series for given prices and period"""
-        if len(prices) < period:
-            return []
-        
-        ema = []
-        multiplier = 2 / (period + 1)
-        
-        # Start with SMA
-        sma = sum(prices[:period]) / period
-        ema.append(sma)
-        
-        # Calculate EMA for remaining prices
-        for i in range(period, len(prices)):
-            ema_val = (prices[i] - ema[-1]) * multiplier + ema[-1]
-            ema.append(ema_val)
-        
-        return ema
-    
-    def _get_price_position(self, price: float, ema_short: float, ema_long: float) -> str:
-        """Determine price position relative to EMAs"""
-        if price > ema_short and price > ema_long:
-            return "above_both"
-        elif price < ema_short and price < ema_long:
-            return "below_both"
-        elif price > ema_short:
-            return "above_ema9"
-        elif price < ema_short:
-            return "below_ema9"
-        else:
-            return "at_ema9"
-    
-    def _generate_signal(self, is_bullish: bool, last_price: float,
-                        ema_short: float, ema_long: float,
-                        spread_pct: float, trend_strength: float,
-                        is_crossover: bool, crossover_type: Optional[str]) -> Tuple[str, float, str]:
-        """
-        Generate trading signal based on EMA analysis
-        
-        Returns:
-            (signal, strength, reason)
-        """
-        reasons = []
-        
-        # Base signal from EMA relationship
-        if is_bullish:
-            base_signal = 'BULL'
-            reasons.append(f"EMA 9 ({ema_short:.2f}) > EMA 21 ({ema_long:.2f})")
-            
-            # Check price position for confirmation
-            if last_price < ema_short:
-                signal = 'NEUTRAL'
-                reasons.append(f"But price ({last_price:.2f}) below EMA 9")
-                strength = 30
-            else:
-                signal = 'BULL'
-                strength = trend_strength
-        else:
-            base_signal = 'BEAR'
-            reasons.append(f"EMA 9 ({ema_short:.2f}) < EMA 21 ({ema_long:.2f})")
-            
-            # Check price position for confirmation
-            if last_price > ema_short:
-                signal = 'NEUTRAL'
-                reasons.append(f"But price ({last_price:.2f}) above EMA 9")
-                strength = 30
-            else:
-                signal = 'BEAR'
-                strength = trend_strength
-        
-        # Add spread information
-        reasons.append(f"Spread: {spread_pct:.2f}%")
-        
-        # Boost strength for recent crossover
-        if is_crossover and crossover_type:
-            reasons.append(f"Fresh {crossover_type} crossover")
             strength = min(100, strength * 1.2)
         
-        reason = " | ".join(reasons)
-        return signal, strength, reason
+        # Adjust for price position
+        if signal == 'BULL' and price_position == 'below':
+            strength *= 0.7  # Reduce strength if price below EMA in uptrend
+        elif signal == 'BEAR' and price_position == 'above':
+            strength *= 0.7  # Reduce strength if price above EMA in downtrend
+        
+        # Ensure minimum strength for clear trends
+        if abs(spread_pct) > 0.5 and strength < 30:
+            strength = 30
+        
+        return min(100, max(0, strength))
     
-    def get_ema_values(self, prices: List[float]) -> Optional[Dict[str, float]]:
-        """
-        Get just the current EMA values without full analysis
+    def _build_reason(self, signal: str, ema_9: float, ema_21: float,
+                     spread_pct: float, is_crossover: bool, crossover_type: str,
+                     price_position: str) -> str:
+        """Build human-readable reason for signal"""
+        reasons = []
         
-        Args:
-            prices: List of closing prices
-            
-        Returns:
-            Dict with ema_9 and ema_21 values, or None if insufficient data
-        """
-        if len(prices) < self.min_periods:
-            return None
+        # Primary trend
+        if signal == 'BULL':
+            reasons.append(f"1m EMA 9 ({ema_9:.2f}) > EMA 21 ({ema_21:.2f})")
+        else:
+            reasons.append(f"1m EMA 9 ({ema_9:.2f}) < EMA 21 ({ema_21:.2f})")
         
-        ema_short_series = self._calculate_ema_series(prices, self.short_period)
-        ema_long_series = self._calculate_ema_series(prices, self.long_period)
+        # Spread info
+        reasons.append(f"Spread: {abs(spread_pct):.2f}%")
         
-        if not ema_short_series or not ema_long_series:
-            return None
+        # Crossover
+        if is_crossover:
+            reasons.append(f"Recent {crossover_type} crossover")
         
-        return {
-            'ema_9': ema_short_series[-1],
-            'ema_21': ema_long_series[-1],
-            'count': len(prices)
-        }
+        # Price position
+        reasons.append(f"Price {price_position} EMA 9")
+        
+        return " | ".join(reasons)
 
 
-# Utility functions for working with 1-minute data
-def validate_1min_data(prices: List[float], timestamps: List[datetime]) -> Tuple[bool, str]:
+def validate_1min_data(bars_1min: pd.DataFrame) -> Tuple[bool, str]:
     """
-    Validate that data is suitable for 1-minute EMA calculation
+    Validate 1-minute data before processing.
     
+    Args:
+        bars_1min: 1-minute bar data
+        
     Returns:
         (is_valid, error_message)
     """
-    if not prices:
-        return False, "No price data provided"
+    if bars_1min.empty:
+        return False, "No data provided"
     
-    if len(prices) < 21:  # Minimum for 21-period EMA
-        return False, f"Insufficient data: {len(prices)} candles (need at least 21)"
+    # Check required columns
+    required_columns = ['open', 'high', 'low', 'close', 'volume']
+    missing = [col for col in required_columns if col not in bars_1min.columns]
+    if missing:
+        return False, f"Missing required columns: {missing}"
     
-    if timestamps and len(timestamps) != len(prices):
-        return False, "Price and timestamp arrays must have same length"
+    # Check minimum data points (need at least 26 bars for stable EMA)
+    if len(bars_1min) < 26:
+        return False, f"Insufficient data: {len(bars_1min)} bars, need at least 26"
     
-    # Check for invalid prices
-    if any(p <= 0 for p in prices):
-        return False, "Invalid prices detected (zero or negative)"
-    
-    # Check timestamp spacing if provided
-    if timestamps and len(timestamps) > 1:
-        # Check if roughly 1-minute intervals
-        intervals = []
-        for i in range(1, len(timestamps)):
-            interval = (timestamps[i] - timestamps[i-1]).total_seconds()
-            intervals.append(interval)
-        
-        avg_interval = sum(intervals) / len(intervals)
-        if avg_interval < 50 or avg_interval > 70:  # Allow 50-70 seconds
-            return False, f"Data doesn't appear to be 1-minute intervals (avg: {avg_interval:.1f}s)"
+    # Check for timezone awareness
+    if bars_1min.index.tz is None:
+        return False, "Timestamps must be timezone-aware"
     
     return True, ""
-
-
-def extract_signal_metrics(result: EMAResult) -> Dict[str, any]:
-    """Extract key metrics from EMA result for display"""
-    return {
-        'direction': result.signal,
-        'strength': result.signal_strength,
-        'ema_9': result.ema_9,
-        'ema_21': result.ema_21,
-        'spread': result.spread,
-        'spread_pct': result.spread_pct,
-        'trend_strength': result.trend_strength,
-        'is_crossover': result.is_crossover,
-        'crossover_type': result.crossover_type,
-        'price_position': result.price_position,
-        'reason': result.reason
-    }

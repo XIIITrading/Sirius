@@ -1,8 +1,10 @@
+# backtest/backtest_system/dashboard.py
 """
 Backtest Dashboard with Enhanced Layout
 - Header: Input controls
 - Middle: Results grid (left) | Charts (right)
 - Bottom: Three analysis grids (HVN, Order Block, Supply/Demand)
+- Footer: Status bar with progress tracking
 """
 
 import asyncio
@@ -34,7 +36,6 @@ logger = logging.getLogger(__name__)
 
 # Define the order in which plugins should run
 PLUGIN_RUN_ORDER = [
-   
     "1-Min EMA Crossover",
     "5-Min EMA Crossover", 
     "15-Min EMA Crossover",
@@ -49,7 +50,7 @@ PLUGIN_RUN_ORDER = [
     "Tick Flow Analysis",
     "Bid/Ask Ratio Tracker",
     "Impact Success",
-    "Large Orders Grid"  # Updated from "Large Orders"
+    "Large Orders Grid"
 ]
 
 
@@ -121,7 +122,7 @@ class BacktestDashboard(QMainWindow):
         
         # Initialize data manager first
         logger.info("Initializing PolygonDataManager...")
-        self.data_manager = PolygonDataManager(disable_polygon_cache=True)
+        self.data_manager = PolygonDataManager()
         
         # Pass data manager to plugin runner
         logger.info("Initializing PluginRunner with data manager...")
@@ -134,17 +135,17 @@ class BacktestDashboard(QMainWindow):
         # Progress tracking
         self.progress_signals = ProgressSignals()
         self.plugin_status = {}
-        self.progress_widgets = {}
+        self.current_plugin_progress = None  # Track current plugin being executed
         
         # Chart containers - updated for new layout
         self.chart_widgets = {}
-        self.large_orders_grid_chart = None  # Add this
+        self.large_orders_grid_chart = None
         self.buy_sell_chart = None
-        self.impact_success_chart = None  # Add this
+        self.impact_success_chart = None
         
         # Store for chart data that might get corrupted by signals
         self.pending_chart_updates = {}
-        self.pending_grid_updates = {}  # Add for grid updates
+        self.pending_grid_updates = {}
         
         # Get available plugins and sort them according to our order
         self.available_plugins = self._get_ordered_plugins()
@@ -197,12 +198,7 @@ class BacktestDashboard(QMainWindow):
         header_widget = self._create_header_section()
         main_layout.addWidget(header_widget)
         
-        # 2. PROGRESS WIDGET (shown during analysis)
-        self.progress_widget = self._create_progress_widget()
-        self.progress_widget.setVisible(False)
-        main_layout.addWidget(self.progress_widget)
-        
-        # 3. MIDDLE SECTION - Results and Charts
+        # 2. MIDDLE SECTION - Results and Charts (removed progress widget)
         middle_splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # Left side - Results grid
@@ -219,12 +215,12 @@ class BacktestDashboard(QMainWindow):
         middle_splitter.setSizes([600, 900])
         main_layout.addWidget(middle_splitter, 3)  # Give more space to middle section
         
-        # 4. BOTTOM SECTION - Analysis Grids
+        # 3. BOTTOM SECTION - Analysis Grids
         bottom_widget = self._create_bottom_grids()
         main_layout.addWidget(bottom_widget, 2)  # Give less space to bottom section
         
-        # 5. STATUS BAR
-        status_widget = self._create_status_bar()
+        # 4. STATUS BAR with progress
+        status_widget = self._create_status_bar_with_progress()
         main_layout.addWidget(status_widget)
         
         # Connect result selection to detail viewer
@@ -233,7 +229,7 @@ class BacktestDashboard(QMainWindow):
     def _create_header_section(self) -> QWidget:
         """Create the header section with input controls"""
         header = QGroupBox("Analysis Configuration")
-        header.setMaximumHeight(150)  # Increased from 120
+        header.setMaximumHeight(150)
         layout = QVBoxLayout(header)
         
         # Main controls row
@@ -250,7 +246,7 @@ class BacktestDashboard(QMainWindow):
         self.symbol_input = QLineEdit()
         self.symbol_input.setPlaceholderText("TSLA")
         self.symbol_input.setText("TSLA")
-        self.symbol_input.setMinimumHeight(30)  # Set minimum height
+        self.symbol_input.setMinimumHeight(30)
         self.symbol_input.setMaximumWidth(100)
         self.symbol_input.setStyleSheet("font-size: 14px; padding: 5px;")
         symbol_layout.addWidget(self.symbol_input)
@@ -267,8 +263,8 @@ class BacktestDashboard(QMainWindow):
         self.datetime_input.setDateTime(QDateTime.currentDateTimeUtc().addSecs(-3600))
         self.datetime_input.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.datetime_input.setCalendarPopup(True)
-        self.datetime_input.setMinimumHeight(30)  # Set minimum height
-        self.datetime_input.setMinimumWidth(200)  # Set minimum width for date
+        self.datetime_input.setMinimumHeight(30)
+        self.datetime_input.setMinimumWidth(200)
         self.datetime_input.setStyleSheet("font-size: 14px; padding: 5px;")
         time_layout.addWidget(self.datetime_input)
         controls_layout.addWidget(time_group)
@@ -282,7 +278,7 @@ class BacktestDashboard(QMainWindow):
         direction_layout.addWidget(direction_label)
         self.direction_combo = QComboBox()
         self.direction_combo.addItems(["LONG", "SHORT"])
-        self.direction_combo.setMinimumHeight(30)  # Set minimum height
+        self.direction_combo.setMinimumHeight(30)
         self.direction_combo.setMaximumWidth(100)
         self.direction_combo.setStyleSheet("font-size: 14px; padding: 5px;")
         direction_layout.addWidget(self.direction_combo)
@@ -296,8 +292,8 @@ class BacktestDashboard(QMainWindow):
         plugin_label.setStyleSheet("font-weight: bold;")
         plugin_layout.addWidget(plugin_label)
         self.plugin_combo = QComboBox()
-        self.plugin_combo.setMinimumWidth(300)  # Increased from 250
-        self.plugin_combo.setMinimumHeight(30)  # Set minimum height
+        self.plugin_combo.setMinimumWidth(300)
+        self.plugin_combo.setMinimumHeight(30)
         self.plugin_combo.setStyleSheet("font-size: 14px; padding: 5px;")
         self.plugin_combo.addItem("All Plugins")
         self.plugin_combo.insertSeparator(1)
@@ -310,7 +306,7 @@ class BacktestDashboard(QMainWindow):
         self.run_button = QPushButton("Run Analysis")
         self.run_button.clicked.connect(self.run_analysis)
         self.run_button.setMinimumWidth(120)
-        self.run_button.setMinimumHeight(45)  # Increased from 40
+        self.run_button.setMinimumHeight(45)
         self.run_button.setStyleSheet("""
             QPushButton {
                 font-size: 16px;
@@ -360,21 +356,21 @@ class BacktestDashboard(QMainWindow):
         large_orders_layout = QVBoxLayout(large_orders_container)
         self.large_orders_grid_chart = ChartPlaceholder("Large Orders Grid")
         large_orders_layout.addWidget(self.large_orders_grid_chart)
-        charts_layout.addWidget(large_orders_container, 1)  # stretch factor 1
+        charts_layout.addWidget(large_orders_container, 1)
         
         # Chart 2: Buy/Sell Ratio Chart (MIDDLE)
         buy_sell_container = QGroupBox("Buy/Sell Ratio")
         buy_sell_layout = QVBoxLayout(buy_sell_container)
         self.buy_sell_chart = ChartPlaceholder("Buy/Sell Ratio Chart")
         buy_sell_layout.addWidget(self.buy_sell_chart)
-        charts_layout.addWidget(buy_sell_container, 1)  # stretch factor 1
+        charts_layout.addWidget(buy_sell_container, 1)
         
         # Chart 3: Impact Success (RIGHT)
         impact_container = QGroupBox("Impact Success")
         impact_layout = QVBoxLayout(impact_container)
         self.impact_success_chart = ChartPlaceholder("Impact Success Chart")
         impact_layout.addWidget(self.impact_success_chart)
-        charts_layout.addWidget(impact_container, 1)  # stretch factor 1
+        charts_layout.addWidget(impact_container, 1)
         
         main_layout.addWidget(charts_widget)
         
@@ -409,103 +405,63 @@ class BacktestDashboard(QMainWindow):
         
         return bottom_widget
     
-    def _create_status_bar(self) -> QWidget:
-        """Create status bar widget"""
+    def _create_status_bar_with_progress(self) -> QWidget:
+        """Create status bar widget with integrated progress tracking"""
         status_widget = QWidget()
+        status_widget.setMaximumHeight(50)
         layout = QHBoxLayout(status_widget)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setContentsMargins(10, 5, 10, 5)
         
+        # Status label
         self.status_label = QLabel("Ready")
+        self.status_label.setMinimumWidth(200)
         layout.addWidget(self.status_label)
+        
+        # Plugin name label (hidden by default)
+        self.plugin_name_label = QLabel("")
+        self.plugin_name_label.setMinimumWidth(250)
+        self.plugin_name_label.setStyleSheet("font-weight: bold; color: #0d7377;")
+        self.plugin_name_label.setVisible(False)
+        layout.addWidget(self.plugin_name_label)
+        
+        # Progress bar (hidden by default)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setMinimumWidth(200)
+        self.progress_bar.setMaximumHeight(25)
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+        
+        # Progress details label (hidden by default)
+        self.progress_details_label = QLabel("")
+        self.progress_details_label.setMinimumWidth(300)
+        self.progress_details_label.setVisible(False)
+        layout.addWidget(self.progress_details_label)
         
         layout.addStretch()
         
         return status_widget
         
-    def _create_progress_widget(self) -> QWidget:
-        """Create widget for tracking plugin progress"""
-        widget = QGroupBox("Analysis Progress")
-        layout = QVBoxLayout(widget)
-        
-        # Container for individual plugin progress bars
-        self.progress_container = QWidget()
-        self.progress_layout = QVBoxLayout(self.progress_container)
-        self.progress_layout.setSpacing(5)
-        
-        # Scroll area for many plugins
-        scroll = QScrollArea()
-        scroll.setWidget(self.progress_container)
-        scroll.setWidgetResizable(True)
-        scroll.setMaximumHeight(150)
-        
-        layout.addWidget(scroll)
-        
-        return widget
-    
-    def _create_plugin_progress_bar(self, plugin_name: str) -> QWidget:
-        """Create progress bar widget for a single plugin"""
-        widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(5, 2, 5, 2)
-        
-        # Plugin name
-        name_label = QLabel(plugin_name)
-        name_label.setMinimumWidth(200)
-        name_label.setMaximumWidth(200)
-        layout.addWidget(name_label)
-        
-        # Progress bar
-        progress_bar = QProgressBar()
-        progress_bar.setMinimum(0)
-        progress_bar.setMaximum(100)
-        progress_bar.setTextVisible(True)
-        progress_bar.setMinimumWidth(150)
-        layout.addWidget(progress_bar)
-        
-        # Status label
-        status_label = QLabel("Pending")
-        status_label.setMinimumWidth(80)
-        status_label.setMaximumWidth(80)
-        status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(status_label)
-        
-        # Details label
-        details_label = QLabel("")
-        details_label.setMinimumWidth(200)
-        layout.addWidget(details_label)
-        
-        layout.addStretch()
-        
-        # Store references
-        self.progress_widgets[plugin_name] = {
-            'widget': widget,
-            'progress_bar': progress_bar,
-            'status_label': status_label,
-            'details_label': details_label
-        }
-        
-        return widget
-    
     def on_plugin_started(self, plugin_name: str):
         """Handle plugin started signal"""
         self.plugin_status[plugin_name] = PluginStatus.RUNNING
+        self.current_plugin_progress = plugin_name
         
-        if plugin_name not in self.progress_widgets:
-            widget = self._create_plugin_progress_bar(plugin_name)
-            self.progress_layout.addWidget(widget)
-        
-        widgets = self.progress_widgets[plugin_name]
-        widgets['status_label'].setText("Running")
-        widgets['status_label'].setStyleSheet("color: #14a085; font-weight: bold;")
-        widgets['progress_bar'].setValue(0)
-        widgets['details_label'].setText("Initializing...")
+        # Show progress elements
+        self.plugin_name_label.setText(f"Running: {plugin_name}")
+        self.plugin_name_label.setVisible(True)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setVisible(True)
+        self.progress_details_label.setText("Initializing...")
+        self.progress_details_label.setVisible(True)
     
     def on_plugin_progress(self, plugin_name: str, percentage: int, message: str):
         """Handle plugin progress update"""
-        if plugin_name in self.progress_widgets:
-            widgets = self.progress_widgets[plugin_name]
-            widgets['progress_bar'].setValue(percentage)
-            widgets['details_label'].setText(message)
+        if plugin_name == self.current_plugin_progress:
+            self.progress_bar.setValue(percentage)
+            self.progress_details_label.setText(message)
     
     def on_plugin_completed(self, plugin_name: str, result: dict):
         """Handle plugin completion"""
@@ -513,56 +469,53 @@ class BacktestDashboard(QMainWindow):
         
         self.plugin_status[plugin_name] = PluginStatus.COMPLETED
         
-        if plugin_name in self.progress_widgets:
-            widgets = self.progress_widgets[plugin_name]
-            widgets['status_label'].setText("✓ Complete")
-            widgets['status_label'].setStyleSheet("color: #0d7377; font-weight: bold;")
-            widgets['progress_bar'].setValue(100)
+        # Update progress if this is the current plugin
+        if plugin_name == self.current_plugin_progress:
+            self.progress_bar.setValue(100)
             
-            # Show summary in details
+            # Show summary
             signal_dir = result.get('signal', {}).get('direction', 'N/A')
             confidence = result.get('signal', {}).get('confidence', 0)
             strength = result.get('signal', {}).get('strength', 0)
-            widgets['details_label'].setText(
-                f"{signal_dir} - Strength: {strength:.0f}%, Confidence: {confidence:.0f}%"
+            self.progress_details_label.setText(
+                f"Complete - {signal_dir} (Strength: {strength:.0f}%, Confidence: {confidence:.0f}%)"
             )
             
         # Check if we have pending chart data for this plugin
         if plugin_name in self.pending_chart_updates:
             logger.info(f"Found pending chart update for {plugin_name}")
-            # Create a copy of the result and add the chart data
             result_with_chart = result.copy()
             if 'display_data' not in result_with_chart:
                 result_with_chart['display_data'] = {}
             result_with_chart['display_data']['chart_widget'] = self.pending_chart_updates.pop(plugin_name)
-            
-            # Update chart with the complete data
             self._update_display_if_applicable(plugin_name, result_with_chart)
         elif plugin_name in self.pending_grid_updates:
             logger.info(f"Found pending grid update for {plugin_name}")
-            # Create a copy of the result and add the grid data
             result_with_grid = result.copy()
             if 'display_data' not in result_with_grid:
                 result_with_grid['display_data'] = {}
             result_with_grid['display_data']['grid_widget'] = self.pending_grid_updates.pop(plugin_name)
-            
-            # Update grid with the complete data
             self._update_display_if_applicable(plugin_name, result_with_grid)
         else:
-            # Original behavior - try with the result as-is
             self._update_display_if_applicable(plugin_name, result)
     
     def on_plugin_error(self, plugin_name: str, error_message: str):
         """Handle plugin error"""
         self.plugin_status[plugin_name] = PluginStatus.ERROR
         
-        if plugin_name in self.progress_widgets:
-            widgets = self.progress_widgets[plugin_name]
-            widgets['status_label'].setText("✗ Error")
-            widgets['status_label'].setStyleSheet("color: #ff4444; font-weight: bold;")
-            widgets['details_label'].setText(
-                error_message[:50] + "..." if len(error_message) > 50 else error_message
+        if plugin_name == self.current_plugin_progress:
+            self.progress_details_label.setText(
+                f"Error: {error_message[:50]}..." if len(error_message) > 50 else f"Error: {error_message}"
             )
+            self.progress_details_label.setStyleSheet("color: #ff4444;")
+    
+    def _hide_progress_elements(self):
+        """Hide all progress elements in the status bar"""
+        self.plugin_name_label.setVisible(False)
+        self.progress_bar.setVisible(False)
+        self.progress_details_label.setVisible(False)
+        self.progress_details_label.setStyleSheet("")  # Reset style
+        self.current_plugin_progress = None
     
     def _update_display_if_applicable(self, plugin_name: str, result: dict):
         """Update chart or grid if plugin provides display data"""
@@ -647,7 +600,7 @@ class BacktestDashboard(QMainWindow):
         """Handle chart display for plugins that provide chart data"""
         logger.info(f"Found chart config for {plugin_name}")
         
-        # Mapping for chart plugins (updated for new layout)
+        # Mapping for chart plugins
         target_mapping = {
             "Bid/Ask Ratio Tracker": ('buy_sell_chart', 'buy_sell_ratio'),
             "Impact Success": ('impact_success_chart', 'impact_success')
@@ -750,25 +703,16 @@ class BacktestDashboard(QMainWindow):
         
         direction = self.direction_combo.currentText()
         
-        # Clear previous progress widgets
-        for plugin_name in list(self.progress_widgets.keys()):
-            widget_info = self.progress_widgets[plugin_name]
-            widget_info['widget'].deleteLater()
-            del self.progress_widgets[plugin_name]
-        
         # Reset plugin status and pending updates
         self.plugin_status.clear()
         self.pending_chart_updates.clear()
-        self.pending_grid_updates.clear()  # Clear grid updates too
+        self.pending_grid_updates.clear()
         
         # Update status
         plugin_text = f"{len(selected_plugins)} plugins" if len(selected_plugins) > 1 else selected_plugins[0]
         self.status_label.setText(f"Running {plugin_text} for {symbol}...")
         self.run_button.setEnabled(False)
         self.generate_report_button.setEnabled(False)
-        
-        # Show progress widget
-        self.progress_widget.setVisible(True)
         
         # Clear previous results
         self.multi_result_viewer.clear_results()
@@ -794,10 +738,8 @@ class BacktestDashboard(QMainWindow):
                 # Update overall status
                 if len(plugin_names) > 1:
                     self.status_label.setText(
-                        f"Running {plugin_name} ({i+1}/{len(plugin_names)})..."
+                        f"Running plugin {i+1}/{len(plugin_names)}: {plugin_name}"
                     )
-                else:
-                    self.status_label.setText(f"Running {plugin_name}...")
                 
                 try:
                     # Run the plugin with progress callback
@@ -841,6 +783,10 @@ class BacktestDashboard(QMainWindow):
                         'signal': {'direction': 'ERROR', 'strength': 0, 'confidence': 0}
                     }
                     results.append(error_result)
+                    self.multi_result_viewer.add_result(error_result)
+                
+                # Small delay between plugins to allow UI updates
+                await asyncio.sleep(0.1)
             
             # Update final status
             successful = sum(1 for r in results if 'error' not in r)
@@ -859,17 +805,19 @@ class BacktestDashboard(QMainWindow):
             
             # Enable report button
             self.generate_report_button.setEnabled(True)
+            
+            # Hide progress elements after a short delay
+            await asyncio.sleep(2)
+            self._hide_progress_elements()
                 
         except Exception as e:
             logger.error(f"Error running plugins: {e}")
             self.status_label.setText(f"Error: {str(e)}")
             QMessageBox.critical(self, "Analysis Error", str(e))
+            self._hide_progress_elements()
             
         finally:
             self.run_button.setEnabled(True)
-            # Hide progress widget if single plugin
-            if len(plugin_names) == 1:
-                self.progress_widget.setVisible(False)
     
     def _show_detailed_result(self, result: Dict[str, Any]):
         """Show detailed view of selected result"""

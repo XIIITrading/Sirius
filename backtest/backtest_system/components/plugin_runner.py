@@ -187,8 +187,8 @@ class PluginRunner:
         self.data_manager = data_manager
     
     async def run_single_plugin(self, plugin_name: str, symbol: str, 
-                           entry_time: datetime, direction: str,
-                           progress_callback: Optional[Callable[[int, str], None]] = None) -> Dict[str, Any]:
+                               entry_time: datetime, direction: str,
+                               progress_callback: Optional[Callable[[int, str], None]] = None) -> Dict[str, Any]:
         """
         Run a single plugin and return its results without modification.
         """
@@ -206,16 +206,13 @@ class PluginRunner:
         self._set_current_plugin(plugin_name)
         
         try:
-            # Check if plugin has run_analysis_with_data_manager method
-            if hasattr(plugin_module, 'run_analysis_with_data_manager'):
-                # Plugin expects data_manager to be passed
-                logger.info(f"Running {plugin_name} with data_manager support")
-                result = await plugin_module.run_analysis_with_data_manager(
-                    symbol, entry_time, direction, self.data_manager, progress_callback
-                )
+            # IMPORTANT: Set data manager in plugin if it has set_data_manager function
+            if hasattr(plugin_module, 'set_data_manager') and self.data_manager:
+                logger.info(f"Setting data manager for {plugin_name}")
+                plugin_module.set_data_manager(self.data_manager)
             
             # Check if plugin supports progress reporting
-            elif plugin_meta.get('has_progress'):
+            if plugin_meta.get('has_progress'):
                 logger.info(f"Running {plugin_name} with native progress support")
                 result = await plugin_module.run_analysis_with_progress(
                     symbol, entry_time, direction, progress_callback

@@ -193,5 +193,32 @@
     "end_time": "2025-06-27T21:55:00+00:00",
     "cached_at": "2025-07-04T21:24:56.768113+00:00",
     "data_points": 802
+  },
+  "7919a3bf48065629a9e80a8be867c69b": {
+    "symbol": "TSLA",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T00:20:00+00:00",
+    "end_time": "2025-06-27T18:00:00+00:00",
+    "cached_at": "2025-07-05T15:24:00.904023+00:00",
+    "data_points": 567
+  },
+  "e3c6d7ed4d1a91af0ac7beb6e491a78a": {
+    "symbol": "TSLA",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T00:20:00+00:00",
+    "end_time": "2025-06-27T22:00:00+00:00",
+    "cached_at": "2025-07-05T15:24:01.050620+00:00",
+    "data_points": 807
+  },
+  "554f325491c0145e583a2701e960a8cc": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-27T00:15:00.894000+00:00",
+    "end_time": "2025-06-27T21:55:00.894000+00:00",
+    "cached_at": "2025-07-05T15:58:03.509429+00:00",
+    "data_points": 791
   }
 }

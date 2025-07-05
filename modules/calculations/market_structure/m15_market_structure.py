@@ -1,4 +1,4 @@
-# modules/calculations/market-structure/m15_market_structure.py
+# modules/calculations/market_structure/m15_market_structure.py
 """
 Module: Fractal-Based Market Structure Analysis (15-Minute)
 Purpose: Detect market structure changes using fractals on 15-minute charts
@@ -7,14 +7,12 @@ Output: BULL/BEAR signals based on market structure breaks
 Time Handling: All timestamps in UTC
 """
 
-import asyncio
 import numpy as np
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Deque, Tuple
 from dataclasses import dataclass, field
 from collections import deque
 import logging
-import time
 import os
 import time as time_module
 
@@ -30,15 +28,6 @@ logging.basicConfig(
 )
 logging.Formatter.converter = time_module.gmtime  # Force UTC in logs
 logger = logging.getLogger(__name__)
-
-# UTC validation function
-def ensure_utc(dt: datetime) -> datetime:
-    """Ensure datetime is UTC-aware"""
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    elif dt.tzinfo != timezone.utc:
-        return dt.astimezone(timezone.utc)
-    return dt
 
 
 @dataclass
@@ -95,14 +84,15 @@ class MarketStructureSignal:
 
 class M15MarketStructureAnalyzer:
     """
-    Fractal-based market structure analyzer for 15-minute trend detection
+    Fractal-based market structure analyzer for 15-minute trend detection.
     All timestamps are in UTC.
     """
     
     def __init__(self, 
                  fractal_length: int = 2,      # Even fewer bars for 15-min timeframe
                  buffer_size: int = 60,        # 60 candles = 900 minutes (15 hours)
-                 min_candles_required: int = 10):  # Minimum for valid signal
+                 min_candles_required: int = 10,  # Minimum for valid signal
+                 bars_needed: int = 60):       # Number of 15-min bars to request
         """
         Initialize M15 market structure analyzer
         
@@ -110,10 +100,12 @@ class M15MarketStructureAnalyzer:
             fractal_length: Number of bars on each side for fractal detection
             buffer_size: Number of recent candles to maintain
             min_candles_required: Minimum candles needed for analysis
+            bars_needed: Number of 15-minute bars to request from data source
         """
         self.fractal_length = fractal_length
         self.buffer_size = buffer_size
         self.min_candles_required = max(min_candles_required, fractal_length * 2 + 1)
+        self.bars_needed = max(bars_needed, self.min_candles_required * 2)
         self.timeframe = '15-minute'
         
         # Data storage
@@ -130,7 +122,48 @@ class M15MarketStructureAnalyzer:
         
         logger.info(f"M15 Market Structure Analyzer initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         logger.info(f"Settings: timeframe={self.timeframe}, fractal_length={fractal_length}, "
-                   f"buffer={buffer_size}, min_candles={min_candles_required}")
+                   f"buffer={buffer_size}, min_candles={min_candles_required}, bars_needed={bars_needed}")
+    
+    def get_required_bars(self) -> int:
+        """Get the number of 15-minute bars required for analysis"""
+        return self.bars_needed
+    
+    def process_bars_dataframe(self, symbol: str, bars_df, 
+                              up_to_time: Optional[datetime] = None) -> Optional[MarketStructureSignal]:
+        """
+        Process a DataFrame of 15-minute bars up to a specific time.
+        
+        Args:
+            symbol: Trading symbol
+            bars_df: DataFrame with OHLCV data indexed by timestamp
+            up_to_time: Process bars up to this time (exclusive)
+            
+        Returns:
+            MarketStructureSignal if generated, None otherwise
+        """
+        if bars_df.empty:
+            logger.warning(f"Empty DataFrame provided for {symbol}")
+            return None
+        
+        # Convert DataFrame to list of candle dictionaries
+        candles = []
+        for timestamp, row in bars_df.iterrows():
+            # Stop at up_to_time if specified
+            if up_to_time and timestamp >= up_to_time:
+                break
+                
+            candle_dict = {
+                'timestamp': timestamp,
+                'o': float(row.get('open', row.get('o', 0))),
+                'h': float(row.get('high', row.get('h', 0))),
+                'l': float(row.get('low', row.get('l', 0))),
+                'c': float(row.get('close', row.get('c', 0))),
+                'v': float(row.get('volume', row.get('v', 0)))
+            }
+            candles.append(candle_dict)
+        
+        # Process all candles
+        return self.process_historical_candles(symbol, candles)
     
     def _validate_timestamp(self, timestamp: datetime, source: str) -> datetime:
         """Validate and ensure timestamp is UTC"""
@@ -171,7 +204,10 @@ class M15MarketStructureAnalyzer:
         
         # Extract candle info and ensure UTC
         if 'timestamp' in candle_data:
-            timestamp = datetime.fromtimestamp(candle_data['timestamp'] / 1000, tz=timezone.utc)
+            if isinstance(candle_data['timestamp'], datetime):
+                timestamp = candle_data['timestamp']
+            else:
+                timestamp = datetime.fromtimestamp(candle_data['timestamp'] / 1000, tz=timezone.utc)
         else:
             timestamp = candle_data.get('t', datetime.now(timezone.utc))
             if isinstance(timestamp, (int, float)):
@@ -525,230 +561,3 @@ class M15MarketStructureAnalyzer:
                 for symbol in self.candles.keys()
             }
         }
-
-
-# ============= TEST FUNCTION =============
-async def test_m15_market_structure_analyzer():
-    """Test M15 market structure analyzer with real-time websocket data"""
-    import sys
-    import os
-    
-    # Add parent directories to path for imports
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    market_structure_dir = os.path.dirname(current_dir)
-    calculations_dir = os.path.dirname(market_structure_dir)
-    modules_dir = os.path.dirname(calculations_dir)
-    vega_root = os.path.dirname(modules_dir)
-    if vega_root not in sys.path:
-        sys.path.insert(0, vega_root)
-    
-    from polygon import PolygonWebSocketClient, PolygonClient
-    
-    print("=== M15 MARKET STRUCTURE ANALYZER TEST ===")
-    print("Analyzing market structure using fractals on 15-minute charts")
-    print(f"Current UTC time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
-    
-    # Test configuration
-    TEST_SYMBOLS = ['AAPL', 'TSLA', 'SPY']
-    TEST_DURATION = 1200  # 20 minutes to see at least one 15-min candle
-    USE_HISTORICAL = True  # Load historical data first
-    
-    # Create analyzer with fractal length of 2 for 15-minute
-    analyzer = M15MarketStructureAnalyzer(
-        fractal_length=2,
-        buffer_size=60,  # 60 15-min candles = 900 minutes (15 hours)
-        min_candles_required=10
-    )
-    
-    # Track signals
-    signal_history = []
-    
-    # Load historical data if requested
-    if USE_HISTORICAL:
-        print("Loading historical 15-minute candles...")
-        rest_client = PolygonClient()
-        
-        for symbol in TEST_SYMBOLS:
-            # Get last 60 15-minute candles (900 minutes of data)
-            end_time = datetime.now(timezone.utc)
-            start_time = end_time - timedelta(minutes=900)
-            
-            try:
-                candles = rest_client.get_candles(
-                    symbol=symbol,
-                    timespan='minute',
-                    multiplier=15,  # 15-minute candles
-                    from_=start_time,
-                    to=end_time
-                )
-                
-                if candles:
-                    print(f"\n{symbol}: Loading {len(candles)} historical 15-minute candles")
-                    signal = analyzer.process_historical_candles(symbol, candles)
-                    
-                    if signal:
-                        signal_history.append(signal)
-                        print(f"  Initial Signal: {signal.signal} - {signal.structure_type}")
-                        print(f"  Reason: {signal.reason}")
-                        
-            except Exception as e:
-                print(f"Error loading historical data for {symbol}: {e}")
-    
-    # Handle real-time candles
-    async def handle_candle(data: Dict):
-        """Process incoming 15-minute candle data"""
-        symbol = data['symbol']
-        
-        # For 15-minute aggregates, check if this is a complete candle
-        # You might need to track candle completion based on timestamps
-        is_complete = data.get('complete', True)
-        
-        # Process candle
-        signal = analyzer.process_candle(symbol, data, is_complete)
-        
-        if signal:
-            signal_history.append(signal)
-            
-            # Display based on signal type
-            if signal.signal == 'BULL':
-                emoji = '📈'
-                color_code = '\033[92m'  # Green
-            else:
-                emoji = '📉'
-                color_code = '\033[91m'  # Red
-            
-            if signal.structure_type == 'CHoCH':
-                structure_emoji = '🔄'  # Reversal
-            else:
-                structure_emoji = '➡️'   # Continuation
-            
-            print(f"\n{color_code}{'='*60}\033[0m")
-            print(f"{emoji} {signal.symbol} - {signal.signal} Market Structure (15-MIN) {structure_emoji}")
-            print(f"Type: {signal.structure_type} (Strength: {signal.strength:.0f}%)")
-            print(f"Time: {signal.timestamp.strftime('%H:%M:%S.%f UTC')[:-3]}")
-            print(f"Reason: {signal.reason}")
-            
-            # Display key metrics
-            m = signal.metrics
-            print(f"\nMetrics:")
-            print(f"  • Current Trend: {m['current_trend']}")
-            print(f"  • Last High Fractal: {m['last_high_fractal']:.2f}" if m['last_high_fractal'] else "  • Last High Fractal: None")
-            print(f"  • Last Low Fractal: {m['last_low_fractal']:.2f}" if m['last_low_fractal'] else "  • Last Low Fractal: None")
-            print(f"  • Total Fractals: {m['fractal_count']}")
-            print(f"  • Structure Breaks: {m['structure_breaks']}")
-            print(f"  • Trend Changes: {m['trend_changes']}")
-    
-    # Create WebSocket client
-    ws_client = PolygonWebSocketClient()
-    
-    try:
-        # Connect and authenticate
-        print(f"\nConnecting to Polygon WebSocket...")
-        await ws_client.connect()
-        print("✓ Connected and authenticated")
-        
-        # Subscribe to 15-minute aggregates
-        print(f"\nSubscribing to 15-minute candles for: {', '.join(TEST_SYMBOLS)}")
-        
-        # Subscribe to aggregates with 15-minute multiplier
-        # Note: You may need to adjust this based on your WebSocket client implementation
-        for symbol in TEST_SYMBOLS:
-            await ws_client.subscribe_aggregates(
-                symbol=symbol,
-                timespan='minute',
-                multiplier=15,
-                callback=handle_candle
-            )
-        
-        print("✓ Subscribed successfully to 15-minute data")
-        
-        print(f"\n⏰ Running for {TEST_DURATION} seconds...")
-        print("Waiting for 15-minute market structure changes...\n")
-        
-        # Create listen task
-        listen_task = asyncio.create_task(ws_client.listen())
-        
-        # Run for specified duration
-        start_time = time.time()
-        last_stats_time = start_time
-        
-        while time.time() - start_time < TEST_DURATION:
-            await asyncio.sleep(1)
-            
-            # Print stats every 300 seconds (5 minutes)
-            if time.time() - last_stats_time >= 300:
-                stats = analyzer.get_statistics()
-                print(f"\n📊 15-Min Stats: {stats['candles_processed']} candles, "
-                      f"{stats['fractals_detected']} fractals, "
-                      f"{stats['signals_generated']} signals")
-                
-                # Show current trends
-                if stats['current_trends']:
-                    print("Current 15-Min Trends:")
-                    for sym, trend in stats['current_trends'].items():
-                        fractal_info = stats['fractal_counts'][sym]
-                        print(f"  {sym}: {trend} (High fractals: {fractal_info['high']}, "
-                              f"Low fractals: {fractal_info['low']})")
-                
-                print(f"Time: {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}")
-                last_stats_time = time.time()
-            
-            # Show countdown
-            remaining = TEST_DURATION - (time.time() - start_time)
-            print(f"\r⏳ Time remaining: {remaining:.0f}s ", end='', flush=True)
-        
-        print("\n\n🏁 Test complete!")
-        
-        # Final summary
-        stats = analyzer.get_statistics()
-        print(f"\n📊 Final 15-Minute Statistics:")
-        print(f"  • Timeframe: {stats['timeframe']}")
-        print(f"  • Total candles processed: {stats['candles_processed']}")
-        print(f"  • Fractals detected: {stats['fractals_detected']}")
-        print(f"  • Signals generated: {stats['signals_generated']}")
-        print(f"  • Symbols tracked: {', '.join(stats['active_symbols'])}")
-        print(f"  • End time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        
-        # Signal summary
-        if signal_history:
-            print(f"\n📈 15-Minute Signal Summary:")
-            bull_signals = [s for s in signal_history if s.signal == 'BULL']
-            bear_signals = [s for s in signal_history if s.signal == 'BEAR']
-            bos_signals = [s for s in signal_history if s.structure_type == 'BOS']
-            choch_signals = [s for s in signal_history if s.structure_type == 'CHoCH']
-            
-            print(f"  • Bullish: {len(bull_signals)} ({len(bull_signals)/len(signal_history)*100:.0f}%)")
-            print(f"  • Bearish: {len(bear_signals)} ({len(bear_signals)/len(signal_history)*100:.0f}%)")
-            print(f"  • BOS (Continuation): {len(bos_signals)}")
-            print(f"  • CHoCH (Reversal): {len(choch_signals)}")
-            
-            # Show current state
-            print(f"\n📍 Current 15-Minute Market Structure:")
-            for symbol in TEST_SYMBOLS:
-                current = analyzer.get_current_analysis(symbol)
-                if current:
-                    print(f"  • {symbol}: {current.signal} trend")
-                    if current.metrics['last_break_type']:
-                        print(f"    Last break: {current.metrics['last_break_type']} at "
-                              f"{current.metrics['last_break_price']:.2f}")
-        
-        # Cancel listen task
-        listen_task.cancel()
-        await ws_client.disconnect()
-        
-    except KeyboardInterrupt:
-        print("\n\n⚠️ Test interrupted by user")
-        await ws_client.disconnect()
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        await ws_client.disconnect()
-
-
-if __name__ == "__main__":
-    print(f"Starting M15 Market Structure Analyzer at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    print("This module detects market structure changes using fractals on 15-minute charts")
-    print("All timestamps are in UTC\n")
-    
-    asyncio.run(test_m15_market_structure_analyzer())

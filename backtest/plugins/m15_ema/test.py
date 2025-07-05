@@ -52,7 +52,7 @@ class PluginTester:
         self.plugin_config = {
             'name': '15-Min EMA Crossover',
             'version': '1.0.0',
-            'lookback_minutes': 900,  # 15 hours
+            'required_bars': 390,  # 26 fifteen-minute bars * 15
             'ema_short': 9,
             'ema_long': 21
         }
@@ -79,18 +79,37 @@ class PluginTester:
             # Step 1: Plugin sets itself as current plugin
             self.data_manager.set_current_plugin(self.plugin_config['name'])
             
-            # Step 2: Plugin calculates data requirements
-            start_time = entry_time - timedelta(minutes=self.plugin_config['lookback_minutes'])
+            # Step 2: Plugin will handle its own data fetching internally
+            # We'll simulate what the plugin does
+            required_1min_bars = self.plugin_config['required_bars']
+            lookback_days = 3
+            max_lookback_days = 10
+            bars_1min = None
             
-            logger.info(f"Fetching 1-minute bars from {start_time} to {entry_time}")
+            logger.info(f"Attempting to fetch {required_1min_bars} 1-minute bars")
             
-            # Step 3: Plugin fetches data (goes through circuit breaker)
-            bars_1min = await self.data_manager.load_bars(
-                symbol=symbol,
-                start_time=start_time,
-                end_time=entry_time,
-                timeframe='1min'
-            )
+            while lookback_days <= max_lookback_days:
+                start_time = entry_time - timedelta(days=lookback_days)
+                
+                logger.info(f"Trying {lookback_days}-day lookback: {start_time} to {entry_time}")
+                
+                bars_1min = await self.data_manager.load_bars(
+                    symbol=symbol,
+                    start_time=start_time,
+                    end_time=entry_time,
+                    timeframe='1min'
+                )
+                
+                if not bars_1min.empty:
+                    logger.info(f"Fetched {len(bars_1min)} bars with {lookback_days}-day lookback")
+                    
+                    if len(bars_1min) >= required_1min_bars:
+                        # Trim to exactly what we need
+                        bars_1min = bars_1min.iloc[-required_1min_bars:]
+                        logger.info(f"Successfully obtained required {required_1min_bars} bars")
+                        break
+                
+                lookback_days += 2
             
             # Check circuit breaker status
             circuit_status = self.data_manager.get_circuit_status()
@@ -98,11 +117,15 @@ class PluginTester:
             logger.info(f"API Calls: {circuit_status['metrics']['total_requests']}")
             logger.info(f"Cache Hits: {circuit_status['metrics'].get('cache_hits', 0)}")
             
-            if bars_1min.empty:
+            if bars_1min is None or bars_1min.empty:
                 logger.error("No data received from data manager")
                 return self._create_error_signal(entry_time, "No data available")
             
-            logger.info(f"Received {len(bars_1min)} 1-minute bars")
+            if len(bars_1min) < required_1min_bars:
+                logger.error(f"Insufficient data: only {len(bars_1min)} bars")
+                return self._create_error_signal(entry_time, f"Insufficient data: only {len(bars_1min)} bars")
+            
+            logger.info(f"Using exactly {len(bars_1min)} 1-minute bars for calculation")
             
             # Step 4: Validate data
             is_valid, error_msg = validate_15min_data(bars_1min, timeframe='1min')
@@ -166,7 +189,8 @@ class PluginTester:
                 'bars_processed': result.bars_processed,
                 'last_close': result.last_15min_close,
                 'last_volume': result.last_15min_volume,
-                'alignment': alignment
+                'alignment': alignment,
+                'bars_used': self.plugin_config['required_bars']
             },
             'display_data': {
                 'summary': f"15-Min EMA 9/21 - {signal_map[result.signal]}",
@@ -179,6 +203,7 @@ class PluginTester:
                     ['Trend Strength', f'{result.trend_strength:.0f}%'],
                     ['Signal Strength', f'{result.signal_strength:.0f}%'],
                     ['15m Bars', f'{result.bars_processed}'],
+                    ['1m Bars Used', f'{self.plugin_config["required_bars"]}'],
                     ['Price Position', result.price_position.title()],
                     ['Last Close', f'${result.last_15min_close:.2f}'],
                     ['Last Volume', f'{result.last_15min_volume:,.0f}'],
@@ -246,6 +271,7 @@ class PluginTester:
             print(f"   Last Close: ${details.get('last_close', 0):.2f}")
             print(f"   Last Volume: {details.get('last_volume', 0):,.0f}")
             print(f"   15m Bars Processed: {details.get('bars_processed', 'N/A')}")
+            print(f"   1m Bars Used: {details.get('bars_used', 'N/A')}")
             print(f"   Alignment: {details.get('alignment', 'N/A')}")
         
         # Display data

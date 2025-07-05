@@ -742,5 +742,77 @@
     "end_time": "2025-06-28T22:55:00.438000+00:00",
     "cached_at": "2025-07-05T21:57:00.980074+00:00",
     "data_points": 3736
+  },
+  "0a44045e38afbab97f4b443b5886530c": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T03:55:00+00:00",
+    "end_time": "2025-06-28T22:55:00+00:00",
+    "cached_at": "2025-07-05T22:21:32.923983+00:00",
+    "data_points": 1834
+  },
+  "91b70f050f2922f91e835f0c3ec96eac": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T02:15:00.594000+00:00",
+    "end_time": "2025-06-28T22:55:00.594000+00:00",
+    "cached_at": "2025-07-05T22:23:07.449877+00:00",
+    "data_points": 1834
+  },
+  "a8d1057970c04df78c1c8db2bca5e7ed": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T23:15:00.594000+00:00",
+    "end_time": "2025-06-28T22:55:00.594000+00:00",
+    "cached_at": "2025-07-05T22:23:07.714615+00:00",
+    "data_points": 1878
+  },
+  "70fcea41f4e2b056bc0459261dd872eb": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T04:15:00.594000+00:00",
+    "end_time": "2025-06-28T22:55:00.594000+00:00",
+    "cached_at": "2025-07-05T22:23:08.116924+00:00",
+    "data_points": 4692
+  },
+  "44f1ca549891822891e3adb1290a6c93": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T18:15:00.594000+00:00",
+    "end_time": "2025-06-28T22:55:00.594000+00:00",
+    "cached_at": "2025-07-05T22:23:08.394332+00:00",
+    "data_points": 2170
+  },
+  "f931562e43959325b4ac31d7d24e2396": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T03:15:00.594000+00:00",
+    "end_time": "2025-06-28T22:55:00.594000+00:00",
+    "cached_at": "2025-07-05T22:23:08.680753+00:00",
+    "data_points": 2783
+  },
+  "bd365d3537ab46f509c17a35622b172c": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-24T07:15:00.594000+00:00",
+    "end_time": "2025-06-28T22:55:00.594000+00:00",
+    "cached_at": "2025-07-05T22:23:08.996759+00:00",
+    "data_points": 3736
+  },
+  "c476f9440b04da596b077d9e66f074bf": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-26T03:55:00.424000+00:00",
+    "end_time": "2025-06-28T22:55:00.424000+00:00",
+    "cached_at": "2025-07-05T22:26:55.450602+00:00",
+    "data_points": 1834
   }
 }

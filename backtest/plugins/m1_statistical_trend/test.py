@@ -1,257 +1,333 @@
 # backtest/plugins/m1_statistical_trend/test.py
 """
-Interactive test interface for 1-Minute Statistical Trend Plugin
-Supports both historical point-in-time and live streaming tests
+Test module for M1 Statistical Trend Analyzer
+Run with: python test.py -s AAPL -t "2025-01-15 10:30:00" -d LONG
 """
 
 import asyncio
 import argparse
-from datetime import datetime, timedelta, timezone
-import logging
 import sys
-from pathlib import Path
-from typing import Optional
+import os
+from datetime import datetime, timedelta, timezone
+import pandas as pd
 
-# Add parent paths
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+# Add parent directories to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+plugins_dir = os.path.dirname(current_dir)
+backtest_dir = os.path.dirname(plugins_dir)
+project_root = os.path.dirname(backtest_dir)
+sys.path.insert(0, project_root)
 
-from backtest.plugins.m1_statistical_trend import run_analysis
-from modules.calculations.trend.statistical_trend_1min import StatisticalTrend1Min
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Now we can import from the correct paths
+from backtest.data import PolygonDataManager
+from modules.calculations.trend.statistical_trend_1min import (
+    StatisticalTrend1MinSimplified
 )
-logger = logging.getLogger(__name__)
 
 
-class InteractiveTest:
-    """Interactive test environment for the plugin"""
+def parse_datetime(dt_str: str) -> datetime:
+    """Parse datetime string to timezone-aware datetime"""
+    formats = [
+        '%Y-%m-%d %H:%M:%S',
+        '%Y-%m-%d %H:%M',
+        '%Y-%m-%d',
+    ]
     
-    def __init__(self):
-        self.calculator = StatisticalTrend1Min()
-        self.running = False
-        
-    async def test_historical(self, symbol: str, test_time: datetime, direction: str):
-        """Test with historical data at specific point in time"""
-        print(f"\n{'='*60}")
-        print(f"HISTORICAL TEST - 1-MIN STATISTICAL TREND")
-        print(f"{'='*60}")
-        print(f"Symbol: {symbol}")
-        print(f"Time: {test_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
-        print(f"Direction: {direction}")
-        print(f"{'='*60}\n")
-        
+    for fmt in formats:
         try:
-            # Call plugin analysis
-            result = await run_analysis(symbol, test_time, direction)
-            
-            # Display results
-            self._display_results(result)
-            
-        except Exception as e:
-            print(f"\n❌ ERROR: {e}")
-            logger.error(f"Test failed: {e}", exc_info=True)
+            dt = datetime.strptime(dt_str, fmt)
+            # Make timezone aware (UTC)
+            return dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
     
-    async def test_live(self, symbol: str):
-        """Start live monitoring test"""
-        print(f"\n{'='*60}")
-        print(f"LIVE MONITORING TEST - 1-MIN STATISTICAL TREND")
-        print(f"{'='*60}")
-        print(f"Symbol: {symbol}")
-        print(f"Starting at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC")
-        print(f"{'='*60}\n")
-        print("Press Ctrl+C to stop...\n")
-        
-        self.running = True
-        
-        try:
-            # Callback for live updates
-            async def on_signal_update(signal):
-                print(f"\n[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] New Signal:")
-                print(f"  Signal: {signal.signal}")
-                print(f"  Price: ${signal.price:.2f}")
-                print(f"  Confidence: {signal.confidence:.1f}%")
-                print(f"  P-Value: {signal.p_value:.4f}")
-                print(f"  Volatility: {signal.volatility:.2f}%")
-                
-                if signal.signal != 'NEUTRAL':
-                    print(f"  🔔 ACTION: {signal.signal} signal detected!")
-            
-            # Start live monitoring
-            await self.calculator.start_live_monitoring([symbol], on_signal_update)
-            
-            # Keep running until interrupted
-            while self.running:
-                await asyncio.sleep(1)
-                
-        except KeyboardInterrupt:
-            print("\n\nStopping live test...")
-            self.running = False
-        except Exception as e:
-            print(f"\n❌ ERROR: {e}")
-            logger.error(f"Live test failed: {e}", exc_info=True)
+    raise ValueError(f"Could not parse datetime: {dt_str}")
+
+
+async def test_statistical_trend(symbol: str, entry_time: datetime, direction: str):
+    """Test statistical trend analyzer for a specific symbol and time"""
+    print("=== M1 STATISTICAL TREND ANALYSIS ===")
+    print(f"Symbol: {symbol}")
+    print(f"Entry Time: {entry_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print(f"Direction: {direction}")
+    print(f"Current UTC time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
     
-    def _display_results(self, result: dict):
-        """Display analysis results - no calculations, just formatting"""
-        if 'error' in result:
-            print(f"❌ ERROR: {result['error']}")
+    # Create analyzer
+    analyzer = StatisticalTrend1MinSimplified(lookback_periods=10)
+    
+    # Create data manager
+    data_manager = PolygonDataManager()
+    data_manager.set_current_plugin("M1_StatisticalTrend_Test")
+    
+    print(f"Analyzer configured for {analyzer.lookback_periods} lookback periods")
+    
+    try:
+        # Calculate start time for data fetch
+        # Need at least lookback_periods of data before entry_time
+        start_time = entry_time - timedelta(minutes=20)  # Get extra for safety
+        
+        print(f"Fetching data from {start_time} to {entry_time}")
+        
+        # Fetch bars using load_bars (matching m1_market_structure pattern)
+        bars_df = await data_manager.load_bars(
+            symbol=symbol,
+            start_time=start_time,
+            end_time=entry_time,
+            timeframe='1min'
+        )
+        
+        if bars_df.empty:
+            print("No data returned!")
             return
         
-        # Main signal info
-        signal = result['signal']
-        print(f"SIGNAL: {signal['direction']}")
-        print(f"Confidence: {signal['confidence']:.1f}%")
-        print(f"Strength: {signal['strength']:.1f}%")
+        print(f"Received {len(bars_df)} bars")
+        print(f"Data range: {bars_df.index.min()} to {bars_df.index.max()}")
         
-        # Details
-        details = result.get('details', {})
-        print(f"\nDETAILS:")
-        print(f"Raw Signal: {details.get('raw_signal', 'N/A')}")
-        print(f"P-Value: {details.get('p_value', 0):.4f}")
-        print(f"Volatility: {details.get('volatility', 0):.2f}%")
+        # Trim to just what we need if we got too much
+        if len(bars_df) > analyzer.lookback_periods:
+            bars_df = bars_df.iloc[-analyzer.lookback_periods:]
+            print(f"Trimmed to {len(bars_df)} bars")
         
-        if details.get('aligned'):
-            print(f"Alignment: ✅ Aligned")
+        # Analyze
+        signal = analyzer.analyze(symbol, bars_df, entry_time)
+        
+        print(f"\n{'='*60}")
+        print(f"SIGNAL GENERATED")
+        print(f"{'='*60}")
+        print(f"Signal: {signal.signal}")
+        print(f"Confidence: {signal.confidence:.1f}%")
+        print(f"Trend Strength: {signal.trend_strength:.2f}%")
+        print(f"Volatility Adjusted Strength: {signal.volatility_adjusted_strength:.2f}")
+        print(f"Volume Confirmation: {'Yes' if signal.volume_confirmation else 'No'}")
+        
+        # Direction alignment check
+        print(f"\n{'='*60}")
+        print(f"TRADE ALIGNMENT")
+        print(f"{'='*60}")
+        
+        alignment_map = {
+            'LONG': ['STRONG BUY', 'BUY', 'WEAK BUY'],
+            'SHORT': ['STRONG SELL', 'SELL', 'WEAK SELL']
+        }
+        
+        if signal.signal in alignment_map.get(direction, []):
+            print(f"✓ Signal ({signal.signal}) aligns with {direction} direction")
         else:
-            print(f"Alignment: ⚠️ Not aligned")
+            print(f"⚠ Signal ({signal.signal}) conflicts with {direction} direction")
         
-        # Display data
-        display = result.get('display_data', {})
-        if 'table_data' in display:
-            print(f"\nSTATISTICAL TESTS:")
-            print("-" * 50)
-            for row in display['table_data']:
-                print(f"{row[0]:<20} {row[1]}")
+        # Show thresholds
+        print(f"\n{'='*60}")
+        print("SIGNAL THRESHOLDS")
+        print(f"{'='*60}")
+        print("Strong Signal: Trend > 2.0x volatility")
+        print("Normal Signal: Trend > 1.0x volatility")
+        print("Weak Signal: Trend > 0.5x volatility")
+        print("Neutral: Trend < 0.5x volatility")
         
-        print(f"\n{display.get('description', '')}")
+    except Exception as e:
+        print(f"\nError during test: {e}")
+        import traceback
+        traceback.print_exc()
 
 
-async def interactive_menu():
-    """Interactive command-line menu"""
-    test = InteractiveTest()
+async def test_live_monitoring(symbol: str, duration_minutes: int = 5):
+    """Monitor statistical trends in real-time (simulated)"""
+    print(f"\n=== LIVE MONITORING MODE ===")
+    print(f"Symbol: {symbol}")
+    print(f"Duration: {duration_minutes} minutes")
+    print("Note: This uses historical data to simulate live monitoring\n")
     
-    while True:
-        print("\n" + "="*50)
-        print("1-MIN STATISTICAL TREND TEST MENU")
-        print("="*50)
-        print("1. Test historical (specific time)")
-        print("2. Test current time")
-        print("3. Start live monitoring")
-        print("4. Exit")
-        print("="*50)
+    # Create analyzer
+    analyzer = StatisticalTrend1MinSimplified(lookback_periods=10)
+    data_manager = PolygonDataManager()
+    data_manager.set_current_plugin("M1_StatisticalTrend_Live")
+    
+    # Start from a recent time
+    current_time = datetime.now(timezone.utc) - timedelta(hours=24)  # Yesterday
+    end_time = current_time + timedelta(minutes=duration_minutes)
+    
+    last_signal = None
+    
+    while current_time < end_time:
+        print(f"\n[{current_time.strftime('%H:%M:%S')}] Checking...")
         
-        choice = input("\nSelect option (1-4): ").strip()
-        
-        if choice == '1':
-            # Historical test
-            symbol = input("Enter symbol (e.g., AAPL): ").strip().upper()
-            date_str = input("Enter datetime (YYYY-MM-DD HH:MM:SS): ").strip()
-            direction = input("Enter direction (LONG/SHORT): ").strip().upper()
+        try:
+            # Get data
+            start_time = current_time - timedelta(minutes=20)
             
-            try:
-                test_time = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
-                test_time = test_time.replace(tzinfo=timezone.utc)
-                await test.test_historical(symbol, test_time, direction)
-            except ValueError:
-                print("❌ Invalid datetime format")
-                
-        elif choice == '2':
-            # Current time test
-            symbol = input("Enter symbol (e.g., AAPL): ").strip().upper()
-            direction = input("Enter direction (LONG/SHORT): ").strip().upper()
-            
-            test_time = datetime.now(timezone.utc) - timedelta(minutes=1)
-            await test.test_historical(symbol, test_time, direction)
-            
-        elif choice == '3':
-            # Live monitoring
-            symbol = input("Enter symbol (e.g., AAPL): ").strip().upper()
-            await test.test_live(symbol)
-            
-        elif choice == '4':
-            print("Exiting...")
-            break
-        else:
-            print("❌ Invalid option")
-
-
-def parse_arguments():
-    """Parse command line arguments for quick testing"""
-    parser = argparse.ArgumentParser(
-        description='Test 1-Minute Statistical Trend Plugin'
-    )
-    
-    parser.add_argument(
-        '-s', '--symbol',
-        type=str,
-        help='Stock symbol (e.g., AAPL)'
-    )
-    
-    parser.add_argument(
-        '-t', '--time',
-        type=str,
-        help='Test time "YYYY-MM-DD HH:MM:SS" (default: 1 min ago)'
-    )
-    
-    parser.add_argument(
-        '-d', '--direction',
-        type=str,
-        choices=['LONG', 'SHORT'],
-        default='LONG',
-        help='Trade direction'
-    )
-    
-    parser.add_argument(
-        '-l', '--live',
-        action='store_true',
-        help='Start live monitoring'
-    )
-    
-    parser.add_argument(
-        '-i', '--interactive',
-        action='store_true',
-        help='Start interactive menu'
-    )
-    
-    return parser.parse_args()
-
-
-async def main():
-    """Main entry point"""
-    args = parse_arguments()
-    
-    if args.interactive or not args.symbol:
-        # Interactive mode
-        await interactive_menu()
-    else:
-        # Command line mode
-        test = InteractiveTest()
-        
-        if args.live:
-            # Live monitoring
-            await test.test_live(args.symbol.upper())
-        else:
-            # Historical test
-            if args.time:
-                test_time = datetime.strptime(args.time, "%Y-%m-%d %H:%M:%S")
-                test_time = test_time.replace(tzinfo=timezone.utc)
-            else:
-                test_time = datetime.now(timezone.utc) - timedelta(minutes=1)
-            
-            await test.test_historical(
-                args.symbol.upper(),
-                test_time,
-                args.direction
+            bars_df = await data_manager.load_bars(
+                symbol=symbol,
+                start_time=start_time,
+                end_time=current_time,
+                timeframe='1min'
             )
+            
+            if not bars_df.empty and len(bars_df) >= analyzer.lookback_periods:
+                # Take most recent bars
+                recent_bars = bars_df.iloc[-analyzer.lookback_periods:]
+                
+                # Analyze
+                signal = analyzer.analyze(symbol, recent_bars, current_time)
+                
+                # Check for signal change
+                if last_signal is None or signal.signal != last_signal.signal:
+                    print(f"  *** NEW SIGNAL: {signal.signal} ***")
+                    print(f"  Confidence: {signal.confidence:.0f}%")
+                    print(f"  Strength: {signal.trend_strength:.1f}%")
+                    last_signal = signal
+                else:
+                    print(f"  Current: {signal.signal} ({signal.confidence:.0f}%)")
+            
+        except Exception as e:
+            print(f"  Error: {e}")
+        
+        # Advance time by 1 minute
+        current_time += timedelta(minutes=1)
+        await asyncio.sleep(0.5)  # Small delay for readability
+    
+    print("\nMonitoring complete")
+
+
+async def test_batch_analysis(symbol: str, start_time: datetime, duration_hours: int = 2):
+    """Test multiple time points to see signal patterns"""
+    print(f"\n=== BATCH ANALYSIS ===")
+    print(f"Symbol: {symbol}")
+    print(f"Start: {start_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print(f"Duration: {duration_hours} hours")
+    
+    analyzer = StatisticalTrend1MinSimplified(lookback_periods=10)
+    data_manager = PolygonDataManager()
+    data_manager.set_current_plugin("M1_StatisticalTrend_Batch")
+    
+    # Load all data for the period at once
+    data_start = start_time - timedelta(minutes=20)
+    data_end = start_time + timedelta(hours=duration_hours)
+    
+    print("Loading data for batch analysis...")
+    all_bars = await data_manager.load_bars(
+        symbol=symbol,
+        start_time=data_start,
+        end_time=data_end,
+        timeframe='1min'
+    )
+    
+    if all_bars.empty:
+        print("No data available for batch analysis")
+        return
+    
+    print(f"Loaded {len(all_bars)} bars total")
+    
+    current_time = start_time
+    end_time = start_time + timedelta(hours=duration_hours)
+    
+    signals = []
+    
+    print("\nTime                  Signal         Confidence  Strength  Vol-Adj")
+    print("-" * 70)
+    
+    while current_time < end_time:
+        try:
+            # Get subset of bars up to current time
+            bars_subset = all_bars[all_bars.index <= current_time]
+            
+            if len(bars_subset) >= analyzer.lookback_periods:
+                # Take the most recent bars
+                recent_bars = bars_subset.iloc[-analyzer.lookback_periods:]
+                
+                signal = analyzer.analyze(symbol, recent_bars, current_time)
+                signals.append((current_time, signal))
+                
+                print(f"{current_time.strftime('%H:%M:%S')}  "
+                      f"{signal.signal:<12}  "
+                      f"{signal.confidence:>8.1f}%  "
+                      f"{signal.trend_strength:>7.2f}%  "
+                      f"{signal.volatility_adjusted_strength:>7.2f}")
+        except:
+            pass
+        
+        current_time += timedelta(minutes=5)
+    
+    # Summary
+    if signals:
+        print(f"\n{'='*70}")
+        print("SUMMARY")
+        print(f"{'='*70}")
+        
+        signal_counts = {}
+        for _, sig in signals:
+            signal_counts[sig.signal] = signal_counts.get(sig.signal, 0) + 1
+        
+        print("Signal Distribution:")
+        for sig_type, count in sorted(signal_counts.items()):
+            pct = count / len(signals) * 100
+            print(f"  {sig_type:<12}: {count:>3} ({pct:>5.1f}%)")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Test M1 Statistical Trend Analyzer",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    
+    parser.add_argument(
+        "-s", "--symbol",
+        type=str,
+        default="AAPL",
+        help="Stock symbol to analyze"
+    )
+    
+    parser.add_argument(
+        "-t", "--time",
+        type=str,
+        default=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
+        help="Entry time in format 'YYYY-MM-DD HH:MM:SS'"
+    )
+    
+    parser.add_argument(
+        "-d", "--direction",
+        type=str,
+        choices=["LONG", "SHORT"],
+        default="LONG",
+        help="Trade direction"
+    )
+    
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Run in live monitoring mode (simulated)"
+    )
+    
+    parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="Run batch analysis over time period"
+    )
+    
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=5,
+        help="Duration for live monitoring in minutes or batch in hours"
+    )
+    
+    args = parser.parse_args()
+    
+    # Parse entry time
+    try:
+        entry_time = parse_datetime(args.time)
+    except ValueError as e:
+        print(f"Error parsing time: {e}")
+        print("Please use format: YYYY-MM-DD HH:MM:SS")
+        sys.exit(1)
+    
+    # Run appropriate test
+    if args.live:
+        asyncio.run(test_live_monitoring(args.symbol, args.duration))
+    elif args.batch:
+        asyncio.run(test_batch_analysis(args.symbol, entry_time, args.duration))
+    else:
+        asyncio.run(test_statistical_trend(args.symbol, entry_time, args.direction))
 
 
 if __name__ == "__main__":
-    # Example usage:
-    # python test.py -i                                    # Interactive menu
-    # python test.py -s AAPL -d LONG                      # Test AAPL LONG at current time
-    # python test.py -s TSLA -t "2024-01-15 10:30:00"    # Test specific time
-    # python test.py -s SPY -l                            # Live monitoring
-    
-    asyncio.run(main())
+    main()

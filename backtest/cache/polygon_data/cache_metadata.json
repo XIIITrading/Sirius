@@ -634,5 +634,23 @@
     "end_time": "2025-06-28T22:55:00+00:00",
     "cached_at": "2025-07-05T20:47:57.085064+00:00",
     "data_points": 4692
+  },
+  "aca1db6043808ecf25626e7044a86136": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T18:15:00+00:00",
+    "end_time": "2025-06-28T22:55:00+00:00",
+    "cached_at": "2025-07-05T21:05:44.797516+00:00",
+    "data_points": 2170
+  },
+  "6ba1465235dd35414ebd80f55d2fb48d": {
+    "symbol": "CRCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T03:15:00+00:00",
+    "end_time": "2025-06-28T22:55:00+00:00",
+    "cached_at": "2025-07-05T21:11:46.309180+00:00",
+    "data_points": 2783
   }
 }

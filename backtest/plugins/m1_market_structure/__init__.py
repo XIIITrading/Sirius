@@ -1,65 +1,25 @@
+# modules/calculations/market_structure/__init__.py
 """
-M1 Market Structure Plugin
-Complete self-contained plugin for 1-minute fractal-based market structure analysis.
+Market Structure Analysis Module
+Provides fractal-based market structure detection for trend analysis
 """
 
-import logging
-from datetime import datetime
-from typing import Dict, Any
+from .m1_market_structure import (
+    MarketStructureAnalyzer,
+    MarketStructureSignal,
+    MarketStructureMetrics,
+    Fractal,
+    Candle
+)
 
-from .plugin import M1MarketStructurePlugin
+__all__ = [
+    'MarketStructureAnalyzer',
+    'MarketStructureSignal', 
+    'MarketStructureMetrics',
+    'Fractal',
+    'Candle'
+]
 
-# Configure logging
-logger = logging.getLogger(__name__)
-
-# Create plugin instance
-_plugin = M1MarketStructurePlugin()
-
-# Export the main interface
-async def run_analysis(symbol: str, entry_time: datetime, direction: str) -> Dict[str, Any]:
-    """
-    Run M1 Market Structure analysis.
-    
-    This is the single entry point for the plugin.
-    
-    Args:
-        symbol: Stock symbol
-        entry_time: Entry time (UTC)
-        direction: 'LONG' or 'SHORT'
-        
-    Returns:
-        Complete analysis results formatted for display
-    """
-    try:
-        # Validate inputs
-        if not _plugin.validate_inputs(symbol, entry_time, direction):
-            raise ValueError("Invalid input parameters")
-        
-        # Run analysis
-        result = await _plugin.run_analysis(symbol, entry_time, direction)
-        
-        logger.info(f"M1 Market Structure analysis complete for {symbol} at {entry_time}")
-        return result
-        
-    except Exception as e:
-        logger.error(f"Error in M1 Market Structure analysis: {e}")
-        # Return error result
-        return {
-            'plugin_name': _plugin.name,
-            'timestamp': entry_time,
-            'error': str(e),
-            'signal': {
-                'direction': 'NEUTRAL',
-                'strength': 0,
-                'confidence': 0
-            }
-        }
-
-# Export plugin metadata
-PLUGIN_NAME = _plugin.name
-PLUGIN_VERSION = _plugin.version
-
-# Optional: Export configuration function for UI
-def get_config():
-    """Get plugin configuration for UI settings"""
-    return _plugin.get_config()
+# Module metadata
+__version__ = '1.0.0'
+__author__ = 'Trading System'

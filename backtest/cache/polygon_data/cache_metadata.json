@@ -1039,5 +1039,32 @@
     "end_time": "2025-06-27T13:35:00.591000+00:00",
     "cached_at": "2025-07-06T13:55:57.508602+00:00",
     "data_points": 4222
+  },
+  "87c21b7ec1539880c27ab1f6e7dcdb3b": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:30:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-06T14:47:22.748292+00:00",
+    "data_points": 26427
+  },
+  "84191cb5c2e96c55bf3e32bcc1b08a25": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:35:00.018000+00:00",
+    "end_time": "2025-06-27T13:40:00.018000+00:00",
+    "cached_at": "2025-07-06T14:32:52.074990+00:00",
+    "data_points": 18233
+  },
+  "eacb2f941972277c5c105154eb28c1c1": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:35:00+00:00",
+    "end_time": "2025-06-27T13:40:00+00:00",
+    "cached_at": "2025-07-06T14:43:56.165596+00:00",
+    "data_points": 18233
   }
 }

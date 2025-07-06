@@ -297,9 +297,16 @@ class TickFlowAnalyzer:
         
         self.signals_generated += 1
         
+        # Get timestamp from the most recent trade
+        if trades_list:
+            signal_timestamp = trades_list[-1].timestamp
+        else:
+            # Fallback only if no trades (shouldn't happen in practice)
+            signal_timestamp = datetime.now(timezone.utc)
+        
         return VolumeSignal(
             symbol=symbol,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=signal_timestamp,
             signal=signal,
             strength=strength,
             metrics=metrics.__dict__,
@@ -379,7 +386,9 @@ class TickFlowAnalyzer:
     
     def _determine_signal(self, metrics: TickFlowMetrics) -> Tuple[str, float, str]:
         """
-        Determine trading signal from metrics
+        Enhanced signal determination for momentum trading.
+        More sensitive to large trade imbalances and algo activity.
+        Includes price/volume divergence detection for absorption analysis.
         
         Returns:
             (signal, strength, reason)
@@ -388,54 +397,131 @@ class TickFlowAnalyzer:
         buy_pct = metrics.buy_volume_pct
         momentum = metrics.momentum_score
         large_trade_diff = metrics.large_buy_trades - metrics.large_sell_trades
+        large_trade_ratio = metrics.large_buy_trades / max(1, metrics.large_sell_trades)
         trade_rate = metrics.trade_rate
         
-        # Calculate signal strength (0-100)
-        strength = min(100, abs(momentum))
+        # Calculate base strength from volume
+        volume_strength = abs(momentum)
         
-        # Determine signal with reason
+        # Calculate large trade signal (more weight for algo detection)
+        large_trade_strength = 0
+        if metrics.large_buy_trades + metrics.large_sell_trades > 0:
+            # Calculate imbalance percentage
+            total_large = metrics.large_buy_trades + metrics.large_sell_trades
+            large_buy_pct = (metrics.large_buy_trades / total_large) * 100
+            large_trade_strength = abs(large_buy_pct - 50) * 2  # Convert to 0-100 scale
+        
+        # Combine signals with weights (40% large trades, 60% volume for momentum)
+        combined_strength = (volume_strength * 0.6) + (large_trade_strength * 0.4)
+        strength = min(100, combined_strength)
+        
+        # Multi-level signal determination
         reasons = []
         
-        # Strong bullish conditions
-        if buy_pct >= self.momentum_threshold:
-            if large_trade_diff > 2:
-                reasons.append(f"Heavy buying {buy_pct:.0f}% with {metrics.large_buy_trades} large buys")
-                signal = 'BULLISH'
-                strength = min(100, strength * 1.2)  # Boost for large trades
-            else:
-                reasons.append(f"Strong buying pressure at {buy_pct:.0f}%")
-                signal = 'BULLISH'
-                
-        # Strong bearish conditions
-        elif buy_pct <= (100 - self.momentum_threshold):
-            if large_trade_diff < -2:
-                reasons.append(f"Heavy selling {100-buy_pct:.0f}% with {metrics.large_sell_trades} large sells")
-                signal = 'BEARISH'
-                strength = min(100, strength * 1.2)
-            else:
-                reasons.append(f"Strong selling pressure at {100-buy_pct:.0f}%")
-                signal = 'BEARISH'
-                
-        # Neutral conditions
+        # Initial signal based on volume flow
+        # STRONG BULLISH - Multiple confirmations
+        if buy_pct >= 65 or (buy_pct >= 55 and large_trade_ratio >= 2.0):
+            signal = 'BULLISH'
+            if buy_pct >= 65:
+                reasons.append(f"Strong buying {buy_pct:.0f}%")
+            if large_trade_ratio >= 2.0:
+                reasons.append(f"Algo buying detected ({metrics.large_buy_trades} vs {metrics.large_sell_trades})")
+            strength = min(100, strength * 1.2)  # Boost for strong signals
+        
+        # MODERATE BULLISH - Clear but not overwhelming
+        elif buy_pct >= 55 or (buy_pct >= 52 and large_trade_diff > 5):
+            signal = 'BULLISH'
+            reasons.append(f"Moderate buying {buy_pct:.0f}%")
+            if large_trade_diff > 5:
+                reasons.append(f"{large_trade_diff} more large buys")
+        
+        # STRONG BEARISH - Multiple confirmations
+        elif buy_pct <= 35 or (buy_pct <= 45 and large_trade_ratio <= 0.5):
+            signal = 'BEARISH'
+            if buy_pct <= 35:
+                reasons.append(f"Strong selling {100-buy_pct:.0f}%")
+            if large_trade_ratio <= 0.5:
+                reasons.append(f"Algo selling detected ({metrics.large_sell_trades} vs {metrics.large_buy_trades})")
+            strength = min(100, strength * 1.2)
+        
+        # MODERATE BEARISH
+        elif buy_pct <= 45 or (buy_pct <= 48 and large_trade_diff < -5):
+            signal = 'BEARISH'
+            reasons.append(f"Moderate selling {100-buy_pct:.0f}%")
+            if large_trade_diff < -5:
+                reasons.append(f"{abs(large_trade_diff)} more large sells")
+        
+        # NEUTRAL - But with lean indicators
         else:
             signal = 'NEUTRAL'
-            strength = 30  # Low strength for neutral
             
-            if abs(large_trade_diff) >= 2:
-                if large_trade_diff > 0:
-                    reasons.append(f"Mixed flow but {large_trade_diff} more large buys")
-                else:
-                    reasons.append(f"Mixed flow but {abs(large_trade_diff)} more large sells")
+            # Add lean information
+            if buy_pct > 50:
+                reasons.append(f"Slight buy bias {buy_pct:.0f}%")
             else:
-                reasons.append(f"Balanced flow {buy_pct:.0f}% buy / {100-buy_pct:.0f}% sell")
-        
-        # Add trade rate context
-        if trade_rate > 20:
-            reasons.append(f"High activity: {trade_rate:.0f} trades/sec")
-        elif trade_rate < 5:
-            reasons.append(f"Low activity: {trade_rate:.1f} trades/sec")
-            strength *= 0.8  # Reduce strength for low activity
+                reasons.append(f"Slight sell bias {100-buy_pct:.0f}%")
             
+            # Note any large trade imbalance
+            if abs(large_trade_diff) >= 3:
+                if large_trade_diff > 0:
+                    reasons.append(f"{large_trade_diff} more large buys (watch for momentum)")
+                else:
+                    reasons.append(f"{abs(large_trade_diff)} more large sells (watch for weakness)")
+            else:
+                reasons.append("Balanced large trades")
+            
+            # For neutral, reduce strength
+            strength = strength * 0.6
+        
+        # CRITICAL: Check for price/volume divergence (absorption detection)
+        if signal == 'BULLISH' and metrics.price_trend == 'down':
+            # Bullish volume but price falling = DISTRIBUTION/ABSORPTION FAILURE
+            signal = 'BEARISH'
+            old_reasons = reasons.copy()
+            reasons = [f"⚠️ ABSORPTION FAILURE: {buy_pct:.0f}% buying can't lift price"]
+            if large_trade_diff > 0:
+                reasons.append(f"Buyers trapped ({large_trade_diff} more large buys absorbed)")
+            reasons.append(f"Was: {' | '.join(old_reasons)}")
+            strength = min(100, strength * 1.5)  # Strong reversal signal
+            
+        elif signal == 'BEARISH' and metrics.price_trend == 'up':
+            # Bearish volume but price rising = ACCUMULATION/SHORT SQUEEZE
+            signal = 'BULLISH'
+            old_reasons = reasons.copy()
+            reasons = [f"⚠️ SHORT SQUEEZE: {100-buy_pct:.0f}% selling can't drop price"]
+            if large_trade_diff < 0:
+                reasons.append(f"Sellers trapped ({abs(large_trade_diff)} more large sells absorbed)")
+            reasons.append(f"Was: {' | '.join(old_reasons)}")
+            strength = min(100, strength * 1.5)  # Strong reversal signal
+        
+        elif signal == 'NEUTRAL':
+            # For neutral signals, note any divergence
+            if buy_pct > 52 and metrics.price_trend == 'down':
+                reasons.insert(0, "⚠️ Buy pressure failing (distribution?)")
+                signal = 'BEARISH'
+                strength = min(100, strength * 1.2)
+            elif buy_pct < 48 and metrics.price_trend == 'up':
+                reasons.insert(0, "⚠️ Sell pressure failing (accumulation?)")
+                signal = 'BULLISH'
+                strength = min(100, strength * 1.2)
+        
+        # Add trade rate context (important for momentum)
+        if trade_rate > 50:
+            reasons.append(f"High momentum: {trade_rate:.0f} trades/sec")
+            if signal != 'NEUTRAL':
+                strength = min(100, strength * 1.1)  # Boost for high activity
+        elif trade_rate < 10:
+            reasons.append(f"Low activity: {trade_rate:.1f} trades/sec")
+            strength *= 0.8  # Reduce for low activity
+        
+        # Price trend confirmation (only if not divergent)
+        if signal == 'BULLISH' and metrics.price_trend == 'up':
+            reasons.append("Price confirming ↗")
+            strength = min(100, strength * 1.05)
+        elif signal == 'BEARISH' and metrics.price_trend == 'down':
+            reasons.append("Price confirming ↘")
+            strength = min(100, strength * 1.05)
+        
         reason = " | ".join(reasons)
         return signal, strength, reason
     

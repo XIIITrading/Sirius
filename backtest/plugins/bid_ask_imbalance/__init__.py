@@ -3,7 +3,7 @@
 Bid/Ask Imbalance Analysis Plugin
 Real-time order flow analysis through bid/ask execution imbalance detection.
 Consolidated implementation using modular PolygonDataManager.
-Version 3.6.0 - Production version with count-based sampling
+Version 3.7.0 - Optimized version with pre-aligned data support
 """
 
 import logging
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Plugin metadata
 PLUGIN_NAME = "Bid/Ask Imbalance Analysis"
-PLUGIN_VERSION = "3.6.0"
+PLUGIN_VERSION = "3.7.0"
 
 # Create single data manager instance at module level
 _data_manager = PolygonDataManager()
@@ -40,8 +40,9 @@ _config = {
     'quote_window_minutes': 15,  # Extended quote window
     'quote_forward_minutes': 5,   # Forward window
     'max_trades_to_process': 15000,  # Maximum trades to process
-    'count_sample_interval': 2,  # Every 2nd trade for detailed analysis
-    'adaptive_sync': True  # Enable adaptive sync tolerance
+    'count_sample_interval': 10,  # Increased from 2 to 10 for better performance
+    'adaptive_sync': True,  # Enable adaptive sync tolerance
+    'use_prealigned_data': True  # Enable pre-aligned data usage
 }
 
 
@@ -116,6 +117,7 @@ async def run_analysis_with_progress(symbol: str, entry_time: datetime, directio
                                    progress_callback: Optional[Callable[[int, str], None]] = None) -> Dict[str, Any]:
     """
     Run Bid/Ask Imbalance analysis with progress tracking.
+    Optimized version using pre-aligned data when available.
     
     Args:
         symbol: Stock symbol
@@ -140,187 +142,15 @@ async def run_analysis_with_progress(symbol: str, entry_time: datetime, directio
                 progress_callback(percentage, message)
             logger.info(f"Progress: {percentage}% - {message}")
         
-        # 1. Fetch data using modular data manager
-        report_progress(5, "Fetching trade and quote data...")
-        trades_df, quotes_df = await _fetch_data(symbol, entry_time)
+        # 1. Check if data manager supports pre-aligned data
+        use_prealigned = _config['use_prealigned_data'] and hasattr(_data_manager, 'load_aligned_trades')
         
-        if trades_df.empty:
-            raise ValueError(f"No trade data available for {symbol}")
-        
-        original_trade_count = len(trades_df)
-        original_quote_count = len(quotes_df)
-        report_progress(10, f"Fetched {original_trade_count:,} trades and {original_quote_count:,} quotes")
-        
-        # 2. Analyze data characteristics and adjust sync tolerance if needed
-        adaptive_tolerance = _config['quote_sync_tolerance_ms']
-        if _config['adaptive_sync']:
-            adaptive_tolerance = _adjust_sync_tolerance_adaptive(trades_df, quotes_df)
-        
-        # 3. Initialize analyzer with adaptive settings
-        report_progress(15, f"Initializing analyzer (sync tolerance: {adaptive_tolerance}ms)...")
-        analyzer = BidAskImbalance(
-            imbalance_lookback=_config['imbalance_lookback'],
-            trades_per_bar=_config['trades_per_bar'],
-            spread_history_seconds=_config['spread_history_seconds'],
-            quote_sync_tolerance_ms=adaptive_tolerance,
-            aggression_threshold=_config['aggression_threshold'],
-            smoothing_alpha=_config['smoothing_alpha']
-        )
-        
-        # 4. Filter quotes to prevent cleanup issues
-        quote_window_start = entry_time - timedelta(minutes=_config['quote_window_minutes'])
-        quote_window_end = entry_time + timedelta(minutes=_config['quote_forward_minutes'])
-        
-        quotes_filtered = quotes_df[
-            (quotes_df.index >= quote_window_start) & 
-            (quotes_df.index <= quote_window_end)
-        ]
-        
-        logger.info(f"Quote filtering: {len(quotes_df)} -> {len(quotes_filtered)} quotes")
-        logger.info(f"Quote window: {quote_window_start} to {quote_window_end}")
-        
-        # Use filtered quotes
-        quotes_df = quotes_filtered
-        
-        # 5. Sample trades if needed - using count-based sampling
-        if len(trades_df) > _config['max_trades_to_process']:
-            report_progress(20, f"Optimizing data for analysis...")
-            trades_df = _sample_trades(trades_df)
-            quotes_df = _sample_quotes(quotes_df)
-            report_progress(25, f"Optimized to {len(trades_df):,} trades and {len(quotes_df):,} quotes")
+        if use_prealigned:
+            logger.info("Using optimized pre-aligned data processing")
+            return await _run_analysis_optimized(symbol, entry_time, direction, report_progress)
         else:
-            report_progress(25, "Using all available data")
-        
-        # 6. Process quotes
-        report_progress(30, "Building quote history...")
-        
-        quote_count = 0
-        quote_update_interval = max(1, len(quotes_df) // 20)  # Update 20 times
-        
-        for i, (timestamp, quote_data) in enumerate(quotes_df.iterrows()):
-            # Convert timestamp if needed
-            if hasattr(timestamp, 'to_pydatetime'):
-                quote_timestamp = timestamp.to_pydatetime()
-            else:
-                quote_timestamp = timestamp
-                
-            quote = Quote(
-                symbol=symbol,
-                bid=float(quote_data['bid']),
-                ask=float(quote_data['ask']),
-                bid_size=int(quote_data.get('bid_size', 100)),
-                ask_size=int(quote_data.get('ask_size', 100)),
-                timestamp=quote_timestamp
-            )
-            analyzer.process_quote(quote)
-            quote_count += 1
-            
-            if i % quote_update_interval == 0 and i > 0:
-                progress = 30 + int((i / len(quotes_df)) * 15)  # 30-45%
-                report_progress(progress, f"Processed {quote_count:,} quotes")
-        
-        # 7. Process trades
-        report_progress(45, f"Analyzing {len(trades_df):,} trades...")
-        
-        signals = []
-        last_signal = None
-        trades_processed = 0
-        update_interval = max(1, len(trades_df) // 20)  # Update progress 20 times
-        sync_success = 0
-        sync_fail = 0
-        
-        for i, (timestamp, trade_data) in enumerate(trades_df.iterrows()):
-            # Stop at entry time
-            if timestamp >= entry_time:
-                break
-            
-            # Convert timestamp if needed
-            if hasattr(timestamp, 'to_pydatetime'):
-                trade_timestamp = timestamp.to_pydatetime()
-            else:
-                trade_timestamp = timestamp
-            
-            # Create trade object
-            trade = Trade(
-                symbol=symbol,
-                price=float(trade_data['price']),
-                size=int(trade_data['size']),
-                timestamp=trade_timestamp,
-                conditions=trade_data.get('conditions')
-            )
-            
-            # Check sync before processing (for logging)
-            synced_quote = analyzer._get_synchronized_quote(trade)
-            if synced_quote:
-                sync_success += 1
-            else:
-                sync_fail += 1
-            
-            # Process trade and get signal
-            signal = analyzer.process_trade(trade)
-            
-            if signal:
-                signals.append(signal)
-                last_signal = signal
-            
-            trades_processed += 1
-            
-            # Update progress
-            if i % update_interval == 0 and i > 0:
-                progress = 45 + int((i / len(trades_df)) * 45)  # 45-90%
-                sync_rate = sync_success / (sync_success + sync_fail) * 100 if (sync_success + sync_fail) > 0 else 0
-                report_progress(
-                    min(progress, 90),
-                    f"Processed {trades_processed:,} trades, {len(signals):,} signals, sync: {sync_rate:.0f}%"
-                )
-        
-        # Log sync statistics
-        total_sync_attempts = sync_success + sync_fail
-        sync_rate = 0
-        if total_sync_attempts > 0:
-            sync_rate = sync_success / total_sync_attempts * 100
-            logger.info(f"Trade/Quote sync rate: {sync_rate:.1f}% ({sync_success}/{total_sync_attempts})")
-        
-        # 8. Complete analysis
-        report_progress(92, "Generating final analysis...")
-        
-        if not last_signal:
-            # Try to get the latest analysis if no signals
-            if symbol in analyzer.latest_signals:
-                last_signal = analyzer.latest_signals[symbol]
-            else:
-                raise ValueError("No signals generated from analysis")
-        
-        # Get summaries
-        session_summary = analyzer.get_session_summary(symbol)
-        bar_summary = analyzer.get_bar_index_summary(symbol)
-        
-        # 9. Format results
-        report_progress(95, "Formatting results...")
-        
-        result = _format_results(
-            last_signal, signals, session_summary,
-            bar_summary, analyzer, entry_time, direction
-        )
-        
-        # Add performance stats
-        result['performance_stats'] = {
-            'original_trades': original_trade_count,
-            'processed_trades': trades_processed,
-            'original_quotes': original_quote_count,
-            'filtered_quotes': len(quotes_filtered),
-            'processed_quotes': quote_count,
-            'sampling_ratio': trades_processed / original_trade_count if original_trade_count > 0 else 1,
-            'signals_generated': len(signals),
-            'sync_rate': sync_rate,
-            'sync_tolerance_ms': adaptive_tolerance,
-            'quote_window_minutes': _config['quote_window_minutes'],
-            'count_interval': _config['count_sample_interval']
-        }
-        
-        report_progress(100, f"Complete - {last_signal.signal_type}")
-        
-        return result
+            logger.info("Using standard processing (pre-aligned data not available)")
+            return await _run_analysis_standard(symbol, entry_time, direction, report_progress)
         
     except Exception as e:
         logger.error(f"Error in Bid/Ask Imbalance analysis: {e}")
@@ -338,6 +168,360 @@ async def run_analysis_with_progress(symbol: str, entry_time: datetime, directio
                 'confidence': 0
             }
         }
+
+
+async def _run_analysis_optimized(symbol: str, entry_time: datetime, direction: str,
+                                report_progress: Callable[[int, str], None]) -> Dict[str, Any]:
+    """
+    Optimized analysis using pre-aligned trade data.
+    This is significantly faster as quote synchronization is already done.
+    """
+    # 1. Fetch pre-aligned data
+    report_progress(5, "Fetching pre-aligned trade data...")
+    
+    start_time = entry_time - timedelta(minutes=_config['lookback_minutes'])
+    
+    try:
+        # Try to get pre-aligned trades
+        aligned_trades = await _data_manager.load_aligned_trades(
+            symbol=symbol,
+            start_time=start_time,
+            end_time=entry_time,
+            alignment_tolerance_ms=_config['quote_sync_tolerance_ms']
+        )
+        
+        if aligned_trades.empty:
+            raise ValueError(f"No aligned trade data available for {symbol}")
+        
+        original_trade_count = len(aligned_trades)
+        report_progress(10, f"Fetched {original_trade_count:,} pre-aligned trades")
+        
+    except Exception as e:
+        logger.warning(f"Failed to load pre-aligned data: {e}. Falling back to standard processing.")
+        return await _run_analysis_standard(symbol, entry_time, direction, report_progress)
+    
+    # 2. Initialize analyzer
+    report_progress(15, "Initializing analyzer...")
+    analyzer = BidAskImbalance(
+        imbalance_lookback=_config['imbalance_lookback'],
+        trades_per_bar=_config['trades_per_bar'],
+        spread_history_seconds=_config['spread_history_seconds'],
+        quote_sync_tolerance_ms=_config['quote_sync_tolerance_ms'],
+        aggression_threshold=_config['aggression_threshold'],
+        smoothing_alpha=_config['smoothing_alpha']
+    )
+    
+    # 3. Sample trades if needed
+    if len(aligned_trades) > _config['max_trades_to_process']:
+        report_progress(20, f"Optimizing data for analysis...")
+        aligned_trades = aligned_trades.iloc[::_config['count_sample_interval']].copy()
+        report_progress(25, f"Optimized to {len(aligned_trades):,} trades")
+    else:
+        report_progress(25, "Using all available data")
+    
+    # 4. Process trades with pre-aligned quotes
+    report_progress(30, f"Processing {len(aligned_trades):,} trades...")
+    
+    signals = []
+    last_signal = None
+    trades_processed = 0
+    update_interval = max(1, len(aligned_trades) // 20)
+    
+    # Convert to numpy arrays for faster access
+    trade_times = aligned_trades.index.to_numpy()
+    trade_prices = aligned_trades['price'].to_numpy() 
+    trade_sizes = aligned_trades['size'].to_numpy()
+    trade_bids = aligned_trades['bid'].to_numpy() if 'bid' in aligned_trades else None
+    trade_asks = aligned_trades['ask'].to_numpy() if 'ask' in aligned_trades else None
+    
+    # Build quote history from aligned data
+    if trade_bids is not None and trade_asks is not None:
+        report_progress(35, "Building quote history from aligned data...")
+        
+        # Get unique quote updates
+        unique_quotes = aligned_trades[['bid', 'ask', 'bid_size', 'ask_size']].drop_duplicates()
+        
+        for idx, quote_data in unique_quotes.iterrows():
+            quote = Quote(
+                symbol=symbol,
+                bid=float(quote_data['bid']),
+                ask=float(quote_data['ask']),
+                bid_size=int(quote_data.get('bid_size', 100)),
+                ask_size=int(quote_data.get('ask_size', 100)),
+                timestamp=idx.to_pydatetime() if hasattr(idx, 'to_pydatetime') else idx
+            )
+            analyzer.process_quote(quote)
+    
+    # Process trades
+    report_progress(45, "Analyzing trades...")
+    
+    for i in range(len(trade_times)):
+        # Stop at entry time
+        if trade_times[i] >= entry_time:
+            break
+        
+        # Create trade object with pre-aligned quote data
+        trade = Trade(
+            symbol=symbol,
+            price=float(trade_prices[i]),
+            size=int(trade_sizes[i]),
+            timestamp=trade_times[i].to_pydatetime() if hasattr(trade_times[i], 'to_pydatetime') else trade_times[i],
+            conditions=None
+        )
+        
+        # Add pre-aligned quote data if available
+        if trade_bids is not None and trade_asks is not None:
+            trade.bid = float(trade_bids[i])
+            trade.ask = float(trade_asks[i])
+        
+        # Process trade and get signal
+        signal = analyzer.process_trade(trade)
+        
+        if signal:
+            signals.append(signal)
+            last_signal = signal
+        
+        trades_processed += 1
+        
+        # Update progress
+        if i % update_interval == 0 and i > 0:
+            progress = 45 + int((i / len(trade_times)) * 45)
+            report_progress(
+                min(progress, 90),
+                f"Processed {trades_processed:,} trades, {len(signals):,} signals"
+            )
+    
+    # 5. Complete analysis
+    report_progress(92, "Generating final analysis...")
+    
+    if not last_signal:
+        if symbol in analyzer.latest_signals:
+            last_signal = analyzer.latest_signals[symbol]
+        else:
+            raise ValueError("No signals generated from analysis")
+    
+    # Get summaries
+    session_summary = analyzer.get_session_summary(symbol)
+    bar_summary = analyzer.get_bar_index_summary(symbol)
+    
+    # 6. Format results
+    report_progress(95, "Formatting results...")
+    
+    result = _format_results(
+        last_signal, signals, session_summary,
+        bar_summary, analyzer, entry_time, direction
+    )
+    
+    # Add performance stats
+    result['performance_stats'] = {
+        'original_trades': original_trade_count,
+        'processed_trades': trades_processed,
+        'sampling_ratio': trades_processed / original_trade_count if original_trade_count > 0 else 1,
+        'signals_generated': len(signals),
+        'sync_rate': 100.0,  # Pre-aligned data has 100% sync
+        'processing_mode': 'optimized_prealigned',
+        'count_interval': _config['count_sample_interval']
+    }
+    
+    report_progress(100, f"Complete - {last_signal.signal_type}")
+    
+    return result
+
+
+async def _run_analysis_standard(symbol: str, entry_time: datetime, direction: str,
+                               report_progress: Callable[[int, str], None]) -> Dict[str, Any]:
+    """
+    Standard analysis implementation (original logic).
+    Used when pre-aligned data is not available.
+    """
+    # 1. Fetch data using modular data manager
+    report_progress(5, "Fetching trade and quote data...")
+    trades_df, quotes_df = await _fetch_data(symbol, entry_time)
+    
+    if trades_df.empty:
+        raise ValueError(f"No trade data available for {symbol}")
+    
+    original_trade_count = len(trades_df)
+    original_quote_count = len(quotes_df)
+    report_progress(10, f"Fetched {original_trade_count:,} trades and {original_quote_count:,} quotes")
+    
+    # 2. Analyze data characteristics and adjust sync tolerance if needed
+    adaptive_tolerance = _config['quote_sync_tolerance_ms']
+    if _config['adaptive_sync']:
+        adaptive_tolerance = _adjust_sync_tolerance_adaptive(trades_df, quotes_df)
+    
+    # 3. Initialize analyzer with adaptive settings
+    report_progress(15, f"Initializing analyzer (sync tolerance: {adaptive_tolerance}ms)...")
+    analyzer = BidAskImbalance(
+        imbalance_lookback=_config['imbalance_lookback'],
+        trades_per_bar=_config['trades_per_bar'],
+        spread_history_seconds=_config['spread_history_seconds'],
+        quote_sync_tolerance_ms=adaptive_tolerance,
+        aggression_threshold=_config['aggression_threshold'],
+        smoothing_alpha=_config['smoothing_alpha']
+    )
+    
+    # 4. Filter quotes to prevent cleanup issues
+    quote_window_start = entry_time - timedelta(minutes=_config['quote_window_minutes'])
+    quote_window_end = entry_time + timedelta(minutes=_config['quote_forward_minutes'])
+    
+    quotes_filtered = quotes_df[
+        (quotes_df.index >= quote_window_start) & 
+        (quotes_df.index <= quote_window_end)
+    ]
+    
+    logger.info(f"Quote filtering: {len(quotes_df)} -> {len(quotes_filtered)} quotes")
+    logger.info(f"Quote window: {quote_window_start} to {quote_window_end}")
+    
+    # Use filtered quotes
+    quotes_df = quotes_filtered
+    
+    # 5. Sample trades if needed - using count-based sampling
+    if len(trades_df) > _config['max_trades_to_process']:
+        report_progress(20, f"Optimizing data for analysis...")
+        trades_df = _sample_trades(trades_df)
+        quotes_df = _sample_quotes(quotes_df)
+        report_progress(25, f"Optimized to {len(trades_df):,} trades and {len(quotes_df):,} quotes")
+    else:
+        report_progress(25, "Using all available data")
+    
+    # 6. Process quotes - convert to numpy arrays for faster iteration
+    report_progress(30, "Building quote history...")
+    
+    quote_times = quotes_df.index.to_numpy()
+    quote_bids = quotes_df['bid'].to_numpy()
+    quote_asks = quotes_df['ask'].to_numpy()
+    quote_bid_sizes = quotes_df['bid_size'].to_numpy() if 'bid_size' in quotes_df else np.full(len(quotes_df), 100)
+    quote_ask_sizes = quotes_df['ask_size'].to_numpy() if 'ask_size' in quotes_df else np.full(len(quotes_df), 100)
+    
+    quote_count = 0
+    quote_update_interval = max(1, len(quotes_df) // 20)
+    
+    for i in range(len(quote_times)):
+        quote_timestamp = quote_times[i]
+        if hasattr(quote_timestamp, 'to_pydatetime'):
+            quote_timestamp = quote_timestamp.to_pydatetime()
+            
+        quote = Quote(
+            symbol=symbol,
+            bid=float(quote_bids[i]),
+            ask=float(quote_asks[i]),
+            bid_size=int(quote_bid_sizes[i]),
+            ask_size=int(quote_ask_sizes[i]),
+            timestamp=quote_timestamp
+        )
+        analyzer.process_quote(quote)
+        quote_count += 1
+        
+        if i % quote_update_interval == 0 and i > 0:
+            progress = 30 + int((i / len(quotes_df)) * 15)
+            report_progress(progress, f"Processed {quote_count:,} quotes")
+    
+    # 7. Process trades - convert to numpy arrays
+    report_progress(45, f"Analyzing {len(trades_df):,} trades...")
+    
+    trade_times = trades_df.index.to_numpy()
+    trade_prices = trades_df['price'].to_numpy()
+    trade_sizes = trades_df['size'].to_numpy()
+    trade_conditions = trades_df['conditions'].to_numpy() if 'conditions' in trades_df else None
+    
+    signals = []
+    last_signal = None
+    trades_processed = 0
+    update_interval = max(1, len(trades_df) // 20)
+    sync_success = 0
+    sync_fail = 0
+    
+    for i in range(len(trade_times)):
+        # Stop at entry time
+        if trade_times[i] >= entry_time:
+            break
+        
+        trade_timestamp = trade_times[i]
+        if hasattr(trade_timestamp, 'to_pydatetime'):
+            trade_timestamp = trade_timestamp.to_pydatetime()
+        
+        # Create trade object
+        trade = Trade(
+            symbol=symbol,
+            price=float(trade_prices[i]),
+            size=int(trade_sizes[i]),
+            timestamp=trade_timestamp,
+            conditions=trade_conditions[i] if trade_conditions is not None else None
+        )
+        
+        # Check sync before processing (for logging)
+        synced_quote = analyzer._get_synchronized_quote(trade)
+        if synced_quote:
+            sync_success += 1
+        else:
+            sync_fail += 1
+        
+        # Process trade and get signal
+        signal = analyzer.process_trade(trade)
+        
+        if signal:
+            signals.append(signal)
+            last_signal = signal
+        
+        trades_processed += 1
+        
+        # Update progress
+        if i % update_interval == 0 and i > 0:
+            progress = 45 + int((i / len(trades_df)) * 45)
+            sync_rate = sync_success / (sync_success + sync_fail) * 100 if (sync_success + sync_fail) > 0 else 0
+            report_progress(
+                min(progress, 90),
+                f"Processed {trades_processed:,} trades, {len(signals):,} signals, sync: {sync_rate:.0f}%"
+            )
+    
+    # Log sync statistics
+    total_sync_attempts = sync_success + sync_fail
+    sync_rate = 0
+    if total_sync_attempts > 0:
+        sync_rate = sync_success / total_sync_attempts * 100
+        logger.info(f"Trade/Quote sync rate: {sync_rate:.1f}% ({sync_success}/{total_sync_attempts})")
+    
+    # 8. Complete analysis
+    report_progress(92, "Generating final analysis...")
+    
+    if not last_signal:
+        if symbol in analyzer.latest_signals:
+            last_signal = analyzer.latest_signals[symbol]
+        else:
+            raise ValueError("No signals generated from analysis")
+    
+    # Get summaries
+    session_summary = analyzer.get_session_summary(symbol)
+    bar_summary = analyzer.get_bar_index_summary(symbol)
+    
+    # 9. Format results
+    report_progress(95, "Formatting results...")
+    
+    result = _format_results(
+        last_signal, signals, session_summary,
+        bar_summary, analyzer, entry_time, direction
+    )
+    
+    # Add performance stats
+    result['performance_stats'] = {
+        'original_trades': original_trade_count,
+        'processed_trades': trades_processed,
+        'original_quotes': original_quote_count,
+        'filtered_quotes': len(quotes_filtered),
+        'processed_quotes': quote_count,
+        'sampling_ratio': trades_processed / original_trade_count if original_trade_count > 0 else 1,
+        'signals_generated': len(signals),
+        'sync_rate': sync_rate,
+        'sync_tolerance_ms': adaptive_tolerance,
+        'quote_window_minutes': _config['quote_window_minutes'],
+        'count_interval': _config['count_sample_interval'],
+        'processing_mode': 'standard'
+    }
+    
+    report_progress(100, f"Complete - {last_signal.signal_type}")
+    
+    return result
 
 
 async def _fetch_data(symbol: str, entry_time: datetime) -> Tuple[pd.DataFrame, pd.DataFrame]:

@@ -307,6 +307,75 @@ class PolygonDataManager:
         
         return df
         
+    async def load_aligned_trades(self, symbol: str, start_time: datetime, 
+                                end_time: datetime, alignment_tolerance_ms: int = 500) -> pd.DataFrame:
+        """
+        Load trades with pre-synchronized quote data.
+        
+        Returns DataFrame with columns:
+        - All original trade columns
+        - bid, ask, bid_size, ask_size from synchronized quotes
+        - quote_age_ms
+        - spread, spread_pct
+        """
+        # Check cache first
+        cache_key = f"{symbol}_aligned_trades_{start_time}_{end_time}_{alignment_tolerance_ms}"
+        cached = self.cache_manager.get(symbol, 'aligned_trades', 'tick', start_time, end_time)
+        
+        if cached is not None:
+            logger.info(f"Returning cached aligned trades for {symbol}")
+            return cached
+        
+        # Fetch raw data
+        trades = await self.load_trades(symbol, start_time, end_time)
+        quotes = await self.load_quotes(symbol, start_time, end_time)
+        
+        if trades.empty or quotes.empty:
+            return trades  # Return unaligned if no quotes
+        
+        # Use pandas merge_asof for efficient alignment
+        aligned = self._align_trades_quotes_fast(trades, quotes, alignment_tolerance_ms)
+        
+        # Cache the result
+        self.cache_manager.put(symbol, 'aligned_trades', 'tick', start_time, end_time, aligned)
+        
+        return aligned
+        
+    def _align_trades_quotes_fast(self, trades_df: pd.DataFrame, quotes_df: pd.DataFrame, 
+                                 tolerance_ms: int) -> pd.DataFrame:
+        """Fast vectorized trade-quote alignment"""
+        # Reset index for merge
+        trades_reset = trades_df.reset_index().rename(columns={'index': 'trade_time'})
+        quotes_reset = quotes_df.reset_index().rename(columns={'index': 'quote_time'})
+        
+        # Merge trades with quotes
+        aligned = pd.merge_asof(
+            trades_reset.sort_values('trade_time'),
+            quotes_reset[['quote_time', 'bid', 'ask', 'bid_size', 'ask_size']].sort_values('quote_time'),
+            left_on='trade_time',
+            right_on='quote_time',
+            direction='backward',
+            tolerance=pd.Timedelta(milliseconds=tolerance_ms)
+        )
+        
+        # Calculate derived fields
+        aligned['quote_age_ms'] = (aligned['trade_time'] - aligned['quote_time']).dt.total_seconds() * 1000
+        aligned['spread'] = aligned['ask'] - aligned['bid']
+        aligned['spread_pct'] = (aligned['spread'] / aligned['bid'] * 100).fillna(0)
+        
+        # Classify trades (simple classification)
+        aligned['trade_side'] = 'unknown'
+        aligned.loc[aligned['price'] >= aligned['ask'], 'trade_side'] = 'buy'
+        aligned.loc[aligned['price'] <= aligned['bid'], 'trade_side'] = 'sell'
+        midpoint = (aligned['bid'] + aligned['ask']) / 2
+        aligned.loc[(aligned['price'] > aligned['bid']) & (aligned['price'] < midpoint), 'trade_side'] = 'sell'
+        aligned.loc[(aligned['price'] < aligned['ask']) & (aligned['price'] > midpoint), 'trade_side'] = 'buy'
+        
+        # Set index back to trade_time
+        aligned.set_index('trade_time', inplace=True)
+        
+        return aligned
+        
     def _get_minutes_per_bar(self, timeframe: str) -> int:
         """Convert timeframe string to minutes"""
         timeframe_map = {

@@ -23,6 +23,7 @@ class DataType(Enum):
     BARS = "bars"
     TRADES = "trades"
     QUOTES = "quotes"
+    ALIGNED_TRADES = "aligned_trades"
 
 
 @dataclass
@@ -505,6 +506,14 @@ async def example_with_modular_data_manager():
             start_time=base_time - timedelta(hours=1, minutes=30),
             end_time=base_time + timedelta(minutes=30),
             priority=8
+        ),
+        DataNeed(
+            module_name="BidAskImbalance",
+            symbol=symbol,
+            data_type=DataType.ALIGNED_TRADES,
+            timeframe="tick",
+            start_time=start_time,
+            end_time=end_time
         ),
     ]
     

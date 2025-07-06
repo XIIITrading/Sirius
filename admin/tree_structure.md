@@ -1,5 +1,5 @@
 # Project Structure
-Last updated: 2025-07-05 19:26:30
+Last updated: 2025-07-06 20:43:09
 
 ```
 Sirius/
@@ -510,19 +510,85 @@ Sirius/
 │   │   │   │   │   │   ├── 1min_20240627_092140ab.parquet
 │   │   │   │   │   │   ├── 1min_20240627_9eb3abfd.parquet
 │   │   │   │   │   │   ├── 1min_20240627_bc77bfe3.parquet
+│   │   │   │   │   │   ├── 1min_20250101_a3c05929.parquet
 │   │   │   │   │   │   ├── 1min_20250115_9f2f4baf.parquet
+│   │   │   │   │   │   ├── 1min_20250619_273c4fd2.parquet
+│   │   │   │   │   │   ├── 1min_20250625_ac26028f.parquet
 │   │   │   │   │   ├── quotes/
 │   │   │   │   │   │   ├── tick_20240627_785ea362.parquet
 │   │   │   │   │   │   ├── tick_20240627_b49a07d7.parquet
 │   │   │   │   ├── crcl/
 │   │   │   │   │   ├── bars/
 │   │   │   │   │   │   ├── 15min_20250625_d768cf35.parquet
+│   │   │   │   │   │   ├── 15min_20250627_2956c74f.parquet
+│   │   │   │   │   │   ├── 15min_20250627_5164d1b3.parquet
+│   │   │   │   │   │   ├── 15min_20250627_ab098e5e.parquet
+│   │   │   │   │   │   ├── 15min_20250627_d2c248a7.parquet
+│   │   │   │   │   │   ├── 1min_20250621_d0ef1473.parquet
+│   │   │   │   │   │   ├── 1min_20250623_11c8fc69.parquet
+│   │   │   │   │   │   ├── 1min_20250623_1418d1e1.parquet
+│   │   │   │   │   │   ├── 1min_20250623_1732bddd.parquet
+│   │   │   │   │   │   ├── 1min_20250623_22a72286.parquet
+│   │   │   │   │   │   ├── 1min_20250623_6a2eae87.parquet
+│   │   │   │   │   │   ├── 1min_20250623_70fcea41.parquet
+│   │   │   │   │   │   ├── 1min_20250623_71108066.parquet
+│   │   │   │   │   │   ├── 1min_20250623_934f1b46.parquet
+│   │   │   │   │   │   ├── 1min_20250623_f1432149.parquet
+│   │   │   │   │   │   ├── 1min_20250623_fd2e84fd.parquet
+│   │   │   │   │   │   ├── 1min_20250624_199f0728.parquet
+│   │   │   │   │   │   ├── 1min_20250624_1f8c1a5e.parquet
+│   │   │   │   │   │   ├── 1min_20250624_30922828.parquet
+│   │   │   │   │   │   ├── 1min_20250624_3ce615ef.parquet
+│   │   │   │   │   │   ├── 1min_20250624_44dfee29.parquet
+│   │   │   │   │   │   ├── 1min_20250624_6e7f595a.parquet
+│   │   │   │   │   │   ├── 1min_20250624_bd365d35.parquet
+│   │   │   │   │   │   ├── 1min_20250624_c55a38a7.parquet
+│   │   │   │   │   │   ├── 1min_20250625_06f2a666.parquet
+│   │   │   │   │   │   ├── 1min_20250625_10119438.parquet
+│   │   │   │   │   │   ├── 1min_20250625_27351a44.parquet
+│   │   │   │   │   │   ├── 1min_20250625_35a84801.parquet
+│   │   │   │   │   │   ├── 1min_20250625_432a38d7.parquet
+│   │   │   │   │   │   ├── 1min_20250625_44f1ca54.parquet
+│   │   │   │   │   │   ├── 1min_20250625_4be3906f.parquet
+│   │   │   │   │   │   ├── 1min_20250625_4ebd5bf8.parquet
+│   │   │   │   │   │   ├── 1min_20250625_5dd69116.parquet
+│   │   │   │   │   │   ├── 1min_20250625_6ba14652.parquet
+│   │   │   │   │   │   ├── 1min_20250625_7141f1b3.parquet
+│   │   │   │   │   │   ├── 1min_20250625_72e442b1.parquet
+│   │   │   │   │   │   ├── 1min_20250625_79ae2544.parquet
+│   │   │   │   │   │   ├── 1min_20250625_7ae8e567.parquet
+│   │   │   │   │   │   ├── 1min_20250625_7c32d730.parquet
 │   │   │   │   │   │   ├── 1min_20250625_7f649ea5.parquet
+│   │   │   │   │   │   ├── 1min_20250625_8f9f7725.parquet
+│   │   │   │   │   │   ├── 1min_20250625_a0c8ffef.parquet
 │   │   │   │   │   │   ├── 1min_20250625_a47fabfc.parquet
+│   │   │   │   │   │   ├── 1min_20250625_a8d10579.parquet
+│   │   │   │   │   │   ├── 1min_20250625_aca1db60.parquet
+│   │   │   │   │   │   ├── 1min_20250625_b1df03a9.parquet
 │   │   │   │   │   │   ├── 1min_20250625_cd3c5056.parquet
+│   │   │   │   │   │   ├── 1min_20250625_cfd122c8.parquet
+│   │   │   │   │   │   ├── 1min_20250625_cff1b59e.parquet
+│   │   │   │   │   │   ├── 1min_20250625_e7df26a6.parquet
+│   │   │   │   │   │   ├── 1min_20250625_f931562e.parquet
 │   │   │   │   │   │   ├── 1min_20250625_fb556de3.parquet
+│   │   │   │   │   │   ├── 1min_20250626_01607916.parquet
+│   │   │   │   │   │   ├── 1min_20250626_034007e6.parquet
+│   │   │   │   │   │   ├── 1min_20250626_0a44045e.parquet
+│   │   │   │   │   │   ├── 1min_20250626_2551d764.parquet
+│   │   │   │   │   │   ├── 1min_20250626_2c7f59b8.parquet
+│   │   │   │   │   │   ├── 1min_20250626_2ebe068d.parquet
+│   │   │   │   │   │   ├── 1min_20250626_3872a43e.parquet
+│   │   │   │   │   │   ├── 1min_20250626_3a0ca4f0.parquet
 │   │   │   │   │   │   ├── 1min_20250626_3b370256.parquet
+│   │   │   │   │   │   ├── 1min_20250626_50eb23bc.parquet
+│   │   │   │   │   │   ├── 1min_20250626_7ca7c978.parquet
+│   │   │   │   │   │   ├── 1min_20250626_91b70f05.parquet
+│   │   │   │   │   │   ├── 1min_20250626_acdd62ef.parquet
+│   │   │   │   │   │   ├── 1min_20250626_c476f944.parquet
+│   │   │   │   │   │   ├── 1min_20250626_c80798a1.parquet
 │   │   │   │   │   │   ├── 1min_20250626_d2f6e4db.parquet
+│   │   │   │   │   │   ├── 1min_20250626_e1deeac9.parquet
+│   │   │   │   │   │   ├── 1min_20250626_e6169b58.parquet
 │   │   │   │   │   │   ├── 1min_20250627_1bce2976.parquet
 │   │   │   │   │   │   ├── 1min_20250627_247c03fb.parquet
 │   │   │   │   │   │   ├── 1min_20250627_3ca67960.parquet
@@ -532,19 +598,56 @@ Sirius/
 │   │   │   │   │   │   ├── 1min_20250627_7a38b076.parquet
 │   │   │   │   │   │   ├── 1min_20250627_7c60cc91.parquet
 │   │   │   │   │   │   ├── 1min_20250627_93b4f2ac.parquet
+│   │   │   │   │   │   ├── 1min_20250627_94b71a42.parquet
 │   │   │   │   │   │   ├── 1min_20250627_b9c9060c.parquet
+│   │   │   │   │   │   ├── 1min_20250627_c61b6d20.parquet
 │   │   │   │   │   │   ├── 1min_20250627_c6d210cc.parquet
 │   │   │   │   │   │   ├── 1min_20250627_c9ad9f40.parquet
 │   │   │   │   │   │   ├── 1min_20250627_cd78b3e5.parquet
 │   │   │   │   │   │   ├── 1min_20250627_faa77c94.parquet
+│   │   │   │   │   │   ├── 5min_20250620_31d10b16.parquet
+│   │   │   │   │   │   ├── 5min_20250620_59c556f5.parquet
+│   │   │   │   │   │   ├── 5min_20250620_966ed9ef.parquet
+│   │   │   │   │   │   ├── 5min_20250620_dccbb40a.parquet
+│   │   │   │   │   │   ├── 5min_20250620_e183e9a2.parquet
 │   │   │   │   │   │   ├── 5min_20250626_efa66e6c.parquet
 │   │   │   │   │   │   ├── 5min_20250627_0964444d.parquet
 │   │   │   │   │   ├── quotes/
+│   │   │   │   │   │   ├── tick_20250627_02c6ad0a.parquet
+│   │   │   │   │   │   ├── tick_20250627_110e955b.parquet
+│   │   │   │   │   │   ├── tick_20250627_1c28cb94.parquet
+│   │   │   │   │   │   ├── tick_20250627_23ce3212.parquet
+│   │   │   │   │   │   ├── tick_20250627_29d2da71.parquet
+│   │   │   │   │   │   ├── tick_20250627_2d0be922.parquet
+│   │   │   │   │   │   ├── tick_20250627_2f5ed184.parquet
+│   │   │   │   │   │   ├── tick_20250627_4c5af8c7.parquet
 │   │   │   │   │   │   ├── tick_20250627_689814fe.parquet
+│   │   │   │   │   │   ├── tick_20250627_7b9bc489.parquet
+│   │   │   │   │   │   ├── tick_20250627_876cd44c.parquet
+│   │   │   │   │   │   ├── tick_20250627_920819cd.parquet
+│   │   │   │   │   │   ├── tick_20250627_9b38551f.parquet
 │   │   │   │   │   │   ├── tick_20250627_b69f501f.parquet
+│   │   │   │   │   │   ├── tick_20250627_c3ff4fbf.parquet
+│   │   │   │   │   │   ├── tick_20250627_cd91090f.parquet
+│   │   │   │   │   │   ├── tick_20250627_cf160e51.parquet
+│   │   │   │   │   │   ├── tick_20250627_eff5fdf1.parquet
 │   │   │   │   │   │   ├── tick_20250627_f0e0dd3b.parquet
 │   │   │   │   │   ├── trades/
+│   │   │   │   │   │   ├── tick_20250627_0a17a303.parquet
+│   │   │   │   │   │   ├── tick_20250627_1b0b24d1.parquet
+│   │   │   │   │   │   ├── tick_20250627_27a61747.parquet
+│   │   │   │   │   │   ├── tick_20250627_298d87d8.parquet
+│   │   │   │   │   │   ├── tick_20250627_2d45dc20.parquet
 │   │   │   │   │   │   ├── tick_20250627_338f65ce.parquet
+│   │   │   │   │   │   ├── tick_20250627_62ccb5e5.parquet
+│   │   │   │   │   │   ├── tick_20250627_6a8d916c.parquet
+│   │   │   │   │   │   ├── tick_20250627_6dc73883.parquet
+│   │   │   │   │   │   ├── tick_20250627_6f35ceba.parquet
+│   │   │   │   │   │   ├── tick_20250627_7bf1c088.parquet
+│   │   │   │   │   │   ├── tick_20250627_84191cb5.parquet
+│   │   │   │   │   │   ├── tick_20250627_87c21b7e.parquet
+│   │   │   │   │   │   ├── tick_20250627_9661efd3.parquet
+│   │   │   │   │   │   ├── tick_20250627_eacb2f94.parquet
 │   │   │   │   ├── tsla/
 │   │   │   │   │   ├── bars/
 │   │   │   │   │   │   ├── 1min_20250627_311941fe.parquet
@@ -563,8 +666,11 @@ Sirius/
 │   │   │   ├── debug/
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── cli_tester.py
+│   │   │   │   ├── test_bar_limits.py
 │   │   │   │   ├── test_circuit_breaker.py
 │   │   │   │   ├── test_data_validator.py
+│   │   │   │   ├── test_data_volumes.py
+│   │   │   │   ├── test_extended_hours.py
 │   │   │   │   ├── test_integration.py
 │   │   │   │   ├── test_request_aggregator.py
 │   │   │   │   ├── test_trade_quote_aligner.py
@@ -585,7 +691,7 @@ Sirius/
 │   │   │   ├── base_plugin.py
 │   │   │   ├── bid_ask_imbalance/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── plugin.py
+│   │   │   │   ├── investigate_classification.py
 │   │   │   │   ├── test.py
 │   │   │   ├── buy_sell_ratio/
 │   │   │   │   ├── __init__.py
@@ -600,7 +706,7 @@ Sirius/
 │   │   │   ├── large_orders/
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── grid.py
-│   │   │   │   ├── plugin.py
+│   │   │   │   ├── large_orders_grid_CRCL_20250706_154823.json
 │   │   │   │   ├── test.py
 │   │   │   ├── m15_ema/
 │   │   │   │   ├── __init__.py
@@ -608,33 +714,30 @@ Sirius/
 │   │   │   ├── m15_market_structure/
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── plugin.py
+│   │   │   │   ├── test.py
 │   │   │   ├── m15_statistical_trend/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── plugin.py
 │   │   │   │   ├── test.py
 │   │   │   ├── m1_bid_ask_analysis/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── plugin.py
 │   │   │   │   ├── test.py
 │   │   │   ├── m1_ema/
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── test.py
 │   │   │   ├── m1_market_structure/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── plugin.py
+│   │   │   │   ├── test.py
 │   │   │   ├── m1_statistical_trend/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── plugin.py
 │   │   │   │   ├── test.py
 │   │   │   ├── m5_ema/
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── test.py
 │   │   │   ├── m5_market_structure/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── plugin.py
+│   │   │   │   ├── test.py
 │   │   │   ├── m5_statistical_trend/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── plugin.py
 │   │   │   │   ├── test.py
 │   │   │   ├── net_large_volume/
 │   │   │   │   ├── __init__.py
@@ -643,7 +746,6 @@ Sirius/
 │   │   │   ├── order_blocks/
 │   │   │   ├── tick_flow/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── plugin.py
 │   │   │   │   ├── test.py
 │   │   ├── temp/
 │   │   │   ├── polygon_data_report_20250701_203701.json
@@ -696,6 +798,14 @@ Sirius/
 │   │   │   ├── polygon_data_report_20250704_125402_summary.txt
 │   │   │   ├── polygon_data_report_20250704_210339.json
 │   │   │   ├── polygon_data_report_20250704_210339_summary.txt
+│   │   │   ├── polygon_data_report_20250706_150712.json
+│   │   │   ├── polygon_data_report_20250706_150712_summary.txt
+│   │   │   ├── polygon_data_report_20250706_151425.json
+│   │   │   ├── polygon_data_report_20250706_151425_summary.txt
+│   │   │   ├── polygon_data_report_20250706_152841.json
+│   │   │   ├── polygon_data_report_20250706_152841_summary.txt
+│   │   │   ├── polygon_data_report_20250706_154823.json
+│   │   │   ├── polygon_data_report_20250706_154823_summary.txt
 │   ├── cache/
 │   │   ├── cache_metadata.json
 │   │   ├── aapl/

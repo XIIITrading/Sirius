@@ -1,5 +1,5 @@
 """
-Dashboard Simulation Test for Bid/Ask Ratio Plugin
+Dashboard Simulation Test for Impact Success Plugin
 This test simulates how the dashboard uses the plugin and chart module
 """
 
@@ -17,7 +17,7 @@ project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Import like dashboard would
-from backtest.plugins.buy_sell_ratio import run_analysis
+from backtest.plugins.impact_success import run_analysis
 from backtest.data.polygon_data_manager import PolygonDataManager
 
 # For PyQt
@@ -34,21 +34,21 @@ class DashboardSimulator:
     
     def __init__(self):
         # Initialize data manager like dashboard does
-        self.data_manager = PolygonDataManager(disable_polygon_cache=True)
+        self.data_manager = PolygonDataManager()
         
     async def run_plugin(self, symbol: str, entry_time: datetime, direction: str) -> Dict[str, Any]:
         """Run plugin exactly like dashboard would"""
         print(f"\n{'='*80}")
         print(f"DASHBOARD SIMULATION TEST")
-        print(f"Running plugin: Bid/Ask Ratio Tracker")
+        print(f"Running plugin: Impact Success")
         print(f"Symbol: {symbol}")
         print(f"Entry Time: {entry_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print(f"Direction: {direction}")
         print(f"{'='*80}\n")
         
-        # Run the plugin through its standard interface
+        # Run the plugin through its standard interface, passing the data manager
         print("Calling plugin's run_analysis function...")
-        result = await run_analysis(symbol, entry_time, direction)
+        result = await run_analysis(symbol, entry_time, direction, self.data_manager)
         
         return result
     
@@ -69,11 +69,13 @@ class DashboardSimulator:
         print(f"  Direction: {signal.get('direction', 'N/A')}")
         print(f"  Strength: {signal.get('strength', 0):.1f}%")
         print(f"  Confidence: {signal.get('confidence', 0):.1f}%")
+        print(f"  Reason: {signal.get('reason', 'N/A')}")
+        print(f"  Aligned: {signal.get('aligned', False)}")
         
         # Display summary data
         display_data = result.get('display_data', {})
         print(f"\nSummary: {display_data.get('summary', 'N/A')}")
-        print(f"Description: {display_data.get('description', 'N/A')}")
+        print(f"\nDescription:\n{display_data.get('description', 'N/A')}")
         
         # Display table data
         table_data = display_data.get('table_data', [])
@@ -81,6 +83,11 @@ class DashboardSimulator:
             print("\nMetrics:")
             for metric, value in table_data:
                 print(f"  {metric}: {value}")
+        
+        # Display stats if available
+        stats = result.get('stats', {})
+        if stats:
+            print(f"\nInterpretation: {stats.get('interpretation', 'N/A')}")
         
         # Check for chart widget
         chart_config = display_data.get('chart_widget')
@@ -127,21 +134,14 @@ class DashboardSimulator:
             if hasattr(chart, 'update_from_data'):
                 chart.update_from_data(chart_data)
                 print("Called update_from_data successfully")
-            elif hasattr(chart, 'update_data'):
-                chart.update_data(chart_data)
-                print("Called update_data successfully")
             else:
-                print("ERROR: Chart has no update method!")
+                print("ERROR: Chart has no update_from_data method!")
                 return
             
             # Add entry marker if supported
-            if chart_config.get('entry_time'):
-                if hasattr(chart, 'add_entry_marker'):
-                    chart.add_entry_marker(chart_config['entry_time'])
-                    print("Added entry marker using add_entry_marker")
-                elif hasattr(chart, 'add_marker'):
-                    chart.add_marker(30, "Entry", "#ff0000")
-                    print("Added entry marker using add_marker")
+            if chart_config.get('entry_time') and hasattr(chart, 'add_marker'):
+                chart.add_marker(30, "Entry", "#ff0000")
+                print("Added entry marker")
             
             print("✅ Chart created successfully!")
             
@@ -171,10 +171,14 @@ class DashboardSimulator:
         layout = QVBoxLayout(central_widget)
         
         # Add info label
+        signal = result.get('signal', {})
         info_text = (
             f"Plugin: {result.get('plugin_name', 'Unknown')}\n"
             f"Symbol: {result.get('symbol', 'N/A')}\n"
-            f"Signal: {result.get('signal', {}).get('direction', 'N/A')}"
+            f"Direction: {result.get('direction', 'N/A')}\n"
+            f"Signal: {signal.get('direction', 'N/A')} "
+            f"(Strength: {signal.get('strength', 0):.1f}%, "
+            f"Confidence: {signal.get('confidence', 0):.1f}%)"
         )
         info_label = QLabel(info_text)
         info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -203,7 +207,7 @@ class DashboardSimulator:
 async def main():
     """Main test function"""
     parser = argparse.ArgumentParser(
-        description='Dashboard Simulation Test - Tests plugin and chart integration'
+        description='Dashboard Simulation Test - Tests Impact Success plugin and chart integration'
     )
     
     parser.add_argument('-s', '--symbol', type=str, required=True,

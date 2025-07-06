@@ -13,7 +13,7 @@ import json
 # Add parent directories to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
-from backtest.plugins.large_orders.plugin import Plugin
+from backtest.plugins.large_orders import run_analysis_with_data_manager, PLUGIN_NAME
 from backtest.data.polygon_data_manager import PolygonDataManager
 from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 from PyQt6.QtCore import Qt
@@ -31,13 +31,9 @@ async def test_with_real_data(symbol: str, timestamp_str: str, direction: str, s
     
     # Initialize data manager
     data_manager = PolygonDataManager(
-        disable_polygon_cache=True,
         file_cache_hours=24
     )
-    data_manager.set_current_plugin("Large Orders Grid Test")
-    
-    # Initialize plugin
-    plugin = Plugin()
+    data_manager.set_current_plugin(f"{PLUGIN_NAME} Test")
     
     # Progress callback for testing
     def progress_callback(pct: int, msg: str):
@@ -46,7 +42,7 @@ async def test_with_real_data(symbol: str, timestamp_str: str, direction: str, s
     try:
         # Run the plugin analysis
         print("\nRunning Large Orders Grid analysis...")
-        result = await plugin.run(
+        result = await run_analysis_with_data_manager(
             symbol=symbol,
             entry_time=test_time,
             direction=direction,
@@ -182,7 +178,8 @@ async def test_with_real_data(symbol: str, timestamp_str: str, direction: str, s
     
     # Generate data manager report
     print("\nGenerating data manager report...")
-    data_manager.generate_data_report()
+    json_file, summary_file = data_manager.generate_data_report()
+    print(f"Data reports saved to:\n  {json_file}\n  {summary_file}")
 
 
 def main():

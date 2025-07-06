@@ -1066,5 +1066,140 @@
     "end_time": "2025-06-27T13:40:00+00:00",
     "cached_at": "2025-07-06T14:43:56.165596+00:00",
     "data_points": 18233
+  },
+  "6f35ceba018b783b0c23b74dad453dbc": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:10:00+00:00",
+    "end_time": "2025-06-27T13:40:00+00:00",
+    "cached_at": "2025-07-06T15:46:45.976031+00:00",
+    "data_points": 49635
+  },
+  "876cd44c9c920292f15ce3f2087bc14d": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:10:00+00:00",
+    "end_time": "2025-06-27T13:40:00+00:00",
+    "cached_at": "2025-07-06T15:46:46.206457+00:00",
+    "data_points": 7465
+  },
+  "2d45dc2086a89f09020d6c68298a29d7": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00.036000+00:00",
+    "end_time": "2025-06-27T13:35:00.036000+00:00",
+    "cached_at": "2025-07-06T15:58:40.437880+00:00",
+    "data_points": 32336
+  },
+  "4c5af8c7a49a3496ae6b2cd73de2a47e": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00.036000+00:00",
+    "end_time": "2025-06-27T13:35:00.036000+00:00",
+    "cached_at": "2025-07-06T15:58:40.651292+00:00",
+    "data_points": 4656
+  },
+  "d5457f718e481d56a18f0ced3a7b3b3e": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:00:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-06T21:07:39.423381+00:00",
+    "data_points": 33687
+  },
+  "99000fa9838b7e39ef26a09ce9ccaaf4": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:00:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-06T21:07:39.628439+00:00",
+    "data_points": 4891
+  },
+  "1ef2db941e8f15225b8fc39c101ecc61": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:30:00.859000+00:00",
+    "end_time": "2025-06-27T13:35:00.859000+00:00",
+    "cached_at": "2025-07-06T21:12:02.480914+00:00",
+    "data_points": 26427
+  },
+  "e0c10511dd988462ef6df0c63b26998b": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00.859000+00:00",
+    "end_time": "2025-06-27T13:35:00.859000+00:00",
+    "cached_at": "2025-07-06T21:12:09.659934+00:00",
+    "data_points": 32336
+  },
+  "b06bda015b5e6443c81f76cece8aac44": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00.859000+00:00",
+    "end_time": "2025-06-27T13:35:00.859000+00:00",
+    "cached_at": "2025-07-06T21:12:09.897105+00:00",
+    "data_points": 4656
+  },
+  "7d8fae8825af56ed3846f84e396a89bc": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:00:00.561000+00:00",
+    "end_time": "2025-06-27T13:35:00.561000+00:00",
+    "cached_at": "2025-07-06T21:16:28.119615+00:00",
+    "data_points": 33687
+  },
+  "2024ca0a1208a7ab5a2431e35b98e686": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:00:00.561000+00:00",
+    "end_time": "2025-06-27T13:35:00.561000+00:00",
+    "cached_at": "2025-07-06T21:16:28.339832+00:00",
+    "data_points": 4891
+  },
+  "7b936a0b538d3d87bff25bc2c814f449": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00.974000+00:00",
+    "end_time": "2025-06-27T13:35:00.974000+00:00",
+    "cached_at": "2025-07-06T21:35:02.681951+00:00",
+    "data_points": 32336
+  },
+  "49597e611a333f7617a09c74f4aa5a8e": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00.974000+00:00",
+    "end_time": "2025-06-27T13:35:00.974000+00:00",
+    "cached_at": "2025-07-06T21:35:02.886861+00:00",
+    "data_points": 4656
+  },
+  "b0ba4cd0e442524e14ec6ef2d3bd82ad": {
+    "symbol": "TSLA",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-23T13:27:00.433000+00:00",
+    "end_time": "2025-06-23T13:47:00.433000+00:00",
+    "cached_at": "2025-07-06T21:40:05.883473+00:00",
+    "data_points": 301393
+  },
+  "e456c6876c938ca4c2309470bc8aa182": {
+    "symbol": "TSLA",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-23T13:27:00.433000+00:00",
+    "end_time": "2025-06-23T13:47:00.433000+00:00",
+    "cached_at": "2025-07-06T21:40:07.448678+00:00",
+    "data_points": 97122
   }
 }

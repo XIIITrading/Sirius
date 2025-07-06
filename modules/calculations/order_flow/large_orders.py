@@ -28,7 +28,7 @@ class OrderSide(Enum):
 class ImpactStatus(Enum):
     SUCCESS = "SUCCESS"          # Price moved as expected
     FAILURE = "FAILURE"          # Price moved against or flat
-    CONTESTED = "CONTESTED"      # Multiple large orders
+    CONTESTED = "CONTESTED"      # Multiple large orders with significant competition
     INSUFFICIENT = "INSUFFICIENT" # No trades in window
     PENDING = "PENDING"          # Still collecting data
 
@@ -63,6 +63,10 @@ class LargeOrder:
     volume_1s: int = 0
     impact_status: ImpactStatus = ImpactStatus.PENDING
     impact_magnitude: Optional[float] = None  # In spread units
+    
+    # Competition tracking
+    competing_orders: int = 0
+    competing_volume: int = 0
     
     @property
     def is_impact_complete(self) -> bool:
@@ -99,9 +103,12 @@ class LargeOrderDetector:
                  impact_window_seconds: int = 1,
                  min_trades_for_std: int = 100,
                  ratio_threshold: float = 1.5,
-                 stdev_threshold: float = 1.25):
+                 stdev_threshold: float = 1.25,
+                 min_competing_orders_for_contested: int = 5,  # Increased from 3
+                 min_competing_volume_ratio: float = 3.0,      # Increased from 2.0
+                 min_impact_for_success: float = 0.15):        # Decreased from 0.25
         """
-        Initialize detector.
+        Initialize detector with more reactive thresholds.
         
         Args:
             stats_window_minutes: Window for calculating size statistics (default 15)
@@ -109,12 +116,18 @@ class LargeOrderDetector:
             min_trades_for_std: Minimum trades before using STDEV detection (default 100)
             ratio_threshold: Size ratio threshold (default 1.5x average)
             stdev_threshold: Standard deviation threshold (default 1.25)
+            min_competing_orders_for_contested: Min competing orders to mark as contested (default 5)
+            min_competing_volume_ratio: Min ratio of competing volume to order size (default 3.0)
+            min_impact_for_success: Minimum impact in spreads for success (default 0.15)
         """
         self.stats_window_minutes = stats_window_minutes
         self.impact_window_seconds = impact_window_seconds
         self.min_trades_for_std = min_trades_for_std
         self.ratio_threshold = ratio_threshold
         self.stdev_threshold = stdev_threshold
+        self.min_competing_orders_for_contested = min_competing_orders_for_contested
+        self.min_competing_volume_ratio = min_competing_volume_ratio
+        self.min_impact_for_success = min_impact_for_success
         
         # Trade history for statistics (per symbol)
         self.trade_history: Dict[str, deque] = {}
@@ -137,7 +150,9 @@ class LargeOrderDetector:
         logger.info(f"Initialized LargeOrderDetector: "
                    f"stats_window={stats_window_minutes}min, "
                    f"impact_window={impact_window_seconds}s, "
-                   f"thresholds: ratio={ratio_threshold}x, stdev={stdev_threshold}σ")
+                   f"thresholds: ratio={ratio_threshold}x, stdev={stdev_threshold}σ, "
+                   f"min_impact={min_impact_for_success}, "
+                   f"contested_min_orders={min_competing_orders_for_contested}")
     
     def update_quote(self, symbol: str, bid: float, ask: float, timestamp: datetime):
         """Update latest quote for spread calculation"""
@@ -186,7 +201,7 @@ class LargeOrderDetector:
             # Start impact tracking
             order_key = f"{symbol}_{large_order.order_id}"
             self.active_impact_tracking[order_key] = large_order
-            logger.info(f"Large order detected: {symbol} {large_order.size} @ {large_order.price} "
+            logger.debug(f"Large order detected: {symbol} {large_order.size} @ {large_order.price} "
                        f"({large_order.detection_method}: {large_order.size_vs_avg:.1f}x avg, "
                        f"{large_order.size_vs_stdev:.1f}σ)")
         
@@ -385,25 +400,30 @@ class LargeOrderDetector:
         if large_order.volume_1s > 0:
             large_order.vwap_1s = sum(p * v for p, v in zip(prices, volumes)) / large_order.volume_1s
         
-        # Determine impact success
+        # Determine impact success with improved logic
         self._calculate_impact_success(large_order)
     
     def _calculate_impact_success(self, large_order: LargeOrder):
-        """Determine if price impact was successful"""
+        """Determine if price impact was successful with improved logic for high-volume scenarios"""
         if large_order.vwap_1s is None:
             large_order.impact_status = ImpactStatus.INSUFFICIENT
             return
         
-        # Check for multiple large orders (contested)
-        contested_orders = [o for o in self.active_impact_tracking.values()
-                           if o.symbol == large_order.symbol
-                           and o.order_id != large_order.order_id
-                           and o.timestamp >= large_order.timestamp
-                           and o.timestamp <= large_order.impact_window_end]
+        # Check for competing large orders
+        competing_orders = []
+        competing_volume = 0
         
-        if contested_orders:
-            large_order.impact_status = ImpactStatus.CONTESTED
-            return
+        for o in self.active_impact_tracking.values():
+            if (o.symbol == large_order.symbol and
+                o.order_id != large_order.order_id and
+                o.timestamp >= large_order.timestamp and
+                o.timestamp <= large_order.impact_window_end):
+                competing_orders.append(o)
+                competing_volume += o.size
+        
+        # Store competition metrics
+        large_order.competing_orders = len(competing_orders)
+        large_order.competing_volume = competing_volume
         
         # Calculate impact magnitude
         spread = large_order.spread_at_execution
@@ -413,18 +433,35 @@ class LargeOrderDetector:
         price_move = large_order.vwap_1s - large_order.price
         large_order.impact_magnitude = price_move / spread
         
+        # Determine status based on competition and impact
+        is_heavily_contested = (
+            len(competing_orders) >= self.min_competing_orders_for_contested or
+            (competing_volume > large_order.size * self.min_competing_volume_ratio)
+        )
+        
+        # For high-volume scenarios, be more lenient with success criteria
+        success_threshold = self.min_impact_for_success
+        if is_heavily_contested:
+            success_threshold *= 0.5  # Lower threshold when heavily contested
+        
         # Determine success based on side
         if large_order.side == OrderSide.BUY:
-            # Success if price moved up by at least half spread
-            if price_move > spread * 0.5 or large_order.max_price_1s > large_order.price + spread:
+            # For buy orders, expect price to move up
+            if abs(large_order.impact_magnitude) > success_threshold and price_move > 0:
                 large_order.impact_status = ImpactStatus.SUCCESS
+            elif is_heavily_contested and abs(large_order.impact_magnitude) > 0.05:
+                # Very low threshold for contested scenarios
+                large_order.impact_status = ImpactStatus.CONTESTED
             else:
                 large_order.impact_status = ImpactStatus.FAILURE
         
         elif large_order.side == OrderSide.SELL:
-            # Success if price moved down by at least half spread
-            if price_move < -spread * 0.5 or large_order.min_price_1s < large_order.price - spread:
+            # For sell orders, expect price to move down
+            if abs(large_order.impact_magnitude) > success_threshold and price_move < 0:
                 large_order.impact_status = ImpactStatus.SUCCESS
+            elif is_heavily_contested and abs(large_order.impact_magnitude) > 0.05:
+                # Very low threshold for contested scenarios
+                large_order.impact_status = ImpactStatus.CONTESTED
             else:
                 large_order.impact_status = ImpactStatus.FAILURE
         
@@ -472,7 +509,8 @@ class LargeOrderDetector:
                 'impact': status_symbols.get(order.impact_status, "?"),
                 'impact_magnitude': f"{order.impact_magnitude:.2f}" if order.impact_magnitude else "-",
                 'trades_1s': order.trade_count_1s,
-                'volume_1s': order.volume_1s
+                'volume_1s': order.volume_1s,
+                'competing': order.competing_orders
             })
         
         return grid_data
@@ -493,9 +531,12 @@ class LargeOrderDetector:
             'insufficient': sum(1 for o in completed if o.impact_status == ImpactStatus.INSUFFICIENT)
         }
         
-        # Calculate success rate
+        # Calculate success rate (excluding contested)
         total_evaluated = status_counts['success'] + status_counts['failure']
         success_rate = status_counts['success'] / total_evaluated if total_evaluated > 0 else 0
+        
+        # Calculate average competition
+        avg_competition = np.mean([o.competing_orders for o in completed]) if completed else 0
         
         return {
             'current_stats': {
@@ -514,6 +555,7 @@ class LargeOrderDetector:
                 'active_tracking': len([o for o in self.active_impact_tracking.values() 
                                       if o.symbol == symbol]),
                 'impact_success_rate': success_rate,
-                'status_breakdown': status_counts
+                'status_breakdown': status_counts,
+                'avg_competition': avg_competition
             }
         }

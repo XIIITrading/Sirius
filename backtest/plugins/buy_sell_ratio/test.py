@@ -14,7 +14,8 @@ current_file = Path(__file__).resolve()
 sirius_dir = current_file.parent.parent.parent.parent
 sys.path.insert(0, str(sirius_dir))
 
-from modules.calculations.order_flow.buy_sell_ratio import SimpleDeltaTracker, Trade
+# Import the plugin functions
+from backtest.plugins.buy_sell_ratio import run_analysis_with_progress
 from backtest.data.polygon_data_manager import PolygonDataManager
 
 # Configure logging
@@ -30,194 +31,131 @@ logger = logging.getLogger(__name__)
 
 class BidAskRatioTest:
     def __init__(self):
+        # Create data manager for testing
         self.data_manager = PolygonDataManager()
         self.chart_data = None  # Store for chart display
+        self.test_progress = 0
+        
+    def progress_callback(self, percentage: int, message: str):
+        """Progress callback for testing"""
+        if percentage > self.test_progress:
+            self.test_progress = percentage
+            print(f"[{percentage:3d}%] {message}")
         
     async def run_test(self, symbol: str, test_time: datetime, direction: str, show_chart: bool = False):
-        """Run bid/ask ratio analysis test - pure passthrough"""
+        """Run bid/ask ratio analysis test using the plugin interface"""
         
         print(f"\n{'='*80}")
-        print(f"BID/ASK RATIO TRACKER TEST")
+        print(f"BID/ASK RATIO PLUGIN TEST")
         print(f"Symbol: {symbol}")
         print(f"Entry Time: {test_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print(f"Direction: {direction}")
         print(f"{'='*80}\n")
         
-        # Initialize tracker
-        tracker = SimpleDeltaTracker(window_minutes=30)
+        # Reset progress
+        self.test_progress = 0
         
-        print(f"Configuration:")
-        print(f"- Window: 30 minutes")
-        print(f"- Output range: -1 to +1")
-        print()
-        
-        # Calculate data window (30 minutes before entry + 5 extra for processing)
-        data_end_time = test_time
-        data_start_time = test_time - timedelta(minutes=35)
-        analysis_start_time = test_time - timedelta(minutes=30)  # Actual analysis window
-        
-        print(f"Data fetch window: {data_start_time.strftime('%H:%M:%S')} to {data_end_time.strftime('%H:%M:%S')}")
-        print(f"Analysis window: {analysis_start_time.strftime('%H:%M:%S')} to {data_end_time.strftime('%H:%M:%S')} (30 minutes)")
-        
-        # Fetch data
-        print(f"\nFetching market data...")
-        trades_df = await self.data_manager.load_trades(symbol, data_start_time, data_end_time)
-        quotes_df = await self.data_manager.load_quotes(symbol, data_start_time, data_end_time)
-        
-        if trades_df.empty:
-            print("ERROR: No trade data available")
-            return
-            
-        print(f"\nData Summary:")
-        print(f"- Trades loaded: {len(trades_df):,}")
-        print(f"- Quotes loaded: {len(quotes_df):,}")
-        
-        # Process quotes
-        print(f"\nProcessing quotes...")
-        quote_count = 0
-        for timestamp, quote_data in quotes_df.iterrows():
-            tracker.update_quote(
+        try:
+            # Call the plugin with progress tracking
+            result = await run_analysis_with_progress(
+                self.data_manager,
                 symbol=symbol,
-                bid=float(quote_data['bid']),
-                ask=float(quote_data['ask']),
-                timestamp=timestamp.to_pydatetime() if hasattr(timestamp, 'to_pydatetime') else timestamp
-            )
-            quote_count += 1
-            
-            if quote_count % 5000 == 0:
-                print(f"  Processed {quote_count:,} quotes...")
-        
-        print(f"Total quotes processed: {quote_count:,}")
-        
-        # Process trades
-        print(f"\nProcessing trades...")
-        completed_bars = []
-        trades_processed = 0
-        
-        for timestamp, trade_data in trades_df.iterrows():
-            # Create trade object
-            trade = Trade(
-                symbol=symbol,
-                price=float(trade_data['price']),
-                size=int(trade_data['size']),
-                timestamp=timestamp.to_pydatetime() if hasattr(timestamp, 'to_pydatetime') else timestamp
+                entry_time=test_time,
+                direction=direction,
+                progress_callback=self.progress_callback
             )
             
-            # Process trade
-            completed_bar = tracker.process_trade(trade)
-            if completed_bar:
-                completed_bars.append(completed_bar)
-                
-            trades_processed += 1
+            # Check for errors
+            if 'error' in result:
+                print(f"\nERROR: {result['error']}")
+                return
             
-            if trades_processed % 5000 == 0:
-                print(f"  Processed {trades_processed:,} trades, {len(completed_bars)} minute bars...")
-        
-        print(f"\nTotal trades processed: {trades_processed:,}")
-        print(f"Minute bars completed: {len(completed_bars)}")
-        
-        # Get results from tracker
-        chart_data = tracker.get_chart_data(symbol)
-        
-        # Filter chart data to only include the 30-minute analysis window
-        filtered_chart_data = []
-        for point in chart_data:
-            point_time = datetime.fromisoformat(point['timestamp'])
-            if analysis_start_time <= point_time <= data_end_time:
-                filtered_chart_data.append(point)
-        
-        self.chart_data = filtered_chart_data  # Store filtered data for chart display
-        latest_ratio = tracker.get_latest_ratio(symbol)
-        summary_stats = tracker.get_summary_stats(symbol)
-        
-        # Display results
-        print(f"\n{'='*60}")
-        print("ANALYSIS RESULTS")
-        print(f"{'='*60}")
-        
-        if latest_ratio is not None:
-            print(f"\nCurrent Weighted Pressure: {latest_ratio:+.3f}")
-            print(f"Average Pressure: {summary_stats['avg_ratio']:+.3f}")
-            print(f"Max Pressure: {summary_stats['max_ratio']:+.3f}")
-            print(f"Min Pressure: {summary_stats['min_ratio']:+.3f}")
-            print(f"Total Volume: {summary_stats['total_volume']:,.0f}")
-            print(f"Minutes Tracked: {summary_stats['minutes_tracked']}")
+            # Display results
+            print(f"\n{'='*60}")
+            print("ANALYSIS RESULTS")
+            print(f"{'='*60}")
             
-            # Classification stats if available
-            if 'classification_rate' in summary_stats:
-                print(f"Classification Rate: {summary_stats['classification_rate']:.1%}")
+            # Signal assessment
+            signal = result['signal']
+            print(f"\nSignal Assessment:")
+            print(f"  Direction: {signal['direction']}")
+            print(f"  Strength: {signal['strength']:.1f}%")
+            print(f"  Confidence: {signal['confidence']:.1f}%")
             
-            # Sync stats if available
-            if 'sync_stats' in summary_stats:
-                sync = summary_stats['sync_stats']
-                print(f"\nSync Statistics:")
-                print(f"  Total Trades: {sync.get('total_trades', 0):,}")
-                print(f"  Synced Trades: {sync.get('synced_trades', 0):,}")
-                print(f"  Failed Syncs: {sync.get('failed_syncs', 0):,}")
-                if sync.get('total_trades', 0) > 0:
-                    sync_rate = (sync.get('synced_trades', 0) / sync.get('total_trades', 1)) * 100
-                    print(f"  Sync Rate: {sync_rate:.1f}%")
+            # Details
+            details = result['details']
+            print(f"\nMetrics:")
+            print(f"  Current Ratio: {details['current_ratio']:+.3f}")
+            print(f"  Average Ratio: {details['average_ratio']:+.3f}")
+            print(f"  Max Ratio: {details['max_ratio']:+.3f}")
+            print(f"  Min Ratio: {details['min_ratio']:+.3f}")
+            print(f"  Total Volume: {details['total_volume']:,.0f}")
+            print(f"  Minutes Tracked: {details['minutes_tracked']}")
             
-            # Direction alignment
+            # Alignment
             print(f"\nTrade Direction: {direction}")
-            if direction == "LONG" and latest_ratio > 0:
-                print("✅ ALIGNED - Order flow supports LONG trade")
-            elif direction == "SHORT" and latest_ratio < 0:
-                print("✅ ALIGNED - Order flow supports SHORT trade")
+            if details['aligned']:
+                print("✅ ALIGNED - Order flow supports trade direction")
             else:
                 print("⚠️  WARNING - Order flow contradicts intended direction")
-        
-        # Show recent minute bars
-        if completed_bars:
-            print(f"\nRecent Minute Bars (last 10):")
-            print(f"{'Time':<10} {'Pressure':>10} {'Pos Vol':>12} {'Neg Vol':>12} {'Total Vol':>12} {'Classified':>12}")
-            print("-" * 80)
             
-            # Filter to show only bars within the analysis window
-            recent_bars = [bar for bar in completed_bars if bar.timestamp >= analysis_start_time][-10:]
+            # Display data
+            display = result['display_data']
+            print(f"\nSummary: {display['summary']}")
+            print(f"Description: {display['description']}")
             
-            for bar in recent_bars:
-                print(f"{bar.timestamp.strftime('%H:%M:%S'):<10} "
-                      f"{bar.weighted_pressure:>10.3f} "
-                      f"{bar.positive_volume:>12,.0f} "
-                      f"{bar.negative_volume:>12,.0f} "
-                      f"{bar.total_volume:>12,.0f} "
-                      f"{bar.classified_trades:>12}")
-        
-        # Show chart data visualization
-        if self.chart_data:
-            print(f"\nChart Data Points: {len(self.chart_data)} (30-minute window)")
+            # Recent bars table
+            if 'recent_bars' in display:
+                recent_bars = display['recent_bars']
+                print(f"\nRecent Minute Bars:")
+                # Print headers
+                headers = recent_bars['headers']
+                print(f"{headers[0]:<10} {headers[1]:>10} {headers[2]:>12} {headers[3]:>12} {headers[4]:>12}")
+                print("-" * 60)
+                # Print rows
+                for row in recent_bars['rows']:
+                    print(f"{row[0]:<10} {row[1]:>10} {row[2]:>12} {row[3]:>12} {row[4]:>12}")
             
-            if len(self.chart_data) >= 5:
-                print(f"\nPressure Trend (5-minute samples):")
+            # Store chart data for visualization
+            if 'chart_widget' in display:
+                self.chart_data = display['chart_widget']['data']
                 
-                # Sample every 5 minutes
-                sample_indices = list(range(0, len(self.chart_data), 5))
-                if len(self.chart_data) - 1 not in sample_indices:
-                    sample_indices.append(len(self.chart_data) - 1)  # Always include last point
+                # Show pressure trend
+                if self.chart_data and len(self.chart_data) >= 5:
+                    print(f"\nPressure Trend (5-minute samples):")
+                    
+                    # Sample every 5 minutes
+                    sample_indices = list(range(0, len(self.chart_data), 5))
+                    if len(self.chart_data) - 1 not in sample_indices:
+                        sample_indices.append(len(self.chart_data) - 1)
+                    
+                    for idx in sample_indices:
+                        point = self.chart_data[idx]
+                        time_str = datetime.fromisoformat(point['timestamp']).strftime('%H:%M')
+                        pressure = point['buy_sell_ratio']
+                        bar = '█' * int(abs(pressure) * 20)
+                        
+                        # Calculate minutes from entry
+                        point_time = datetime.fromisoformat(point['timestamp'])
+                        mins_from_entry = int((point_time - test_time).total_seconds() / 60)
+                        
+                        if pressure >= 0:
+                            print(f"{time_str} ({mins_from_entry:3d}m) | {' '*20}|{bar:<20} {pressure:+.3f}")
+                        else:
+                            print(f"{time_str} ({mins_from_entry:3d}m) | {bar:>20}|{' '*20} {pressure:+.3f}")
+            
+            print(f"\n{'='*80}\n")
+            
+            # Show chart if requested
+            if show_chart and self.chart_data:
+                self.display_chart(symbol, test_time, direction, display['chart_widget']['entry_time'])
                 
-                for idx in sample_indices:
-                    point = self.chart_data[idx]
-                    time_str = datetime.fromisoformat(point['timestamp']).strftime('%H:%M')
-                    pressure = point['buy_sell_ratio']
-                    bar = '█' * int(abs(pressure) * 20)
-                    
-                    # Calculate minutes from entry
-                    point_time = datetime.fromisoformat(point['timestamp'])
-                    mins_from_entry = int((point_time - test_time).total_seconds() / 60)
-                    
-                    if pressure >= 0:
-                        print(f"{time_str} ({mins_from_entry:3d}m) | {' '*20}|{bar:<20} {pressure:+.3f}")
-                    else:
-                        print(f"{time_str} ({mins_from_entry:3d}m) | {bar:>20}|{' '*20} {pressure:+.3f}")
-        
-        print(f"\n{'='*80}\n")
-        
-        # Show chart if requested
-        if show_chart and self.chart_data:
-            self.display_chart(symbol, test_time, direction)
+        except Exception as e:
+            print(f"\nERROR during test: {e}")
+            import traceback
+            traceback.print_exc()
     
-    def display_chart(self, symbol: str, test_time: datetime, direction: str):
+    def display_chart(self, symbol: str, test_time: datetime, direction: str, entry_time_iso: str):
         """Display the chart with the analyzed data"""
         from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel
         from PyQt6.QtCore import Qt
@@ -253,18 +191,11 @@ class BidAskRatioTest:
         chart = BidAskRatioChart()
         layout.addWidget(chart)
         
-        # Update chart with data
-        chart.update_data(self.chart_data)
+        # Update chart with data using the standard interface
+        chart.update_from_data(self.chart_data)
         
-        # Add entry marker at the 30-minute mark (end of data)
-        if len(self.chart_data) > 0:
-            # Calculate actual minutes span
-            first_time = datetime.fromisoformat(self.chart_data[0]['timestamp'])
-            last_time = datetime.fromisoformat(self.chart_data[-1]['timestamp'])
-            total_minutes = (last_time - first_time).total_seconds() / 60
-            
-            # Add marker at the end
-            chart.add_marker(total_minutes, "Entry", "#ff0000")
+        # Add entry marker
+        chart.add_entry_marker(entry_time_iso)
         
         # Apply dark theme to window
         window.setStyleSheet("""
@@ -287,7 +218,7 @@ class BidAskRatioTest:
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description='Bid/Ask Ratio Analysis Test - Analyzes order flow pressure for the 30 minutes before entry'
+        description='Bid/Ask Ratio Plugin Test - Tests the plugin interface for order flow analysis'
     )
     
     parser.add_argument(

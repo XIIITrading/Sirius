@@ -33,6 +33,8 @@ class BidAskVolumeTest:
     def __init__(self):
         self.analyzer = M1VolumeAnalyzer(lookback_bars=14)
         self.data_manager = PolygonDataManager()
+        # Set plugin name for tracking
+        self.data_manager.set_current_plugin("M1_BidAsk_Test")
         
     async def run_test(self, symbol: str, test_time: datetime, direction: str):
         """Run bid/ask volume analysis test"""
@@ -48,9 +50,11 @@ class BidAskVolumeTest:
         start_time = test_time - timedelta(minutes=20)
         
         print(f"Fetching trades from {start_time} to {test_time}...")
+        # Remove use_cache parameter
         trades_df = await self.data_manager.load_trades(symbol, start_time, test_time)
         
         print(f"Fetching quotes from {start_time} to {test_time}...")
+        # Remove use_cache parameter
         quotes_df = await self.data_manager.load_quotes(symbol, start_time, test_time)
         
         if trades_df.empty:

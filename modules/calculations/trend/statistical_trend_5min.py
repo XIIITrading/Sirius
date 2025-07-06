@@ -25,7 +25,7 @@ class PositionSignal5Min:
     volume_confirmation: bool  # Volume supports the trend
 
 
-class StatisticalTrend5MinSimplified:
+class StatisticalTrend5Min:
     """
     Simplified 5-minute trend analyzer using only essential metrics
     

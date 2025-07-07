@@ -20,7 +20,7 @@ sys.path.insert(0, project_root)
 
 # Now we can import from the correct paths
 from backtest.data import PolygonDataManager
-from modules.calculations.trend.statistical_trend_1min import (
+from backtest.calculations.trend.statistical_trend_1min import (
     StatisticalTrend1MinSimplified
 )
 

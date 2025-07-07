@@ -12,13 +12,15 @@ import logging
 import traceback
 from typing import Dict, List
 
-# Set up paths
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sp500_filter_dir = current_dir
-filters_dir = os.path.dirname(sp500_filter_dir)
-modules_dir = os.path.dirname(filters_dir)
-sirius_root = os.path.dirname(modules_dir)
-sys.path.insert(0, sirius_root)
+# External Imports
+from polygon import DataFetcher
+from polygon.config import PolygonConfig
+
+# Local Imports
+from market_review.pre_market.sp500_filter.sp500_tickers import get_sp500_tickers, check_update_status
+from market_review.pre_market.sp500_filter.market_filter import MarketFilter, FilterCriteria
+from market_review.pre_market.sp500_filter.sp500_bridge import SP500Bridge
+
 
 # Configure logging
 logging.basicConfig(

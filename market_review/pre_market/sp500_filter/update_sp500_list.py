@@ -91,8 +91,8 @@ def generate_python_list(tickers):
 
 def compare_with_current(new_tickers):
     """Compare new ticker list with current list to show changes."""
-    try:
-        from sp500_tickers import SP500_TICKERS as current_tickers
+        try:
+            from market_review.pre_market.sp500_filter.sp500_tickers import SP500_TICKERS as current_tickers
         
         current_set = set(current_tickers)
         new_set = set(new_tickers)

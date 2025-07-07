@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
-from modules.calculations.trend.statistical_trend_5min import StatisticalTrend5Min, PositionSignal5Min
+from backtest.calculations.trend.statistical_trend_5min import StatisticalTrend5Min, PositionSignal5Min
 
 # Configure logging
 logger = logging.getLogger(__name__)

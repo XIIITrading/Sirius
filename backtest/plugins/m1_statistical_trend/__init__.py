@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Callable
 
 from backtest.data.polygon_data_manager import PolygonDataManager
-from modules.calculations.trend.statistical_trend_1min import (
+from backtest.calculations.trend.statistical_trend_1min import (
     StatisticalTrend1MinSimplified,
     StatisticalSignal
 )

@@ -18,7 +18,7 @@ sys.path.insert(0, str(sirius_dir))
 # Import the plugin and calculation module
 import backtest.plugins.m5_statistical_trend as m5_plugin
 from backtest.data.polygon_data_manager import PolygonDataManager
-from modules.calculations.trend.statistical_trend_5min import StatisticalTrend5Min
+from backtest.calculations.trend.statistical_trend_5min import StatisticalTrend5Min
 
 # Configure logging
 logging.basicConfig(

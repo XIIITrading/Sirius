@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, Callable
 import pandas as pd
 
 from backtest.data.polygon_data_manager import PolygonDataManager
-from modules.calculations.market_structure.m15_market_structure import (
+from backtest.calculations.market_structure.m15_market_structure import (
     M15MarketStructureAnalyzer,
     MarketStructureSignal
 )

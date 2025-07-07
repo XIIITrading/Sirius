@@ -20,7 +20,7 @@ sys.path.insert(0, project_root)
 
 # Now we can import from the correct paths
 from backtest.data import PolygonDataManager
-from modules.calculations.market_structure.m5_market_structure import M5MarketStructureAnalyzer
+from backtest.calculations.market_structure.m5_market_structure import M5MarketStructureAnalyzer
 
 
 def parse_datetime(dt_str: str) -> datetime:

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Callable
 
 from backtest.data.polygon_data_manager import PolygonDataManager
-from modules.calculations.market_structure.m1_market_structure import (
+from backtest.calculations.market_structure.m1_market_structure import (
     MarketStructureAnalyzer,
     MarketStructureSignal
 )

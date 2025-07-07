@@ -18,24 +18,9 @@ import logging
 import sys
 import os
 
-# Get the Vega root directory
-current_dir = os.path.dirname(os.path.abspath(__file__))
-modules_dir = os.path.dirname(current_dir)
-vega_root = os.path.dirname(modules_dir)
-
-# Remove any existing 'polygon' from sys.modules to avoid conflicts
-if 'polygon' in sys.modules:
-    del sys.modules['polygon']
-
-# Add vega_root to the FRONT of sys.path
-sys.path.insert(0, vega_root)
-
-# Now import YOUR polygon, not the pip-installed one
+# Polygon Connection
 from polygon import DataFetcher, PolygonWebSocketClient
 from polygon.config import PolygonConfig
-
-# Remove vega_root from path after import to keep things clean
-sys.path.remove(vega_root)
 
 # Import HVN components
 from modules.calculations.volume.hvn_engine import HVNEngine, HVNResult

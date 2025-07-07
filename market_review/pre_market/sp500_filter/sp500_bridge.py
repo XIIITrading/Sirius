@@ -15,30 +15,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import sys
 
-# Add parent directories to path for imports
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sp500_filter_dir = current_dir
-filters_dir = os.path.dirname(sp500_filter_dir)
-modules_dir = os.path.dirname(filters_dir)
-sirius_root = os.path.dirname(modules_dir)
-
-# Add to path for polygon imports
-sys.path.insert(0, sirius_root)
-
-# Import Polygon components
+# Import External Components
 from polygon import DataFetcher
 from polygon.config import PolygonConfig
 
-# Import local components - handle both package and direct imports
-try:
-    # Try relative imports first (when used as package)
-    from .market_filter import MarketFilter, FilterCriteria, InterestScoreWeights
-    from .sp500_tickers import get_sp500_tickers, check_update_status
-except ImportError:
-    # Fall back to absolute imports (when running directly)
-    sys.path.insert(0, current_dir)
-    from market_filter import MarketFilter, FilterCriteria, InterestScoreWeights
-    from sp500_tickers import get_sp500_tickers, check_update_status
+# Import Local Components
+from market_review.pre_market.sp500_filter.market_filter import MarketFilter, FilterCriteria, InterestScoreWeights
+from market_review.pre_market.sp500_filter.sp500_tickers import get_sp500_tickers, check_update_status
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

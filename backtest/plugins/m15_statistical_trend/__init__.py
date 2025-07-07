@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from backtest.data.polygon_data_manager import PolygonDataManager
-from modules.calculations.trend.statistical_trend_15min import StatisticalTrend15MinSimplified
+from backtest.calculations.trend.statistical_trend_15min import StatisticalTrend15MinSimplified
 
 logger = logging.getLogger(__name__)
 

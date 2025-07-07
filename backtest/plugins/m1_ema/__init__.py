@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Callable
 
 from backtest.data.polygon_data_manager import PolygonDataManager
-from modules.calculations.indicators.m1_ema import M1EMACalculator, M1EMAResult
+from backtest.calculations.indicators.m1_ema import M1EMACalculator, M1EMAResult
 
 logger = logging.getLogger(__name__)
 

@@ -17,7 +17,7 @@ sys.path.insert(0, str(project_root))
 
 from backtest.data.polygon_data_manager import PolygonDataManager
 from backtest.data.protected_data_manager import ProtectedDataManager
-from modules.calculations.indicators.m15_ema import M15EMACalculator, validate_15min_data
+from backtest.calculations.indicators.m15_ema import M15EMACalculator, validate_15min_data
 
 # Configure logging
 logging.basicConfig(

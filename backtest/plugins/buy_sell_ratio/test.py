@@ -1,5 +1,5 @@
 """
-Test for Bid/Ask Ratio Plugin with Chart Visualization
+Debug Test for Bid/Ask Ratio Plugin to identify data flow issues
 """
 
 import asyncio
@@ -8,19 +8,21 @@ from datetime import datetime, timedelta, timezone
 import logging
 import sys
 from pathlib import Path
+import pandas as pd
 
 # Add parent paths
 current_file = Path(__file__).resolve()
 sirius_dir = current_file.parent.parent.parent.parent
 sys.path.insert(0, str(sirius_dir))
 
-# Import the plugin functions
-from backtest.plugins.buy_sell_ratio import run_analysis_with_progress
+# Import required components
 from backtest.data.polygon_data_manager import PolygonDataManager
+from backtest.data.trade_quote_aligner import TradeQuoteAligner
+from modules.calculations.order_flow.buy_sell_ratio import BuySellRatioCalculator
 
-# Configure logging
+# Configure detailed logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout)
@@ -29,196 +31,182 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class BidAskRatioTest:
+class BidAskRatioDebugger:
     def __init__(self):
-        # Create data manager for testing
         self.data_manager = PolygonDataManager()
-        self.chart_data = None  # Store for chart display
-        self.test_progress = 0
         
-    def progress_callback(self, percentage: int, message: str):
-        """Progress callback for testing"""
-        if percentage > self.test_progress:
-            self.test_progress = percentage
-            print(f"[{percentage:3d}%] {message}")
-        
-    async def run_test(self, symbol: str, test_time: datetime, direction: str, show_chart: bool = False):
-        """Run bid/ask ratio analysis test using the plugin interface"""
+    async def debug_data_flow(self, symbol: str, test_time: datetime, direction: str):
+        """Debug the entire data flow step by step"""
         
         print(f"\n{'='*80}")
-        print(f"BID/ASK RATIO PLUGIN TEST")
+        print(f"BID/ASK RATIO DEBUG ANALYSIS")
         print(f"Symbol: {symbol}")
         print(f"Entry Time: {test_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print(f"Direction: {direction}")
         print(f"{'='*80}\n")
         
-        # Reset progress
-        self.test_progress = 0
+        # Set plugin
+        self.data_manager.set_current_plugin("DEBUG_BidAskRatio")
+        
+        # Time window
+        start_time = test_time - timedelta(minutes=35)  # Extra 5 minutes
+        end_time = test_time
+        
+        print(f"Time Window: {start_time.strftime('%H:%M:%S')} to {end_time.strftime('%H:%M:%S')} UTC")
         
         try:
-            # Call the plugin with progress tracking
-            result = await run_analysis_with_progress(
-                self.data_manager,
-                symbol=symbol,
-                entry_time=test_time,
-                direction=direction,
-                progress_callback=self.progress_callback
-            )
-            
-            # Check for errors
-            if 'error' in result:
-                print(f"\nERROR: {result['error']}")
-                return
-            
-            # Display results
+            # Step 1: Fetch raw trades
             print(f"\n{'='*60}")
-            print("ANALYSIS RESULTS")
+            print("STEP 1: Fetching Trades")
             print(f"{'='*60}")
             
-            # Signal assessment
-            signal = result['signal']
-            print(f"\nSignal Assessment:")
-            print(f"  Direction: {signal['direction']}")
-            print(f"  Strength: {signal['strength']:.1f}%")
-            print(f"  Confidence: {signal['confidence']:.1f}%")
+            trades_df = await self.data_manager.load_trades(
+                symbol=symbol,
+                start_time=start_time,
+                end_time=end_time
+            )
             
-            # Details
-            details = result['details']
-            print(f"\nMetrics:")
-            print(f"  Current Ratio: {details['current_ratio']:+.3f}")
-            print(f"  Average Ratio: {details['average_ratio']:+.3f}")
-            print(f"  Max Ratio: {details['max_ratio']:+.3f}")
-            print(f"  Min Ratio: {details['min_ratio']:+.3f}")
-            print(f"  Total Volume: {details['total_volume']:,.0f}")
-            print(f"  Minutes Tracked: {details['minutes_tracked']}")
+            print(f"Trades fetched: {len(trades_df)}")
+            if not trades_df.empty:
+                print(f"Trade columns: {list(trades_df.columns)}")
+                print(f"Trade index type: {type(trades_df.index)}")
+                print(f"First trade: {trades_df.index[0]}")
+                print(f"Last trade: {trades_df.index[-1]}")
+                print(f"\nFirst 5 trades:")
+                print(trades_df.head())
             
-            # Alignment
-            print(f"\nTrade Direction: {direction}")
-            if details['aligned']:
-                print("✅ ALIGNED - Order flow supports trade direction")
+            # Step 2: Fetch raw quotes
+            print(f"\n{'='*60}")
+            print("STEP 2: Fetching Quotes")
+            print(f"{'='*60}")
+            
+            quotes_df = await self.data_manager.load_quotes(
+                symbol=symbol,
+                start_time=start_time,
+                end_time=end_time
+            )
+            
+            print(f"Quotes fetched: {len(quotes_df)}")
+            if not quotes_df.empty:
+                print(f"Quote columns: {list(quotes_df.columns)}")
+                print(f"Quote index type: {type(quotes_df.index)}")
+                print(f"First quote: {quotes_df.index[0]}")
+                print(f"Last quote: {quotes_df.index[-1]}")
+                print(f"\nFirst 5 quotes:")
+                print(quotes_df.head())
+            
+            if trades_df.empty or quotes_df.empty:
+                print("\nERROR: No trade or quote data available")
+                return
+            
+            # Step 3: Align trades with quotes
+            print(f"\n{'='*60}")
+            print("STEP 3: Aligning Trades with Quotes")
+            print(f"{'='*60}")
+            
+            aligner = TradeQuoteAligner(
+                max_quote_age_ms=500,
+                min_confidence_threshold=0.5
+            )
+            
+            aligned_df, alignment_report = aligner.align_trades_quotes(trades_df, quotes_df)
+            
+            print(f"Aligned trades: {len(aligned_df)}")
+            print(f"Alignment success rate: {alignment_report.aligned_trades}/{alignment_report.total_trades}")
+            
+            if not aligned_df.empty:
+                print(f"Aligned columns: {list(aligned_df.columns)}")
+                print(f"Aligned index type: {type(aligned_df.index)}")
+                
+                # Check for required columns
+                required_cols = ['trade_price', 'trade_size', 'trade_side', 'confidence']
+                missing_cols = [col for col in required_cols if col not in aligned_df.columns]
+                if missing_cols:
+                    print(f"WARNING: Missing columns: {missing_cols}")
+                
+                # Check trade side distribution
+                if 'trade_side' in aligned_df.columns:
+                    print(f"\nTrade side distribution:")
+                    print(aligned_df['trade_side'].value_counts())
+                
+                print(f"\nFirst 5 aligned trades:")
+                print(aligned_df.head())
+            
+            # Step 4: Process into minute bars
+            print(f"\n{'='*60}")
+            print("STEP 4: Processing into Minute Bars")
+            print(f"{'='*60}")
+            
+            calculator = BuySellRatioCalculator(window_minutes=30, min_confidence=0.5)
+            
+            print(f"Processing {len(aligned_df)} aligned trades...")
+            minute_bars = calculator.process_aligned_trades(aligned_df, symbol)
+            
+            print(f"Minute bars created: {len(minute_bars)}")
+            
+            if minute_bars:
+                print(f"\nAll minute bars:")
+                for i, bar in enumerate(minute_bars):
+                    print(f"{i+1}. {bar.timestamp.strftime('%H:%M:%S')} - "
+                          f"Ratio: {bar.weighted_pressure:+.3f}, "
+                          f"Volume: {bar.total_volume:,.0f}, "
+                          f"Trades: {bar.trade_count}")
+                
+                # Step 5: Filter to 30-minute window
+                print(f"\n{'='*60}")
+                print("STEP 5: Filtering to 30-minute Window")
+                print(f"{'='*60}")
+                
+                filtered_bars = [
+                    bar for bar in minute_bars 
+                    if bar.timestamp <= test_time and bar.timestamp >= (test_time - timedelta(minutes=30))
+                ]
+                
+                print(f"Filtered bars: {len(filtered_bars)}")
+                
+                if filtered_bars:
+                    print(f"\nFiltered minute bars:")
+                    for i, bar in enumerate(filtered_bars):
+                        mins_from_entry = int((bar.timestamp - test_time).total_seconds() / 60)
+                        print(f"{i+1}. {bar.timestamp.strftime('%H:%M:%S')} ({mins_from_entry}m) - "
+                              f"Ratio: {bar.weighted_pressure:+.3f}, "
+                              f"Volume: {bar.total_volume:,.0f}")
+                    
+                    latest_ratio = filtered_bars[-1].weighted_pressure
+                    print(f"\nLatest ratio: {latest_ratio:+.3f}")
+                else:
+                    print("\nERROR: No bars in the 30-minute window!")
+                    print(f"Entry time: {test_time}")
+                    print(f"Expected window: {test_time - timedelta(minutes=30)} to {test_time}")
+                    if minute_bars:
+                        print(f"Available bar times: {minute_bars[0].timestamp} to {minute_bars[-1].timestamp}")
             else:
-                print("⚠️  WARNING - Order flow contradicts intended direction")
-            
-            # Display data
-            display = result['display_data']
-            print(f"\nSummary: {display['summary']}")
-            print(f"Description: {display['description']}")
-            
-            # Recent bars table
-            if 'recent_bars' in display:
-                recent_bars = display['recent_bars']
-                print(f"\nRecent Minute Bars:")
-                # Print headers
-                headers = recent_bars['headers']
-                print(f"{headers[0]:<10} {headers[1]:>10} {headers[2]:>12} {headers[3]:>12} {headers[4]:>12}")
-                print("-" * 60)
-                # Print rows
-                for row in recent_bars['rows']:
-                    print(f"{row[0]:<10} {row[1]:>10} {row[2]:>12} {row[3]:>12} {row[4]:>12}")
-            
-            # Store chart data for visualization
-            if 'chart_widget' in display:
-                self.chart_data = display['chart_widget']['data']
+                print("\nERROR: No minute bars created!")
                 
-                # Show pressure trend
-                if self.chart_data and len(self.chart_data) >= 5:
-                    print(f"\nPressure Trend (5-minute samples):")
+                # Debug why no minute bars
+                if aligned_df.empty:
+                    print("Reason: No aligned trades")
+                else:
+                    print("Checking confidence filtering...")
+                    high_conf = aligned_df[aligned_df['confidence'] >= 0.5]
+                    print(f"Trades with confidence >= 0.5: {len(high_conf)}")
                     
-                    # Sample every 5 minutes
-                    sample_indices = list(range(0, len(self.chart_data), 5))
-                    if len(self.chart_data) - 1 not in sample_indices:
-                        sample_indices.append(len(self.chart_data) - 1)
-                    
-                    for idx in sample_indices:
-                        point = self.chart_data[idx]
-                        time_str = datetime.fromisoformat(point['timestamp']).strftime('%H:%M')
-                        pressure = point['buy_sell_ratio']
-                        bar = '█' * int(abs(pressure) * 20)
-                        
-                        # Calculate minutes from entry
-                        point_time = datetime.fromisoformat(point['timestamp'])
-                        mins_from_entry = int((point_time - test_time).total_seconds() / 60)
-                        
-                        if pressure >= 0:
-                            print(f"{time_str} ({mins_from_entry:3d}m) | {' '*20}|{bar:<20} {pressure:+.3f}")
-                        else:
-                            print(f"{time_str} ({mins_from_entry:3d}m) | {bar:>20}|{' '*20} {pressure:+.3f}")
+                    if not high_conf.empty:
+                        print("Checking minute grouping...")
+                        print(f"Index type: {type(high_conf.index)}")
+                        print(f"First index: {high_conf.index[0]}")
+                        print(f"Last index: {high_conf.index[-1]}")
             
-            print(f"\n{'='*80}\n")
-            
-            # Show chart if requested
-            if show_chart and self.chart_data:
-                self.display_chart(symbol, test_time, direction, display['chart_widget']['entry_time'])
-                
         except Exception as e:
-            print(f"\nERROR during test: {e}")
+            print(f"\nERROR: {e}")
             import traceback
             traceback.print_exc()
-    
-    def display_chart(self, symbol: str, test_time: datetime, direction: str, entry_time_iso: str):
-        """Display the chart with the analyzed data"""
-        from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel
-        from PyQt6.QtCore import Qt
-        
-        # Import the chart
-        sys.path.append(str(Path(__file__).parent))
-        from chart import BidAskRatioChart
-        
-        app = QApplication.instance()
-        if app is None:
-            app = QApplication(sys.argv)
-        
-        # Create main window
-        window = QMainWindow()
-        window.setWindowTitle(f"Bid/Ask Ratio Chart - {symbol} - Entry: {test_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        window.setGeometry(100, 100, 1200, 800)
-        
-        # Create central widget with layout
-        central_widget = QWidget()
-        window.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
-        
-        # Add title label with time window info
-        start_time = test_time - timedelta(minutes=30)
-        title_text = (f"{symbol} - {direction} Trade Analysis\n"
-                     f"Window: {start_time.strftime('%H:%M:%S')} to {test_time.strftime('%H:%M:%S')} UTC (30 minutes)")
-        title = QLabel(title_text)
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("font-size: 14px; font-weight: bold; padding: 10px;")
-        layout.addWidget(title)
-        
-        # Create and add chart
-        chart = BidAskRatioChart()
-        layout.addWidget(chart)
-        
-        # Update chart with data using the standard interface
-        chart.update_from_data(self.chart_data)
-        
-        # Add entry marker
-        chart.add_entry_marker(entry_time_iso)
-        
-        # Apply dark theme to window
-        window.setStyleSheet("""
-            QMainWindow {
-                background-color: #1e1e1e;
-                color: #ffffff;
-            }
-            QLabel {
-                background-color: #1e1e1e;
-                color: #ffffff;
-            }
-        """)
-        
-        window.show()
-        
-        # Keep the window open
-        app.exec()
 
 
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description='Bid/Ask Ratio Plugin Test - Tests the plugin interface for order flow analysis'
+        description='Debug Bid/Ask Ratio data flow'
     )
     
     parser.add_argument(
@@ -232,7 +220,7 @@ def parse_arguments():
         '-t', '--time',
         type=str,
         default=None,
-        help='Entry time in format "YYYY-MM-DD HH:MM:SS" (analyzes 30 minutes before this time)'
+        help='Entry time in format "YYYY-MM-DD HH:MM:SS"'
     )
     
     parser.add_argument(
@@ -243,17 +231,11 @@ def parse_arguments():
         help='Trade direction (default: LONG)'
     )
     
-    parser.add_argument(
-        '-c', '--chart',
-        action='store_true',
-        help='Display interactive chart after analysis'
-    )
-    
     return parser.parse_args()
 
 
 async def main():
-    """Run the test with CLI arguments"""
+    """Run the debug test"""
     args = parse_arguments()
     
     # Parse datetime
@@ -266,26 +248,16 @@ async def main():
             print("Please use format: YYYY-MM-DD HH:MM:SS")
             return
     else:
-        # Default to current time (will analyze 30 minutes before now)
         test_time = datetime.now(timezone.utc)
-        print(f"No time specified, using current time: {test_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
-        print(f"Will analyze 30 minutes before this time")
+        print(f"Using current time: {test_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
     
-    # Create tester and run
-    tester = BidAskRatioTest()
-    
-    try:
-        await tester.run_test(
-            symbol=args.symbol.upper(),
-            test_time=test_time,
-            direction=args.direction,
-            show_chart=args.chart
-        )
-        
-    except Exception as e:
-        print(f"\nERROR: {e}")
-        import traceback
-        traceback.print_exc()
+    # Create debugger and run
+    debugger = BidAskRatioDebugger()
+    await debugger.debug_data_flow(
+        symbol=args.symbol.upper(),
+        test_time=test_time,
+        direction=args.direction
+    )
 
 
 if __name__ == "__main__":

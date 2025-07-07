@@ -18,7 +18,7 @@ sys.path.insert(0, str(sirius_dir))
 # Import required components
 from backtest.data.polygon_data_manager import PolygonDataManager
 from backtest.data.trade_quote_aligner import TradeQuoteAligner
-from modules.calculations.order_flow.buy_sell_ratio import BuySellRatioCalculator
+from backtest.calculations.order_flow.buy_sell_ratio import BuySellRatioCalculator
 
 # Configure detailed logging
 logging.basicConfig(

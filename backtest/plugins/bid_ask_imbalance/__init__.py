@@ -14,7 +14,7 @@ import numpy as np
 
 # Import the modular data manager
 from backtest.data.polygon_data_manager import PolygonDataManager
-from modules.calculations.order_flow.bid_ask_imbal import (
+from backtest.calculations.order_flow.bid_ask_imbal import (
     BidAskImbalance, Trade, Quote, BidAskSignal
 )
 

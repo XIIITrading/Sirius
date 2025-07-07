@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Callable, List
 import pandas as pd
 
-from modules.calculations.order_flow.buy_sell_ratio import BuySellRatioCalculator, MinuteBar
+from backtest.calculations.order_flow.buy_sell_ratio import BuySellRatioCalculator, MinuteBar
 from backtest.data.trade_quote_aligner import TradeQuoteAligner
 
 # Configure logging

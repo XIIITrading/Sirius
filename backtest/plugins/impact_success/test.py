@@ -17,7 +17,7 @@ project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Import like dashboard would
-from backtest.plugins.impact_success import run_analysis
+from backtest.plugins.impact_success import run_analysis, set_data_manager
 from backtest.data.polygon_data_manager import PolygonDataManager
 
 # For PyQt
@@ -36,6 +36,9 @@ class DashboardSimulator:
         # Initialize data manager like dashboard does
         self.data_manager = PolygonDataManager()
         
+        # Set the data manager for the plugin (like dashboard would do)
+        set_data_manager(self.data_manager)
+        
     async def run_plugin(self, symbol: str, entry_time: datetime, direction: str) -> Dict[str, Any]:
         """Run plugin exactly like dashboard would"""
         print(f"\n{'='*80}")
@@ -46,9 +49,10 @@ class DashboardSimulator:
         print(f"Direction: {direction}")
         print(f"{'='*80}\n")
         
-        # Run the plugin through its standard interface, passing the data manager
+        # Run the plugin through its standard interface
+        # Note: NOT passing data_manager as argument - it was already set via set_data_manager()
         print("Calling plugin's run_analysis function...")
-        result = await run_analysis(symbol, entry_time, direction, self.data_manager)
+        result = await run_analysis(symbol, entry_time, direction)
         
         return result
     

@@ -7,11 +7,12 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Callable
+from dataclasses import dataclass
 import pandas as pd
 import numpy as np
 
-from modules.calculations.order_flow.impact_success import ImpactSuccessTracker
-from modules.calculations.order_flow.buy_sell_ratio import Trade
+from backtest.calculations.order_flow.impact_success import ImpactSuccessTracker
+from backtest.data.trade_quote_aligner import TradeQuoteAligner
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,9 @@ CONFIG = {
     'ratio_threshold': 1.5,
     'stdev_threshold': 1.25,
     'pressure_window_seconds': 60,  # 1-minute bars
-    'history_points': 1800  # 30 minutes of data
+    'history_points': 1800,  # 30 minutes of data
+    'max_quote_age_ms': 500,  # Maximum quote staleness for alignment
+    'min_confidence': 0.7,  # Minimum confidence for aligned trades
 }
 
 # Initialize tracker at module level
@@ -42,6 +45,18 @@ tracker = ImpactSuccessTracker(
 
 # Module-level data manager (set by backtesting system)
 _data_manager = None
+
+
+# Simple Trade dataclass for compatibility with ImpactSuccessTracker
+@dataclass
+class Trade:
+    """Simple trade representation for the tracker"""
+    symbol: str
+    price: float
+    size: int
+    timestamp: datetime
+    bid: Optional[float] = None
+    ask: Optional[float] = None
 
 
 def set_data_manager(data_manager):
@@ -117,13 +132,25 @@ async def _run_analysis_internal(symbol: str, entry_time: datetime, direction: s
     """
     try:
         if progress_callback:
-            progress_callback(0, "Fetching trade and quote data...")
+            progress_callback(0, "Initializing components...")
+        
+        # Set the current plugin for tracking
+        _data_manager.set_current_plugin(PLUGIN_NAME)
+        
+        # Initialize TradeQuoteAligner
+        aligner = TradeQuoteAligner(
+            max_quote_age_ms=CONFIG['max_quote_age_ms'],
+            min_confidence_threshold=CONFIG['min_confidence']
+        )
         
         # Fetch data window (30 minutes before entry)
         end_time = entry_time
         start_time = entry_time - timedelta(minutes=30)
         
-        # Use the module-level data manager
+        if progress_callback:
+            progress_callback(10, "Fetching trade data...")
+        
+        # Fetch trades and quotes separately (following buy_sell_ratio pattern)
         logger.info(f"Fetching trades for {symbol} from {start_time} to {end_time}")
         trades_df = await _data_manager.load_trades(
             symbol=symbol,
@@ -132,7 +159,7 @@ async def _run_analysis_internal(symbol: str, entry_time: datetime, direction: s
         )
         
         if progress_callback:
-            progress_callback(25, f"Loaded {len(trades_df)} trades")
+            progress_callback(30, f"Loaded {len(trades_df)} trades")
         
         # Fetch quotes
         logger.info(f"Fetching quotes for {symbol}")
@@ -145,12 +172,25 @@ async def _run_analysis_internal(symbol: str, entry_time: datetime, direction: s
         if progress_callback:
             progress_callback(50, f"Loaded {len(quotes_df)} quotes")
         
-        # Process data
+        if trades_df.empty or quotes_df.empty:
+            raise ValueError(f"No trade or quote data available for {symbol}")
+        
         if progress_callback:
-            progress_callback(60, "Processing large orders...")
+            progress_callback(60, f"Aligning {len(trades_df):,} trades with {len(quotes_df):,} quotes...")
+        
+        # Align trades with quotes using TradeQuoteAligner
+        aligned_df, alignment_report = aligner.align_trades_quotes(trades_df, quotes_df)
+        
+        if aligned_df.empty:
+            raise ValueError("No trades could be aligned with quotes")
+        
+        logger.info(f"Successfully aligned {alignment_report.aligned_trades}/{alignment_report.total_trades} trades")
+        
+        if progress_callback:
+            progress_callback(70, "Processing large orders...")
             
-        # Process all the data
-        _process_data(trades_df, quotes_df, symbol)
+        # Process the aligned data
+        _process_aligned_data(aligned_df, symbol)
         
         if progress_callback:
             progress_callback(80, "Calculating pressure metrics...")
@@ -162,7 +202,7 @@ async def _run_analysis_internal(symbol: str, entry_time: datetime, direction: s
         signal = _generate_signal(stats, direction)
         
         # Get the complete display package
-        display_data = _prepare_complete_display_package(stats, symbol, entry_time)
+        display_data = _prepare_complete_display_package(stats, symbol, entry_time, alignment_report)
         
         if progress_callback:
             progress_callback(100, "Analysis complete")
@@ -174,7 +214,12 @@ async def _run_analysis_internal(symbol: str, entry_time: datetime, direction: s
             'direction': direction,
             'signal': signal,
             'display_data': display_data,
-            'stats': stats
+            'stats': stats,
+            'alignment_report': {
+                'aligned_trades': alignment_report.aligned_trades,
+                'total_trades': alignment_report.total_trades,
+                'avg_quote_age_ms': alignment_report.avg_quote_age_ms
+            }
         }
         
     except Exception as e:
@@ -194,53 +239,92 @@ async def _run_analysis_internal(symbol: str, entry_time: datetime, direction: s
         }
 
 
-def _process_data(trades_df: pd.DataFrame, quotes_df: pd.DataFrame, symbol: str) -> None:
+def _process_aligned_data(aligned_df: pd.DataFrame, symbol: str) -> None:
     """
-    Process historical data through the tracker.
+    Process aligned trade data through the tracker.
+    
+    The aligned_df from TradeQuoteAligner contains:
+    - All original trade columns (price, size, etc.)
+    - All original quote columns with 'quote_' prefix (quote_bid, quote_ask, etc.)
+    - trade_side (buy/sell classification)
+    - confidence, alignment_method, quote_age_ms
     """
-    # Add symbol column if not present
-    if 'symbol' not in trades_df.columns:
-        trades_df['symbol'] = symbol
-    if 'symbol' not in quotes_df.columns:
-        quotes_df['symbol'] = symbol
+    if aligned_df.empty:
+        logger.warning(f"No aligned trade data for {symbol}")
+        return
     
-    # First update all quotes
-    for timestamp, quote_row in quotes_df.iterrows():
-        tracker.update_quote(
-            symbol=symbol,
-            bid=quote_row['bid'],
-            ask=quote_row['ask'],
-            timestamp=timestamp
-        )
+    # Ensure the index is datetime
+    if not isinstance(aligned_df.index, pd.DatetimeIndex):
+        aligned_df.index = pd.to_datetime(aligned_df.index)
     
-    # Then process trades
-    large_order_count = 0
-    for timestamp, trade_row in trades_df.iterrows():
-        # Get the most recent quote at this time
-        quotes_before = quotes_df[quotes_df.index <= timestamp]
-        if not quotes_before.empty:
-            latest_quote = quotes_before.iloc[-1]
-            bid = latest_quote['bid']
-            ask = latest_quote['ask']
-        else:
-            bid = None
-            ask = None
+    # First, update the tracker with all quotes (using bid/ask from aligned data)
+    # This ensures the tracker has quote context
+    processed_quotes = set()
+    for idx in range(len(aligned_df)):
+        row = aligned_df.iloc[idx]
+        timestamp = aligned_df.index[idx]
         
+        # Ensure timestamp is a datetime object
+        if not isinstance(timestamp, datetime):
+            timestamp = pd.Timestamp(timestamp).to_pydatetime()
+        
+        # Handle different column naming conventions from TradeQuoteAligner
+        bid = row.get('quote_bid', row.get('bid'))
+        ask = row.get('quote_ask', row.get('ask'))
+        
+        # Create a unique key for quote updates to avoid duplicates
+        if pd.notna(bid) and pd.notna(ask):
+            quote_key = (timestamp, bid, ask)
+            if quote_key not in processed_quotes:
+                tracker.update_quote(
+                    symbol=symbol,
+                    bid=bid,
+                    ask=ask,
+                    timestamp=timestamp
+                )
+                processed_quotes.add(quote_key)
+    
+    # Process trades through the tracker
+    large_order_count = 0
+    for idx in range(len(aligned_df)):
+        row = aligned_df.iloc[idx]
+        timestamp = aligned_df.index[idx]
+        
+        # Ensure timestamp is a datetime object
+        if not isinstance(timestamp, datetime):
+            timestamp = pd.Timestamp(timestamp).to_pydatetime()
+        
+        # Get trade data - handle different column names
+        price = row.get('trade_price', row.get('price'))
+        size = row.get('trade_size', row.get('size'))
+        bid = row.get('quote_bid', row.get('bid'))
+        ask = row.get('quote_ask', row.get('ask'))
+        
+        # Create a Trade object for the tracker
         trade = Trade(
             symbol=symbol,
-            price=trade_row['price'],
-            size=int(trade_row['size']),
+            price=price,
+            size=int(size),
             timestamp=timestamp,
-            bid=bid,
-            ask=ask
+            bid=bid,  # May be None if no quote available
+            ask=ask   # May be None if no quote available
         )
         
-        # Process trade - tracker handles everything
+        # Process trade - tracker handles large order detection
         large_order = tracker.process_trade(trade)
         if large_order:
             large_order_count += 1
+            
+            # Log if we have a mismatch between aligner classification and tracker's
+            if 'trade_side' in row and row['trade_side'] != 'unknown':
+                tracker_side = large_order.side.value.lower()
+                aligned_side = row['trade_side'].lower()
+                if tracker_side != aligned_side and tracker_side != 'unknown':
+                    logger.debug(f"Classification mismatch at {timestamp}: "
+                               f"aligned={aligned_side}, tracker={tracker_side}")
     
-    logger.info(f"Processed {len(trades_df)} trades, detected {large_order_count} large orders")
+    logger.info(f"Processed {len(aligned_df)} aligned trades, "
+                f"detected {large_order_count} large orders")
 
 
 def _generate_signal(stats: Dict[str, Any], direction: str) -> Dict[str, Any]:
@@ -296,7 +380,8 @@ def _generate_signal(stats: Dict[str, Any], direction: str) -> Dict[str, Any]:
     }
 
 
-def _prepare_complete_display_package(stats: Dict[str, Any], symbol: str, entry_time: datetime) -> Dict[str, Any]:
+def _prepare_complete_display_package(stats: Dict[str, Any], symbol: str, entry_time: datetime, 
+                                     alignment_report=None) -> Dict[str, Any]:
     """
     Prepare complete display data package with pressure chart data.
     """
@@ -310,6 +395,14 @@ def _prepare_complete_display_package(stats: Dict[str, Any], symbol: str, entry_
         f"Net Pressure: {stats.get('net_pressure', 0):+,}",
         f"Status: {stats.get('interpretation', 'No data')}"
     ]
+    
+    # Add alignment stats if available
+    if alignment_report:
+        description_lines.extend([
+            f"Aligned Trades: {alignment_report.aligned_trades:,} / {alignment_report.total_trades:,}",
+            f"Avg Quote Age: {alignment_report.avg_quote_age_ms:.1f} ms"
+        ])
+    
     description = '\n'.join(description_lines)
     
     # Prepare table data for display
@@ -322,6 +415,13 @@ def _prepare_complete_display_package(stats: Dict[str, Any], symbol: str, entry_
         ("Cumulative Pressure", f"{stats.get('current_cumulative', 0):+,}"),
         ("Pressure Direction", stats.get('pressure_direction', 'NEUTRAL'))
     ]
+    
+    # Add alignment stats to table if available
+    if alignment_report:
+        table_data.extend([
+            ("Aligned Trades", f"{alignment_report.aligned_trades:,} / {alignment_report.total_trades:,}"),
+            ("Avg Quote Age", f"{alignment_report.avg_quote_age_ms:.1f} ms")
+        ])
     
     # Return complete display package
     return {

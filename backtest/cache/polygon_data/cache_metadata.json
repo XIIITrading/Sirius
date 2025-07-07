@@ -1109,7 +1109,7 @@
     "timeframe": "tick",
     "start_time": "2025-06-27T13:00:00+00:00",
     "end_time": "2025-06-27T13:35:00+00:00",
-    "cached_at": "2025-07-07T19:00:58.938834+00:00",
+    "cached_at": "2025-07-07T21:14:03.878021+00:00",
     "data_points": 33687
   },
   "99000fa9838b7e39ef26a09ce9ccaaf4": {
@@ -1118,7 +1118,7 @@
     "timeframe": "tick",
     "start_time": "2025-06-27T13:00:00+00:00",
     "end_time": "2025-06-27T13:35:00+00:00",
-    "cached_at": "2025-07-07T19:00:59.284549+00:00",
+    "cached_at": "2025-07-07T21:14:04.097372+00:00",
     "data_points": 4891
   },
   "1ef2db941e8f15225b8fc39c101ecc61": {
@@ -1542,6 +1542,87 @@
     "start_time": "2025-06-27T13:00:00.086000+00:00",
     "end_time": "2025-06-27T13:35:00.086000+00:00",
     "cached_at": "2025-07-07T19:02:07.335280+00:00",
+    "data_points": 4891
+  },
+  "069083c9996266d26ba3540b48bad830": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-07T21:16:10.127208+00:00",
+    "data_points": 32336
+  },
+  "1615a897521998b7ff29ece34aba11c5": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00+00:00",
+    "end_time": "2025-06-27T13:35:00+00:00",
+    "cached_at": "2025-07-07T21:16:10.333500+00:00",
+    "data_points": 4656
+  },
+  "49e85c08b603f943a7ad2e875a3c3afb": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00.153000+00:00",
+    "end_time": "2025-06-27T13:35:00.153000+00:00",
+    "cached_at": "2025-07-07T21:17:56.282460+00:00",
+    "data_points": 32336
+  },
+  "f2d7653b4e18aad9fede80a5e93db211": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00.153000+00:00",
+    "end_time": "2025-06-27T13:35:00.153000+00:00",
+    "cached_at": "2025-07-07T21:17:56.489066+00:00",
+    "data_points": 4656
+  },
+  "15af2c901351b00ea8e3a5927172d121": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00.992000+00:00",
+    "end_time": "2025-06-27T13:35:00.992000+00:00",
+    "cached_at": "2025-07-07T21:43:51.742904+00:00",
+    "data_points": 32336
+  },
+  "32c50b901bad7cc0ca1bc8b3ef9abf8a": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:05:00.992000+00:00",
+    "end_time": "2025-06-27T13:35:00.992000+00:00",
+    "cached_at": "2025-07-07T21:43:51.947013+00:00",
+    "data_points": 4656
+  },
+  "ddd691c57c9622856bfee6288145235a": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:30:00.147000+00:00",
+    "end_time": "2025-06-27T13:35:00.147000+00:00",
+    "cached_at": "2025-07-07T21:50:32.441155+00:00",
+    "data_points": 26427
+  },
+  "5464b3b550526dc9ccdd527fb9acd7b0": {
+    "symbol": "CRCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:00:00.147000+00:00",
+    "end_time": "2025-06-27T13:35:00.147000+00:00",
+    "cached_at": "2025-07-07T21:50:39.496726+00:00",
+    "data_points": 33687
+  },
+  "fb81e5cfb2c1e280c6218ba6c5a38633": {
+    "symbol": "CRCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-27T13:00:00.147000+00:00",
+    "end_time": "2025-06-27T13:35:00.147000+00:00",
+    "cached_at": "2025-07-07T21:50:39.706686+00:00",
     "data_points": 4891
   }
 }

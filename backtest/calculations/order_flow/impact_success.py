@@ -24,6 +24,30 @@ class OrderSide(Enum):
 
 
 @dataclass
+class Trade:
+    """Trade data structure"""
+    symbol: str
+    price: float
+    size: int
+    timestamp: datetime
+    bid: Optional[float] = None
+    ask: Optional[float] = None
+    exchange: Optional[str] = None
+    conditions: Optional[List[str]] = field(default_factory=list)
+
+
+@dataclass
+class Quote:
+    """Quote data structure"""
+    symbol: str
+    bid: float
+    ask: float
+    bid_size: int = 100
+    ask_size: int = 100
+    timestamp: Optional[datetime] = None
+
+
+@dataclass
 class LargeOrder:
     """Large order detection"""
     order_id: str
@@ -103,7 +127,7 @@ class ImpactSuccessTracker:
         self.current_stats: Dict[str, RollingStats] = {}
         
         # Latest quotes for side classification
-        self.latest_quotes: Dict[str, 'Quote'] = {}
+        self.latest_quotes: Dict[str, Quote] = {}
         
         # Large order history (per symbol)
         self.large_orders: Dict[str, deque] = {}
@@ -126,8 +150,6 @@ class ImpactSuccessTracker:
     
     def update_quote(self, symbol: str, bid: float, ask: float, timestamp: datetime):
         """Update latest quote for spread calculation"""
-        from modules.calculations.order_flow.buy_sell_ratio import Quote
-        
         self.latest_quotes[symbol] = Quote(
             symbol=symbol,
             bid=bid,
@@ -135,7 +157,7 @@ class ImpactSuccessTracker:
             timestamp=timestamp
         )
     
-    def process_trade(self, trade: 'Trade') -> Optional[LargeOrder]:
+    def process_trade(self, trade: Trade) -> Optional[LargeOrder]:
         """
         Process trade and detect if it's a large order.
         Updates pressure tracking if large order detected.
@@ -222,7 +244,7 @@ class ImpactSuccessTracker:
             std_size=std_size
         )
     
-    def _check_large_order(self, trade: 'Trade') -> Optional[LargeOrder]:
+    def _check_large_order(self, trade: Trade) -> Optional[LargeOrder]:
         """Check if trade qualifies as large order"""
         symbol = trade.symbol
         
@@ -282,7 +304,7 @@ class ImpactSuccessTracker:
         
         return large_order
     
-    def _classify_side(self, trade: 'Trade') -> OrderSide:
+    def _classify_side(self, trade: Trade) -> OrderSide:
         """Classify trade as buy or sell based on price vs quotes"""
         symbol = trade.symbol
         

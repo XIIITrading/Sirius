@@ -82,7 +82,7 @@ class SupplyDemandAnalyzer:
     """
     
     def __init__(self,
-                 lookback_days: int = 15,
+                 lookback_days: int = 7,  # Changed from 15 to 7
                  volume_threshold_multiplier: float = 1.7,  # >70% above average
                  atr_threshold: float = 2.0,
                  validation_window_minutes: int = 60,
@@ -454,7 +454,7 @@ def set_data_manager(data_manager):
     
 
 async def analyze_supply_demand_zones(ticker: str, 
-                                    lookback_days: int = 15,
+                                    lookback_days: int = 7,  # Changed from 15 to 7
                                     volume_threshold: float = 1.7) -> Dict:
     """
     Async function to analyze supply/demand zones for a ticker
@@ -597,8 +597,8 @@ if __name__ == "__main__":
         # Set mock data manager
         set_data_manager(MockDataManager())
         
-        # Test analysis
-        result = await analyze_supply_demand_zones('TEST', lookback_days=15)
+        # Test analysis with 7 days lookback
+        result = await analyze_supply_demand_zones('TEST', lookback_days=7)  # Changed to 7
         
         print(f"Analysis Results:")
         print(f"Total zones found: {result['total_zones']}")

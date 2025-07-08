@@ -2,18 +2,20 @@
 """
 Module: Supply/Demand Zone Chart Component
 Purpose: Visualize supply and demand zones with price action
-UI Framework: PyQt6 with PyQtGraph
+Updated: Aligned candlestick rendering with dual_hvn_chart style
+         7-day lookback with 15-minute bars
 """
 
 import logging
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
+import asyncio
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                             QTableWidget, QTableWidgetItem, QHeaderView,
                             QLabel, QGroupBox, QPushButton)
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QPainter, QPicture
 import pyqtgraph as pg
 import pandas as pd
 import numpy as np
@@ -26,41 +28,114 @@ from market_review.calculations.zones.supply_demand import (
 
 logger = logging.getLogger(__name__)
 
+# Module-level data manager instance
+_data_manager = None
+_current_plugin = 'supply_demand'
 
-class MockDataManager:
-    """Mock data manager for testing when real DataManager is not available"""
+
+def initialize_data_manager(data_manager):
+    """Initialize the module-level data manager"""
+    global _data_manager
+    _data_manager = data_manager
     
+    # Set data manager for the supply_demand module
+    set_data_manager(data_manager)
+    
+    # Tell data manager this plugin is active
+    if hasattr(data_manager, 'set_current_plugin'):
+        data_manager.set_current_plugin(_current_plugin)
+    
+    logger.info("Supply/Demand data manager initialized")
+
+
+class PolygonDataManager:
+    """Data manager wrapper for Polygon data fetching"""
+    
+    def __init__(self):
+        from market_review.data.polygon_bridge import PolygonHVNBridge
+        self.bridge = PolygonHVNBridge(
+            hvn_levels=100,
+            hvn_percentile=80.0,
+            lookback_days=14  # Max lookback for data fetching
+        )
+        
     async def load_data_async(self, **kwargs):
-        """Generate mock data for testing"""
-        ticker = kwargs.get('ticker', 'TEST')
+        """Load data asynchronously using Polygon bridge"""
+        ticker = kwargs.get('ticker')
         timeframe = kwargs.get('timeframe', '15min')
         start_date = kwargs.get('start_date')
         end_date = kwargs.get('end_date')
         
-        # Generate time series
-        if timeframe == '15min':
-            freq = '15min'
-        elif timeframe == '5min':
-            freq = '5min'
-        else:
-            freq = '1h'
+        # Use the bridge to calculate HVN (which fetches the data)
+        state = self.bridge.calculate_hvn(
+            symbol=ticker,
+            end_date=end_date,
+            timeframe=timeframe
+        )
+        
+        # Extract the price data from the state
+        if state and state.recent_bars is not None:
+            # Filter data to match requested date range
+            df = state.recent_bars
+            if start_date and end_date:
+                # Ensure timezone awareness
+                if df.index.tz is None:
+                    df.index = df.index.tz_localize('UTC')
+                if start_date.tzinfo is None:
+                    start_date = pd.Timestamp(start_date).tz_localize('UTC')
+                if end_date.tzinfo is None:
+                    end_date = pd.Timestamp(end_date).tz_localize('UTC')
+                    
+                # Filter to requested range
+                df = df[(df.index >= start_date) & (df.index <= end_date)]
             
-        dates = pd.date_range(start=start_date, end=end_date, freq=freq)
+            return df
+        else:
+            return pd.DataFrame()
+
+
+class CandlestickItem(pg.GraphicsObject):
+    """Custom candlestick item matching dual_hvn_chart style"""
+    
+    def __init__(self, data):
+        pg.GraphicsObject.__init__(self)
+        self.data = data
+        self.generatePicture()
         
-        # Generate realistic OHLCV data
-        np.random.seed(42)
-        base_price = 100
-        returns = np.random.randn(len(dates)) * 0.02  # 2% volatility
-        close_prices = base_price * np.exp(returns.cumsum())
+    def generatePicture(self):
+        self.picture = QPicture()
+        p = QPainter(self.picture)
         
-        df = pd.DataFrame(index=dates)
-        df['close'] = close_prices
-        df['open'] = df['close'].shift(1).fillna(base_price)
-        df['high'] = df[['open', 'close']].max(axis=1) + np.abs(np.random.randn(len(dates)) * 0.5)
-        df['low'] = df[['open', 'close']].min(axis=1) - np.abs(np.random.randn(len(dates)) * 0.5)
-        df['volume'] = np.random.randint(100000, 1000000, len(dates))
+        for i, (_, row) in enumerate(self.data.iterrows()):
+            # Determine color - matching dual_hvn_chart colors
+            if row['close'] >= row['open']:
+                p.setPen(pg.mkPen('#10b981', width=1))  # Green
+                p.setBrush(pg.mkBrush('#10b981'))
+            else:
+                p.setPen(pg.mkPen('#ef4444', width=1))  # Red
+                p.setBrush(pg.mkBrush('#ef4444'))
+            
+            # Draw high-low line (wick)
+            p.drawLine(pg.QtCore.QPointF(i, row['low']), 
+                      pg.QtCore.QPointF(i, row['high']))
+            
+            # Draw open-close rectangle (body)
+            height = abs(row['close'] - row['open'])
+            if height > 0:
+                p.drawRect(pg.QtCore.QRectF(
+                    i - 0.3,  # x position - width/2
+                    min(row['open'], row['close']),  # y position (bottom of body)
+                    0.6,  # width
+                    height  # height
+                ))
         
-        return df
+        p.end()
+    
+    def paint(self, p, *args):
+        p.drawPicture(0, 0, self.picture)
+    
+    def boundingRect(self):
+        return pg.QtCore.QRectF(self.picture.boundingRect())
 
 
 class SupplyDemandWorker(QThread):
@@ -71,7 +146,7 @@ class SupplyDemandWorker(QThread):
     error_occurred = pyqtSignal(str)
     progress_update = pyqtSignal(str)
     
-    def __init__(self, ticker: str, lookback_days: int = 15):
+    def __init__(self, ticker: str, lookback_days: int = 7):
         super().__init__()
         self.ticker = ticker
         self.lookback_days = lookback_days
@@ -107,28 +182,52 @@ class SupplyDemandWorker(QThread):
             self.error_occurred.emit(str(e))
             
     def _ensure_data_manager(self):
-        """Ensure data manager is set for supply/demand module"""
-        from market_review.calculations.zones import supply_demand
+        """Ensure data manager is set for supply_demand module"""
+        logger.info("Starting _ensure_data_manager")
         
-        # Check if data manager is already set
-        if supply_demand._data_manager is None:
-            logger.warning("Data manager not set, attempting to initialize...")
+        # Check if supply_demand module already has data manager
+        try:
+            from market_review.calculations.zones.supply_demand import _data_manager as sd_data_manager
             
+            if sd_data_manager is not None:
+                logger.info("Data manager already set in supply_demand module")
+                return
+        except Exception as e:
+            logger.error(f"Error checking supply_demand data manager: {e}")
+        
+        # Declare global BEFORE using it
+        global _data_manager
+        
+        # Try to use the module-level data manager from our module
+        if _data_manager is not None:
             try:
-                # Try to get the real DataManager
-                from market_review.dashboards.data_manager import DataManager
-                data_manager = DataManager.get_instance()
-                set_data_manager(data_manager)
-                logger.info("Successfully set DataManager")
-            except ImportError:
-                # Use mock data manager as fallback
-                logger.warning("DataManager not available, using mock data")
-                mock_manager = MockDataManager()
-                set_data_manager(mock_manager)
+                from market_review.calculations.zones.supply_demand import set_data_manager
+                set_data_manager(_data_manager)
+                logger.info("Successfully set data manager from supply_demand_chart module")
+                return
+            except Exception as e:
+                logger.error(f"Error setting data manager from module: {e}")
+        
+        # Create a PolygonDataManager instance
+        logger.info("Creating PolygonDataManager instance...")
+        try:
+            polygon_dm = PolygonDataManager()
+            from market_review.calculations.zones.supply_demand import set_data_manager
+            set_data_manager(polygon_dm)
+            
+            # Also set our module-level instance
+            _data_manager = polygon_dm
+            logger.info("Successfully created and set PolygonDataManager")
+            
+        except Exception as e:
+            logger.error(f"Failed to create PolygonDataManager: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise RuntimeError(f"Data manager could not be initialized: {str(e)}")
 
 
 class SupplyDemandChart(QWidget):
-    """Chart widget for displaying supply/demand zones"""
+    """Chart widget for displaying supply/demand zones with proper candlesticks"""
     
     # Signals
     loading_started = pyqtSignal()
@@ -136,37 +235,91 @@ class SupplyDemandChart(QWidget):
     error_occurred = pyqtSignal(str)
     zone_selected = pyqtSignal(dict)
     
-    def __init__(self, lookback_days: int = 15, display_bars: int = None):
-        super().__init__()
+    def __init__(self, data_manager=None, lookback_days: int = 7, display_bars: int = 182, parent=None):
+        """
+        Initialize chart with 7 days lookback and proper display bars.
+        
+        Args:
+            data_manager: Data manager instance (optional, can use module-level)
+            lookback_days: Days to look back (default: 7)
+            display_bars: Number of 15-min bars to display (default: 182 = 7 days)
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        
+        # Initialize data manager if provided
+        if data_manager:
+            initialize_data_manager(data_manager)
+        else:
+            # Create PolygonDataManager if no data manager provided
+            try:
+                logger.info("No data manager provided, creating PolygonDataManager")
+                polygon_dm = PolygonDataManager()
+                initialize_data_manager(polygon_dm)
+            except Exception as e:
+                logger.warning(f"Could not initialize data manager at startup: {e}")
+                # Don't fail here - worker thread will try again
+        
         self.ticker = None
         self.lookback_days = lookback_days
-        # Calculate display bars: 15 days * 6.5 hours * 4 (15-min bars per hour)
-        self.display_bars = display_bars or (15 * 6.5 * 4)  # ~390 15-min bars for 15 days
+        self.display_bars = display_bars  # 7 * 6.5 * 4 = 182 bars
         self.analysis_result = None
         self.price_data = None
-        self.price_data_15min = None  # Store 15-minute data
         
-        # Zone colors
-        self.supply_color = QColor(220, 38, 127, 80)  # Pink/Red with transparency
-        self.demand_color = QColor(34, 197, 94, 80)   # Green with transparency
-        self.validated_alpha = 120  # Higher alpha for validated zones
-        self.unvalidated_alpha = 60  # Lower alpha for unvalidated zones
+        # Zone colors with transparency
+        self.supply_color = QColor(220, 38, 127, 80)  # Pink/Red
+        self.demand_color = QColor(34, 197, 94, 80)   # Green
+        self.validated_alpha = 120
+        self.unvalidated_alpha = 60
         
-        # Initialize data manager on creation
-        self._initialize_data_manager()
+        # Style settings matching dual_hvn_chart
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #1a1a1a;
+                color: #ffffff;
+            }
+            QGroupBox {
+                border: 1px solid #333333;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                font-weight: bold;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+                color: #10b981;
+            }
+            QLabel {
+                color: #ffffff;
+            }
+            QPushButton {
+                background-color: #10b981;
+                border: none;
+                border-radius: 3px;
+                padding: 8px 16px;
+                font-weight: bold;
+                color: #000000;
+            }
+            QPushButton:hover {
+                background-color: #059669;
+            }
+            QTableWidget {
+                background-color: #2a2a2a;
+                alternate-background-color: #333333;
+                gridline-color: #444444;
+            }
+            QHeaderView::section {
+                background-color: #1a1a1a;
+                color: #10b981;
+                font-weight: bold;
+                border: 1px solid #444444;
+                padding: 4px;
+            }
+        """)
         
         self.init_ui()
-        
-    def _initialize_data_manager(self):
-        """Initialize data manager for supply/demand module"""
-        try:
-            from market_review.dashboards.data_manager import DataManager
-            data_manager = DataManager.get_instance()
-            set_data_manager(data_manager)
-            logger.info("DataManager initialized for Supply/Demand")
-        except ImportError:
-            logger.warning("DataManager not available, will use mock data")
-            # Don't set mock here, let the worker handle it
         
     def init_ui(self):
         """Initialize the UI"""
@@ -190,25 +343,36 @@ class SupplyDemandChart(QWidget):
         layout.addWidget(splitter)
         
     def create_chart_widget(self):
-        """Create the chart widget"""
+        """Create the chart widget with proper styling"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         
-        # Create plot widget
+        # Create plot widget with dark background
         self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setLabel('left', 'Price ($)')
-        self.plot_widget.setLabel('bottom', 'Time')
+        self.plot_widget.setBackground('#1a1a1a')
+        self.plot_widget.setLabel('left', 'Price', units='$')
+        self.plot_widget.setLabel('bottom', 'Time (UTC)')
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
         
         # Add crosshair
-        self.crosshair_v = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen('w', width=0.5, style=Qt.PenStyle.DashLine))
-        self.crosshair_h = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('w', width=0.5, style=Qt.PenStyle.DashLine))
+        self.crosshair_v = pg.InfiniteLine(
+            angle=90, movable=False, 
+            pen=pg.mkPen('w', width=0.5, style=Qt.PenStyle.DashLine)
+        )
+        self.crosshair_h = pg.InfiniteLine(
+            angle=0, movable=False, 
+            pen=pg.mkPen('w', width=0.5, style=Qt.PenStyle.DashLine)
+        )
         self.plot_widget.addItem(self.crosshair_v, ignoreBounds=True)
         self.plot_widget.addItem(self.crosshair_h, ignoreBounds=True)
         
         # Price label
-        self.price_label = pg.TextItem(anchor=(0, 1), color='w', fill=pg.mkBrush(30, 30, 30, 180))
+        self.price_label = pg.TextItem(
+            anchor=(0, 1), 
+            color='w', 
+            fill=pg.mkBrush(30, 30, 30, 180)
+        )
         self.plot_widget.addItem(self.price_label, ignoreBounds=True)
         
         # Connect mouse move
@@ -228,6 +392,7 @@ class SupplyDemandChart(QWidget):
         
         self.summary_label = QLabel("No data loaded")
         self.summary_label.setWordWrap(True)
+        self.summary_label.setStyleSheet("color: #9ca3af; padding: 2px;")
         summary_layout.addWidget(self.summary_label)
         
         summary_group.setLayout(summary_layout)
@@ -248,6 +413,7 @@ class SupplyDemandChart(QWidget):
         self.zone_table.setHorizontalHeaderLabels([
             "Type", "Range", "Volume%", "Strength", "Valid", "Distance"
         ])
+        self.zone_table.setAlternatingRowColors(True)
         
         # Set column widths
         header = self.zone_table.horizontalHeader()
@@ -270,6 +436,10 @@ class SupplyDemandChart(QWidget):
         layout.addWidget(zones_group)
         
         return widget
+    
+    def set_data_manager(self, data_manager):
+        """Set or update the data manager"""
+        initialize_data_manager(data_manager)
         
     def load_ticker(self, ticker: str):
         """Load supply/demand analysis for ticker"""
@@ -285,8 +455,9 @@ class SupplyDemandChart(QWidget):
         
         self.zone_table.setRowCount(0)
         self.summary_label.setText(f"Loading {ticker}...")
+        self.summary_label.setStyleSheet("color: #f59e0b; padding: 2px;")
         
-        # Start worker thread
+        # Start worker thread with 7 days lookback
         self.worker = SupplyDemandWorker(ticker, self.lookback_days)
         self.worker.analysis_complete.connect(self.on_analysis_complete)
         self.worker.error_occurred.connect(self.on_error)
@@ -299,7 +470,7 @@ class SupplyDemandChart(QWidget):
         self.analysis_result = result
         self.loading_finished.emit()
         
-        # Update summary
+        # Update summary with green success color
         summary_text = f"""
         <b>Current Price:</b> ${result['current_price']:.2f}<br>
         <b>Current ATR:</b> ${result['current_atr']:.2f}<br>
@@ -308,6 +479,7 @@ class SupplyDemandChart(QWidget):
         <b>Nearby Zones:</b> {result['nearby_zones']}
         """
         self.summary_label.setText(summary_text)
+        self.summary_label.setStyleSheet("color: #10b981; padding: 2px;")
         
         # Load price data and plot
         self.load_price_data()
@@ -315,134 +487,128 @@ class SupplyDemandChart(QWidget):
         # Populate zone table
         if result['zones']:
             self.populate_zone_table(result['zones'])
-        
+    
     def load_price_data(self):
-        """Load 15-minute price data for charting"""
+        """Load price data for charting"""
         try:
-            # Try to get data manager
-            try:
-                from market_review.dashboards.data_manager import DataManager
-                data_manager = DataManager.get_instance()
-                
-                # Load 15-minute data for the same period as analysis
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=self.lookback_days)
-                
-                self.price_data_15min = data_manager.load_data(
+            # Check if we have a data manager
+            if _data_manager is None:
+                logger.error("No data manager available")
+                self.error_occurred.emit("Data manager not initialized")
+                return
+            
+            # Create event loop for async operation
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # Load 15-minute data for 7 days
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=self.lookback_days)
+            
+            # Run async load
+            self.price_data = loop.run_until_complete(
+                _data_manager.load_data_async(
                     ticker=self.ticker,
-                    timeframe='15min',  # Changed to 15-minute
+                    timeframe='15min',
                     start_date=start_date,
                     end_date=end_date
                 )
-                
-                # Use the 15-minute data for display
-                self.price_data = self.price_data_15min
-                
-            except (ImportError, Exception) as e:
-                # Fallback: use mock 15-minute data
-                logger.warning(f"DataManager not available for charting: {e}")
-                
-                # Generate 15-minute data for visualization
-                if self.analysis_result and 'current_price' in self.analysis_result:
-                    current_price = self.analysis_result['current_price']
-                    
-                    # Generate 15 days of 15-minute data
-                    end_date = datetime.now()
-                    start_date = end_date - timedelta(days=self.lookback_days)
-                    dates = pd.date_range(start=start_date, end=end_date, freq='15min')
-                    
-                    # Filter for market hours only (optional)
-                    dates = [d for d in dates if 13 <= d.hour < 20 or (d.hour == 20 and d.minute == 0)]
-                    
-                    # Generate price data around current price
-                    np.random.seed(hash(self.ticker) % 2**32)
-                    returns = np.random.randn(len(dates)) * 0.002  # Slightly higher volatility for 15-min
-                    close_prices = current_price * np.exp(returns.cumsum())
-                    
-                    self.price_data = pd.DataFrame(index=dates)
-                    self.price_data['close'] = close_prices
-                    self.price_data['open'] = self.price_data['close'].shift(1).fillna(current_price)
-                    self.price_data['high'] = self.price_data[['open', 'close']].max(axis=1) * (1 + np.abs(np.random.randn(len(dates)) * 0.002))
-                    self.price_data['low'] = self.price_data[['open', 'close']].min(axis=1) * (1 - np.abs(np.random.randn(len(dates)) * 0.002))
-                    self.price_data['volume'] = np.random.randint(50000, 500000, len(dates))
+            )
             
             if self.price_data is not None and not self.price_data.empty:
                 self.plot_price_data()
                 self.plot_zones()
+            else:
+                logger.error("No price data returned")
+                self.error_occurred.emit("No price data available")
                 
         except Exception as e:
             logger.error(f"Error loading price data: {e}")
             self.error_occurred.emit(f"Failed to load price data: {str(e)}")
             
     def plot_price_data(self):
-        """Plot candlestick price data"""
+        """Plot candlestick price data using CandlestickItem"""
         if self.price_data is None or self.price_data.empty:
             return
-            
-        # Use all available data (15 days of 15-min bars)
-        df = self.price_data
-        x = np.arange(len(df))
         
-        # Plot candlesticks
-        for i, (idx, row) in enumerate(df.iterrows()):
-            color = 'g' if row['close'] >= row['open'] else 'r'
-            
-            # Body
-            body = pg.PlotDataItem(
-                [i, i], [row['open'], row['close']],
-                pen=pg.mkPen(color, width=3)  # Thinner for 15-min bars
+        # Reset index for plotting
+        df = self.price_data.reset_index()
+        
+        # Create and add candlestick item
+        candlesticks = CandlestickItem(df)
+        self.plot_widget.addItem(candlesticks)
+        
+        # Create time axis labels
+        time_strings = [t.strftime('%m/%d %H:%M') for t in self.price_data.index]
+        x_dict = dict(enumerate(time_strings))
+        
+        # Show subset of labels (every 6.5 hours = ~26 bars)
+        step = max(1, len(time_strings) // 8)
+        x_dict_sparse = {k: v for k, v in x_dict.items() if k % step == 0}
+        
+        # Create custom axis
+        stringaxis = pg.AxisItem(orientation='bottom')
+        stringaxis.setTicks([list(x_dict_sparse.items())])
+        self.plot_widget.setAxisItems(axisItems={'bottom': stringaxis})
+        
+        # Add current price line
+        if self.analysis_result:
+            current_price = self.analysis_result['current_price']
+            price_line = pg.InfiniteLine(
+                pos=current_price, 
+                angle=0, 
+                pen=pg.mkPen('#f59e0b', width=2, style=Qt.PenStyle.DashLine),
+                label=f'${current_price:.2f}',
+                labelOpts={'position': 0.95, 'color': '#f59e0b'}
             )
-            self.plot_widget.addItem(body)
-            
-            # Wicks
-            wick = pg.PlotDataItem(
-                [i, i], [row['low'], row['high']],
-                pen=pg.mkPen(color, width=1)
-            )
-            self.plot_widget.addItem(wick)
-            
-        # Set x-axis with better labels for 15-minute data
-        tick_labels = []
-        # Show labels every day
-        for i in range(0, len(df), 26):  # ~26 15-min bars per day (market hours)
-            if i < len(df):
-                tick_labels.append((i, df.index[i].strftime('%m/%d')))
+            self.plot_widget.addItem(price_line)
         
-        self.plot_widget.getAxis('bottom').setTicks([tick_labels])
-        
-        # Set Y-axis range based on data
+        # Set Y-axis range
         price_min = df['low'].min()
         price_max = df['high'].max()
         price_range = price_max - price_min
-        padding = price_range * 0.1  # 10% padding
+        padding = price_range * 0.1
         
         self.plot_widget.setYRange(price_min - padding, price_max + padding)
-        self.plot_widget.setXRange(0, len(df))
+        
+        # Set X-axis to show recent data (display_bars)
+        total_bars = len(df)
+        if total_bars > self.display_bars:
+            start_x = total_bars - self.display_bars
+            end_x = total_bars
+        else:
+            start_x = 0
+            end_x = total_bars
+            
+        self.plot_widget.setXRange(start_x, end_x)
+        
+        # Enable mouse interaction
+        self.plot_widget.setMouseEnabled(x=True, y=True)
         
     def plot_zones(self):
-        """Plot supply/demand zones - only show zones within price bounds"""
+        """Plot supply/demand zones"""
         if self.analysis_result is None or 'zones' not in self.analysis_result:
             return
             
         if self.price_data is None or self.price_data.empty:
             return
             
-        # Get price bounds from the displayed data
+        # Get price bounds
         price_min = self.price_data['low'].min()
         price_max = self.price_data['high'].max()
         price_range = price_max - price_min
         
-        # Add some padding to include zones slightly outside the range
-        padding = price_range * 0.05  # 5% padding
+        # Add padding
+        padding = price_range * 0.05
         display_min = price_min - padding
         display_max = price_max + padding
         
         zones_plotted = 0
         
         for zone in self.analysis_result['zones']:
-            # Only plot zones that are within or near the price range
+            # Only plot zones within range
             if zone.price_high < display_min or zone.price_low > display_max:
-                continue  # Skip zones completely outside the range
+                continue
                 
             # Clip zone to display range
             zone_bottom = max(zone.price_low, display_min)
@@ -477,28 +643,26 @@ class SupplyDemandChart(QWidget):
             zone_label = pg.TextItem(
                 text=label_text,
                 color='w',
-                anchor=(1, 0.5)  # Anchor to right side
+                anchor=(1, 0.5)
             )
-            # Position label at the right edge of the chart
+            # Position label
             label_x = len(self.price_data) - 10
             zone_label.setPos(label_x, zone.center_price)
             self.plot_widget.addItem(zone_label)
             
-        logger.info(f"Plotted {zones_plotted} zones within price bounds")
+        logger.info(f"Plotted {zones_plotted} zones")
             
     def populate_zone_table(self, zones: List[SupplyDemandZone]):
         """Populate the zone details table"""
-        # Filter zones to show only those within reasonable range
+        # Filter and sort zones
         if self.price_data is not None and not self.price_data.empty:
             price_min = self.price_data['low'].min()
             price_max = self.price_data['high'].max()
             price_range = price_max - price_min
             
-            # Show zones within 20% of the price range
             display_min = price_min - price_range * 0.2
             display_max = price_max + price_range * 0.2
             
-            # Filter zones
             visible_zones = [
                 zone for zone in zones 
                 if not (zone.price_high < display_min or zone.price_low > display_max)
@@ -511,7 +675,7 @@ class SupplyDemandChart(QWidget):
         current_price = self.analysis_result.get('current_price', 0)
         current_atr = self.analysis_result.get('current_atr', 1)
         
-        # Sort zones by distance from current price
+        # Sort by distance
         sorted_zones = sorted(visible_zones, key=lambda z: abs(z.center_price - current_price))
         
         for i, zone in enumerate(sorted_zones):
@@ -558,33 +722,12 @@ class SupplyDemandChart(QWidget):
         selected_rows = self.zone_table.selectionModel().selectedRows()
         if selected_rows:
             row = selected_rows[0].row()
-            # Need to account for filtered zones
+            # Emit signal with zone info
             if self.analysis_result and 'zones' in self.analysis_result:
-                # Get the visible zones in the same order as the table
                 zones = self.analysis_result['zones']
-                
-                if self.price_data is not None and not self.price_data.empty:
-                    price_min = self.price_data['low'].min()
-                    price_max = self.price_data['high'].max()
-                    price_range = price_max - price_min
-                    
-                    display_min = price_min - price_range * 0.2
-                    display_max = price_max + price_range * 0.2
-                    
-                    visible_zones = [
-                        zone for zone in zones 
-                        if not (zone.price_high < display_min or zone.price_low > display_max)
-                    ]
-                else:
-                    visible_zones = zones
-                    
-                current_price = self.analysis_result.get('current_price', 0)
-                sorted_zones = sorted(visible_zones, key=lambda z: abs(z.center_price - current_price))
-                
-                if row < len(sorted_zones):
-                    zone = sorted_zones[row]
+                if row < len(zones):
                     self.zone_selected.emit({
-                        'zone': zone,
+                        'zone': zones[row],
                         'row': row
                     })
                 
@@ -606,6 +749,7 @@ class SupplyDemandChart(QWidget):
         """Handle errors"""
         self.error_occurred.emit(error_msg)
         self.summary_label.setText(f"Error: {error_msg}")
+        self.summary_label.setStyleSheet("color: #ef4444; padding: 2px;")
         self.loading_finished.emit()
         
     @pyqtSlot(str)
@@ -617,3 +761,6 @@ class SupplyDemandChart(QWidget):
         """Refresh the analysis"""
         if self.ticker:
             self.load_ticker(self.ticker)
+
+# Export the chart class
+__all__ = ['SupplyDemandChart', 'CandlestickItem', 'initialize_data_manager']

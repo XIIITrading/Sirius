@@ -16,6 +16,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 # Local imports
 from market_review.dashboards.components.dual_hvn_chart import DualHVNChart
 from market_review.dashboards.components.camarilla_pivot_chart import CamarillaPivotChart
+from market_review.dashboards.components.supply_demand_chart import SupplyDemandChart
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -105,6 +106,24 @@ class StockAnalysisWindow(QMainWindow):
                 border-radius: 3px;
                 padding: 5px;
             }
+            QTableWidget {
+                background-color: #2a2a2a;
+                border: 1px solid #444444;
+                gridline-color: #444444;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+            QTableWidget::item:selected {
+                background-color: #374151;
+            }
+            QHeaderView::section {
+                background-color: #333333;
+                color: #ffffff;
+                padding: 5px;
+                border: 1px solid #444444;
+                font-weight: bold;
+            }
         """)
         
     def init_ui(self):
@@ -124,6 +143,10 @@ class StockAnalysisWindow(QMainWindow):
         # HVN Analysis Tab
         self.hvn_tab = self.create_hvn_tab()
         self.tab_widget.addTab(self.hvn_tab, "HVN Analysis")
+        
+        # Supply/Demand Tab
+        self.supply_demand_tab = self.create_supply_demand_tab()
+        self.tab_widget.addTab(self.supply_demand_tab, "Supply/Demand")
         
         # Camarilla Pivots Tab
         self.camarilla_tab = self.create_camarilla_tab()
@@ -192,6 +215,34 @@ class StockAnalysisWindow(QMainWindow):
         layout.addWidget(self.hvn_chart)
         return widget
         
+    def create_supply_demand_tab(self):
+        """Create Supply/Demand analysis tab."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Create Supply/Demand chart
+        self.supply_demand_chart = SupplyDemandChart(
+            lookback_days=15,
+            display_bars=390  # 5 days of 5-min bars
+        )
+        
+        # Connect signals
+        self.supply_demand_chart.loading_started.connect(
+            lambda: self.update_status("Analyzing supply/demand zones...")
+        )
+        self.supply_demand_chart.loading_finished.connect(
+            lambda: self.update_status("Supply/Demand analysis complete", success=True)
+        )
+        self.supply_demand_chart.error_occurred.connect(
+            lambda err: self.update_status(f"S/D Error: {err}", error=True)
+        )
+        self.supply_demand_chart.zone_selected.connect(
+            self.on_zone_selected
+        )
+        
+        layout.addWidget(self.supply_demand_chart)
+        return widget
+        
     def create_camarilla_tab(self):
         """Create Camarilla pivots tab."""
         widget = QWidget()
@@ -234,6 +285,9 @@ class StockAnalysisWindow(QMainWindow):
         # Load HVN data
         self.hvn_chart.load_ticker(self.ticker)
         
+        # Load Supply/Demand data
+        self.supply_demand_chart.load_ticker(self.ticker)
+        
         # Load Camarilla data
         self.camarilla_chart.load_ticker(self.ticker)
         
@@ -248,10 +302,24 @@ class StockAnalysisWindow(QMainWindow):
         else:
             self.status_label.setStyleSheet("color: #f59e0b;")
             
+    def on_zone_selected(self, zone_data: dict):
+        """Handle supply/demand zone selection."""
+        zone = zone_data['zone']
+        logger.info(
+            f"Zone selected: {zone.zone_type} at ${zone.center_price:.2f} "
+            f"(Strength: {zone.strength:.0f}%)"
+        )
+        
+        # You can add additional handling here, such as:
+        # - Highlighting the zone on the chart
+        # - Showing additional zone details
+        # - Creating alerts for the zone
+        
     def closeEvent(self, event):
         """Handle window close event."""
         self.window_closed.emit(self.ticker)
         event.accept()
+
 
 if __name__ == "__main__":
     import sys
@@ -267,6 +335,22 @@ if __name__ == "__main__":
     pg.setConfigOption('background', '#1a1a1a')
     pg.setConfigOption('foreground', '#ffffff')
     
+    # Initialize data manager and set it for supply/demand module
+    try:
+        from market_review.dashboards.data_manager import DataManager
+        from market_review.calculations.zones.supply_demand import set_data_manager
+        
+        # Get data manager instance
+        data_manager = DataManager.get_instance()
+        
+        # Set data manager for supply/demand module
+        set_data_manager(data_manager)
+        
+        print("Data manager initialized successfully")
+    except Exception as e:
+        print(f"Warning: Could not initialize data manager: {e}")
+        print("Supply/Demand analysis may not work properly")
+    
     # Create and show window with a test ticker
     ticker = "TSLA"  # Change to any ticker you want
     if len(sys.argv) > 1:
@@ -276,6 +360,11 @@ if __name__ == "__main__":
     window.show()
     
     print(f"Stock Analysis Window opened for {ticker}")
-    print("You can also pass a ticker as argument: python stock_analysis_window.py AAPL")
+    print("Available tabs:")
+    print("  - HVN Analysis: Volume profile analysis")
+    print("  - Supply/Demand: Zone detection based on volume and fractals")
+    print("  - Camarilla Pivots: Support/resistance levels")
+    print("  - Trading Plan: (Coming soon)")
+    print("\nYou can also pass a ticker as argument: python stock_analysis_window.py AAPL")
     
     sys.exit(app.exec())

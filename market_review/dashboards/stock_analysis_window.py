@@ -6,11 +6,12 @@ UI Framework: PyQt6
 """
 
 import logging
+import re
 from typing import Optional
 
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                             QTabWidget, QPushButton, QLabel, QGroupBox,
-                            QSplitter, QTextEdit)
+                            QSplitter, QTextEdit, QLineEdit)
 from PyQt6.QtCore import Qt, pyqtSignal
 
 # Local imports
@@ -124,6 +125,18 @@ class StockAnalysisWindow(QMainWindow):
                 border: 1px solid #444444;
                 font-weight: bold;
             }
+            QLineEdit {
+                background-color: #2a2a2a;
+                border: 1px solid #444444;
+                border-radius: 3px;
+                padding: 5px;
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QLineEdit:focus {
+                border: 1px solid #10b981;
+            }
         """)
         
     def init_ui(self):
@@ -164,14 +177,47 @@ class StockAnalysisWindow(QMainWindow):
         group = QGroupBox(f"Analysis: {self.ticker}")
         layout = QHBoxLayout()
         
-        # Ticker info
-        self.ticker_label = QLabel(f"Ticker: {self.ticker}")
-        self.ticker_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #10b981;")
-        layout.addWidget(self.ticker_label)
+        # Ticker input section
+        ticker_input_layout = QHBoxLayout()
+        ticker_input_layout.setSpacing(5)
+        
+        # Ticker label
+        ticker_label = QLabel("Ticker:")
+        ticker_label.setStyleSheet("font-weight: bold; color: #e5e7eb;")
+        ticker_input_layout.addWidget(ticker_label)
+        
+        # Ticker input field
+        self.ticker_input = QLineEdit(self.ticker)
+        self.ticker_input.setMaximumWidth(100)
+        self.ticker_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #2a2a2a;
+                border: 1px solid #444444;
+                border-radius: 3px;
+                padding: 5px;
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QLineEdit:focus {
+                border: 1px solid #10b981;
+            }
+        """)
+        # Allow pressing Enter to load ticker
+        self.ticker_input.returnPressed.connect(self.on_ticker_change)
+        ticker_input_layout.addWidget(self.ticker_input)
+        
+        # Load button
+        self.load_btn = QPushButton("Load")
+        self.load_btn.setMaximumWidth(60)
+        self.load_btn.clicked.connect(self.on_ticker_change)
+        ticker_input_layout.addWidget(self.load_btn)
+        
+        layout.addLayout(ticker_input_layout)
         
         # Status label
-        self.status_label = QLabel("Loading data...")
-        self.status_label.setStyleSheet("color: #f59e0b;")
+        self.status_label = QLabel("Ready")
+        self.status_label.setStyleSheet("color: #10b981; margin-left: 20px;")
         layout.addWidget(self.status_label)
         
         layout.addStretch()
@@ -188,6 +234,9 @@ class StockAnalysisWindow(QMainWindow):
         layout.addWidget(close_btn)
         
         group.setLayout(layout)
+        
+        # Store the group box to update title later
+        self.header_group = group
         return group
         
     def create_hvn_tab(self):
@@ -222,8 +271,8 @@ class StockAnalysisWindow(QMainWindow):
         
         # Create Supply/Demand chart
         self.supply_demand_chart = SupplyDemandChart(
-            lookback_days=15,
-            display_bars=390  # 5 days of 5-min bars
+            lookback_days=7,
+            display_bars=182  # 7 days of 15-min bars
         )
         
         # Connect signals
@@ -278,6 +327,53 @@ class StockAnalysisWindow(QMainWindow):
         layout.addWidget(info_label)
         return widget
         
+    def validate_ticker(self, ticker: str) -> bool:
+        """Basic ticker validation."""
+        # Check length (most tickers are 1-5 characters)
+        if len(ticker) < 1 or len(ticker) > 10:
+            return False
+            
+        # Check for valid characters (letters and possibly dots/dashes for some tickers)
+        if not re.match(r'^[A-Z][A-Z0-9\-\.]*$', ticker):
+            return False
+            
+        return True
+        
+    def on_ticker_change(self):
+        """Handle ticker change from input field."""
+        new_ticker = self.ticker_input.text().strip().upper()
+        
+        # Validate ticker input
+        if not new_ticker:
+            self.update_status("Please enter a ticker symbol", error=True)
+            return
+            
+        if not self.validate_ticker(new_ticker):
+            self.update_status("Invalid ticker format", error=True)
+            return
+            
+        if new_ticker == self.ticker:
+            self.update_status("Already showing " + new_ticker)
+            return
+            
+        # Update ticker
+        self.ticker = new_ticker
+        
+        # Update window title
+        self.setWindowTitle(f"Stock Analysis - {self.ticker}")
+        
+        # Update header group title
+        if hasattr(self, 'header_group'):
+            self.header_group.setTitle(f"Analysis: {self.ticker}")
+        
+        # Clear status
+        self.update_status(f"Loading {self.ticker}...")
+        
+        # Reload all data
+        self.load_ticker_data()
+        
+        logger.info(f"Changed ticker to {self.ticker}")
+        
     def load_ticker_data(self):
         """Load data for all tabs."""
         logger.info(f"Loading analysis data for {self.ticker}")
@@ -296,11 +392,11 @@ class StockAnalysisWindow(QMainWindow):
         self.status_label.setText(message)
         
         if success:
-            self.status_label.setStyleSheet("color: #10b981;")
+            self.status_label.setStyleSheet("color: #10b981; margin-left: 20px;")
         elif error:
-            self.status_label.setStyleSheet("color: #ef4444;")
+            self.status_label.setStyleSheet("color: #ef4444; margin-left: 20px;")
         else:
-            self.status_label.setStyleSheet("color: #f59e0b;")
+            self.status_label.setStyleSheet("color: #f59e0b; margin-left: 20px;")
             
     def on_zone_selected(self, zone_data: dict):
         """Handle supply/demand zone selection."""
@@ -362,9 +458,10 @@ if __name__ == "__main__":
     print(f"Stock Analysis Window opened for {ticker}")
     print("Available tabs:")
     print("  - HVN Analysis: Volume profile analysis")
-    print("  - Supply/Demand: Zone detection based on volume and fractals")
+    print("  - Supply/Demand: Order blocks and breaker blocks detection")
     print("  - Camarilla Pivots: Support/resistance levels")
     print("  - Trading Plan: (Coming soon)")
-    print("\nYou can also pass a ticker as argument: python stock_analysis_window.py AAPL")
+    print("\nYou can change tickers using the input field in the header")
+    print("You can also pass a ticker as argument: python stock_analysis_window.py AAPL")
     
     sys.exit(app.exec())

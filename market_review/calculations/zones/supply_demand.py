@@ -1,449 +1,388 @@
 # market_review/calculations/zones/supply_demand.py
 """
-Module: Supply and Demand Zone Detection
-Purpose: Identify supply/demand zones using volume profile and fractal pivot points
+Module: Order Blocks & Breaker Blocks Detection
+Purpose: Identify order blocks and breaker blocks using swing highs/lows
 Features: 
-- High volume areas (>70% relative to average)
-- Fractal pivot point alignment
-- ATR-based zone validation
-- Async data loading
+- Swing high/low detection with configurable lookback
+- Order block creation on swing breaks
+- Breaker block tracking when price reverses through OB
+- Maintains last N blocks of each type
 """
 
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass, field
 import logging
 import asyncio
-
-# Import required modules - CORRECTED PATHS
-from backtest.calculations.volume.volume_profile import VolumeProfile, PriceLevel
-from market_review.calculations.market_structure.m15_market_structure import (
-    M15MarketStructureAnalyzer, Fractal
-)
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 
 @dataclass
+class Swing:
+    """Swing high or low point"""
+    price: float
+    time: datetime
+    bar_index: int
+    crossed: bool = False
+
+
+@dataclass
+class OrderBlock:
+    """Order Block definition matching PineScript structure"""
+    block_type: str  # 'bullish' or 'bearish'
+    top: float
+    bottom: float
+    time: datetime
+    bar_index: int
+    is_breaker: bool = False
+    breaker_time: Optional[datetime] = None
+    breaker_bar_index: Optional[int] = None
+    
+    @property
+    def center(self) -> float:
+        return (self.top + self.bottom) / 2
+        
+    @property
+    def height(self) -> float:
+        return self.top - self.bottom
+
+
+# For backward compatibility with existing code
+@dataclass 
 class SupplyDemandZone:
-    """Supply or Demand zone definition"""
+    """Legacy zone definition - maps to OrderBlock"""
     zone_type: str  # 'supply' or 'demand'
     price_low: float
     price_high: float
     center_price: float
-    volume_percent: float
-    fractal_price: float
-    fractal_time: datetime
-    strength: float  # 0-100 based on volume and ATR validation
-    validated: bool
+    volume_percent: float = 0.0  # Not used in new approach
+    fractal_price: float = 0.0
+    fractal_time: datetime = None
+    strength: float = 50.0
+    validated: bool = True
     validation_time: Optional[datetime] = None
-    validation_move: Optional[float] = None  # ATR units moved
-    volume_levels: List[PriceLevel] = None
+    validation_move: Optional[float] = None
+    volume_levels: List = field(default_factory=list)
     
-
-class ATRCalculator:
-    """Calculate Average True Range for 15-minute data"""
-    
-    @staticmethod
-    def calculate_atr(data: pd.DataFrame, period: int = 14) -> pd.Series:
-        """
-        Calculate ATR for given OHLC data
-        
-        Args:
-            data: DataFrame with high, low, close columns
-            period: ATR period (default 14)
-            
-        Returns:
-            Series with ATR values
-        """
-        high = data['high']
-        low = data['low']
-        close = data['close']
-        
-        # Calculate True Range
-        tr1 = high - low
-        tr2 = abs(high - close.shift(1))
-        tr3 = abs(low - close.shift(1))
-        
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        
-        # Calculate ATR using EMA
-        atr = tr.ewm(span=period, adjust=False).mean()
-        
-        return atr
+    @classmethod
+    def from_order_block(cls, ob: OrderBlock) -> 'SupplyDemandZone':
+        """Convert OrderBlock to SupplyDemandZone for compatibility"""
+        zone_type = 'supply' if ob.block_type == 'bearish' else 'demand'
+        return cls(
+            zone_type=zone_type,
+            price_low=ob.bottom,
+            price_high=ob.top,
+            center_price=ob.center,
+            fractal_price=ob.center,
+            fractal_time=ob.time,
+            strength=80.0 if not ob.is_breaker else 60.0,
+            validated=not ob.is_breaker
+        )
 
 
-class SupplyDemandAnalyzer:
+class OrderBlockAnalyzer:
     """
-    Analyze supply and demand zones using volume profile and market structure
+    Analyze order blocks and breaker blocks using swing highs/lows
+    Matches PineScript logic exactly
     """
     
     def __init__(self,
-                 lookback_days: int = 7,  # Changed from 15 to 7
-                 volume_threshold_multiplier: float = 1.7,  # >70% above average
-                 atr_threshold: float = 2.0,
-                 validation_window_minutes: int = 60,
-                 min_zone_size_atr: float = 0.5):
+                 swing_length: int = 7,
+                 show_bullish: int = 3,
+                 show_bearish: int = 3,
+                 use_body: bool = False):
         """
-        Initialize Supply/Demand analyzer
+        Initialize Order Block analyzer
         
         Args:
-            lookback_days: Days of historical data to analyze
-            volume_threshold_multiplier: Multiplier above average volume (1.7 = 70% above)
-            atr_threshold: ATR units for zone validation
-            validation_window_minutes: Time window to check for price movement
-            min_zone_size_atr: Minimum zone size in ATR units
+            swing_length: Lookback period for swing detection (default 10)
+            show_bullish: Number of bullish OBs to track (default 3)
+            show_bearish: Number of bearish OBs to track (default 3)
+            use_body: Use candle body instead of wicks (default False)
         """
-        self.lookback_days = lookback_days
-        self.volume_threshold_multiplier = volume_threshold_multiplier
-        self.atr_threshold = atr_threshold
-        self.validation_window_minutes = validation_window_minutes
-        self.min_zone_size_atr = min_zone_size_atr
-        
-        # Initialize components
-        self.volume_profile = VolumeProfile(levels=100)
-        self.market_structure = M15MarketStructureAnalyzer(
-            fractal_length=2,
-            buffer_size=100,
-            min_candles_required=10
-        )
+        self.swing_length = swing_length
+        self.show_bullish = show_bullish
+        self.show_bearish = show_bearish
+        self.use_body = use_body
         
         # Storage
-        self.zones: List[SupplyDemandZone] = []
-        self.current_atr: Optional[float] = None
+        self.bullish_obs: List[OrderBlock] = []
+        self.bearish_obs: List[OrderBlock] = []
+        self.swing_highs: List[Swing] = []
+        self.swing_lows: List[Swing] = []
         
     def analyze_zones(self, data: pd.DataFrame) -> List[SupplyDemandZone]:
         """
-        Main analysis function to identify supply/demand zones
-        
-        Args:
-            data: DataFrame with OHLC data (15-minute bars)
-            
-        Returns:
-            List of identified supply/demand zones
-        """
-        logger.info(f"Analyzing supply/demand zones for {len(data)} bars")
-        
-        # Ensure we have timestamp column
-        if 'timestamp' not in data.columns:
-            data['timestamp'] = data.index
-            
-        # Calculate ATR
-        atr_series = ATRCalculator.calculate_atr(data)
-        self.current_atr = atr_series.iloc[-1]
-        logger.info(f"Current ATR: {self.current_atr:.4f}")
-        
-        # Build volume profile
-        price_levels = self.volume_profile.build_volume_profile(data)
-        if not price_levels:
-            logger.warning("No price levels found in volume profile")
-            return []
-            
-        # Find high volume areas
-        high_volume_zones = self._find_high_volume_zones(price_levels)
-        logger.info(f"Found {len(high_volume_zones)} high volume zones")
-        
-        # Process market structure to find fractals
-        fractals = self._extract_fractals_from_data(data)
-        logger.info(f"Found {len(fractals)} fractal pivot points")
-        
-        # Align fractals with high volume zones
-        self.zones = self._align_fractals_with_volume(
-            fractals, high_volume_zones, data, atr_series
-        )
-        
-        # Validate zones with price movement
-        self._validate_zones(data, atr_series)
-        
-        logger.info(f"Identified {len(self.zones)} supply/demand zones")
-        return self.zones
-        
-    def _find_high_volume_zones(self, price_levels: List[PriceLevel]) -> List[List[PriceLevel]]:
-        """
-        Find contiguous high volume zones
-        
-        Args:
-            price_levels: List of price levels from volume profile
-            
-        Returns:
-            List of zones (each zone is a list of contiguous price levels)
-        """
-        if not price_levels:
-            return []
-            
-        # Calculate average volume percentage
-        avg_percent = 100.0 / len(price_levels)
-        threshold = avg_percent * self.volume_threshold_multiplier
-        
-        # Get levels above threshold
-        high_volume_levels = [
-            level for level in price_levels 
-            if level.percent_of_total >= threshold
-        ]
-        
-        if not high_volume_levels:
-            return []
-            
-        # Sort by index to ensure contiguity
-        high_volume_levels.sort(key=lambda x: x.index)
-        
-        # Group contiguous levels into zones
-        zones = []
-        current_zone = [high_volume_levels[0]]
-        
-        for level in high_volume_levels[1:]:
-            if level.index == current_zone[-1].index + 1:
-                current_zone.append(level)
-            else:
-                zones.append(current_zone)
-                current_zone = [level]
-                
-        zones.append(current_zone)
-        
-        return zones
-        
-    def _extract_fractals_from_data(self, data: pd.DataFrame) -> List[Dict]:
-        """
-        Extract fractals from 15-minute data
+        Main analysis function to identify order blocks
         
         Args:
             data: DataFrame with OHLC data
             
         Returns:
-            List of fractal dictionaries with price, type, and timestamp
+            List of supply/demand zones (for compatibility)
         """
-        # Process data through market structure analyzer
-        symbol = "ANALYSIS"  # Dummy symbol for internal processing
+        logger.info(f"Analyzing order blocks for {len(data)} bars")
         
-        # Convert DataFrame to candle format expected by analyzer
-        candles = []
-        for idx, row in data.iterrows():
-            candle_dict = {
-                'timestamp': idx if isinstance(idx, datetime) else row['timestamp'],
-                'o': float(row['open']),
-                'h': float(row['high']),
-                'l': float(row['low']),
-                'c': float(row['close']),
-                'v': float(row['volume'])
-            }
-            candles.append(candle_dict)
-            
-        # Process historical candles
-        self.market_structure.process_historical_candles(symbol, candles)
+        # Reset storage
+        self.bullish_obs.clear()
+        self.bearish_obs.clear()
+        self.swing_highs.clear()
+        self.swing_lows.clear()
         
-        # Extract fractals
-        fractals = []
-        
-        # Get high fractals
-        if symbol in self.market_structure.high_fractals:
-            for fractal in self.market_structure.high_fractals[symbol]:
-                fractals.append({
-                    'price': fractal.price,
-                    'type': 'high',
-                    'timestamp': fractal.timestamp,
-                    'bar_index': fractal.bar_index
-                })
-                
-        # Get low fractals
-        if symbol in self.market_structure.low_fractals:
-            for fractal in self.market_structure.low_fractals[symbol]:
-                fractals.append({
-                    'price': fractal.price,
-                    'type': 'low',
-                    'timestamp': fractal.timestamp,
-                    'bar_index': fractal.bar_index
-                })
-                
-        return fractals
-        
-    def _align_fractals_with_volume(self, 
-                                  fractals: List[Dict],
-                                  high_volume_zones: List[List[PriceLevel]],
-                                  data: pd.DataFrame,
-                                  atr_series: pd.Series) -> List[SupplyDemandZone]:
-        """
-        Align fractal pivot points with high volume zones
-        
-        Args:
-            fractals: List of fractal dictionaries
-            high_volume_zones: List of high volume zones
-            data: Original OHLC data
-            atr_series: ATR values
-            
-        Returns:
-            List of supply/demand zones
-        """
-        zones = []
-        
-        for zone_levels in high_volume_zones:
-            if not zone_levels:
-                continue
-                
-            # Calculate zone boundaries
-            zone_low = min(level.low for level in zone_levels)
-            zone_high = max(level.high for level in zone_levels)
-            zone_volume = sum(level.percent_of_total for level in zone_levels)
-            
-            # Calculate weighted center
-            total_volume = sum(level.volume for level in zone_levels)
-            zone_center = sum(
-                level.center * level.volume for level in zone_levels
-            ) / total_volume if total_volume > 0 else (zone_low + zone_high) / 2
-            
-            # Check if zone size meets minimum requirement
-            atr_at_zone = atr_series.iloc[-1]  # Use current ATR for simplicity
-            zone_size = zone_high - zone_low
-            if zone_size < self.min_zone_size_atr * atr_at_zone:
-                continue
-                
-            # Find fractals within or near this zone
-            zone_fractals = []
-            for fractal in fractals:
-                # Check if fractal is within zone or within 1 ATR
-                if (zone_low <= fractal['price'] <= zone_high or
-                    abs(fractal['price'] - zone_center) <= atr_at_zone):
-                    zone_fractals.append(fractal)
-                    
-            # Create zone if we have fractals
-            for fractal in zone_fractals:
-                zone_type = 'supply' if fractal['type'] == 'high' else 'demand'
-                
-                # Calculate initial strength based on volume
-                strength = min(100, zone_volume * 10)  # Scale volume percentage
-                
-                zone = SupplyDemandZone(
-                    zone_type=zone_type,
-                    price_low=zone_low,
-                    price_high=zone_high,
-                    center_price=zone_center,
-                    volume_percent=zone_volume,
-                    fractal_price=fractal['price'],
-                    fractal_time=fractal['timestamp'],
-                    strength=strength,
-                    validated=False,
-                    volume_levels=zone_levels
-                )
-                
-                zones.append(zone)
-                
-        return zones
-        
-    def _validate_zones(self, data: pd.DataFrame, atr_series: pd.Series):
-        """
-        Validate zones by checking for 2 ATR move within 60 minutes
-        
-        Args:
-            data: OHLC data
-            atr_series: ATR values
-        """
-        for zone in self.zones:
-            # Find the fractal bar in the data
-            fractal_time = zone.fractal_time
-            
-            # Get data after fractal formation
-            mask = data.index > fractal_time
-            future_data = data[mask].head(
-                self.validation_window_minutes // 15  # Convert to 15-min bars
-            )
-            
-            if future_data.empty:
-                continue
-                
-            # Get ATR at fractal time
-            atr_at_fractal = atr_series.loc[fractal_time] if fractal_time in atr_series.index else self.current_atr
-            
-            # Check for price movement
-            if zone.zone_type == 'supply':
-                # For supply zone, look for move down
-                min_low = future_data['low'].min()
-                move_from_zone = zone.fractal_price - min_low
-                
-                if move_from_zone >= self.atr_threshold * atr_at_fractal:
-                    zone.validated = True
-                    zone.validation_move = move_from_zone / atr_at_fractal
-                    zone.validation_time = future_data[
-                        future_data['low'] == min_low
-                    ].index[0]
-                    
-            else:  # demand zone
-                # For demand zone, look for move up
-                max_high = future_data['high'].max()
-                move_from_zone = max_high - zone.fractal_price
-                
-                if move_from_zone >= self.atr_threshold * atr_at_fractal:
-                    zone.validated = True
-                    zone.validation_move = move_from_zone / atr_at_fractal
-                    zone.validation_time = future_data[
-                        future_data['high'] == max_high
-                    ].index[0]
-                    
-            # Adjust strength based on validation
-            if zone.validated:
-                zone.strength = min(100, zone.strength + 20)
-                logger.debug(
-                    f"Validated {zone.zone_type} zone at {zone.center_price:.2f} "
-                    f"with {zone.validation_move:.1f} ATR move"
-                )
-                
-    def get_active_zones(self, current_price: float) -> List[SupplyDemandZone]:
-        """
-        Get zones that haven't been broken by current price
-        
-        Args:
-            current_price: Current market price
-            
-        Returns:
-            List of active zones
-        """
-        active_zones = []
-        
-        for zone in self.zones:
-            # Supply zone is active if price is below it
-            if zone.zone_type == 'supply' and current_price < zone.price_low:
-                active_zones.append(zone)
-            # Demand zone is active if price is above it
-            elif zone.zone_type == 'demand' and current_price > zone.price_high:
-                active_zones.append(zone)
-                
-        return active_zones
-        
-    def get_nearby_zones(self, current_price: float, 
-                        atr_distance: float = 3.0) -> List[SupplyDemandZone]:
-        """
-        Get zones within specified ATR distance from current price
-        
-        Args:
-            current_price: Current market price
-            atr_distance: Maximum distance in ATR units
-            
-        Returns:
-            List of nearby zones
-        """
-        if self.current_atr is None:
+        # Ensure we have enough data
+        if len(data) < self.swing_length * 2:
+            logger.warning("Not enough data for swing analysis")
             return []
             
-        max_distance = atr_distance * self.current_atr
-        nearby_zones = []
+        # Detect swings
+        self._detect_swings(data)
+        logger.info(f"Found {len(self.swing_highs)} swing highs and {len(self.swing_lows)} swing lows")
         
-        for zone in self.zones:
-            distance = min(
-                abs(current_price - zone.price_low),
-                abs(current_price - zone.price_high),
-                abs(current_price - zone.center_price)
-            )
+        # Process each bar to find order blocks
+        self._process_order_blocks(data)
+        logger.info(f"Found {len(self.bullish_obs)} bullish and {len(self.bearish_obs)} bearish order blocks")
+        
+        # Convert to zones for compatibility
+        zones = []
+        
+        # Add most recent bullish blocks
+        for ob in self.bullish_obs[-self.show_bullish:]:
+            zones.append(SupplyDemandZone.from_order_block(ob))
             
-            if distance <= max_distance:
-                nearby_zones.append(zone)
+        # Add most recent bearish blocks
+        for ob in self.bearish_obs[-self.show_bearish:]:
+            zones.append(SupplyDemandZone.from_order_block(ob))
+            
+        return zones
+        
+    def _detect_swings(self, data: pd.DataFrame):
+        """Detect swing highs and lows"""
+        high_values = data['high'].values
+        low_values = data['low'].values
+        
+        # Process each potential swing point
+        for i in range(self.swing_length, len(data) - self.swing_length):
+            # Check for swing high
+            if self._is_swing_high(high_values, i):
+                swing = Swing(
+                    price=high_values[i],
+                    time=data.index[i],
+                    bar_index=i
+                )
+                self.swing_highs.append(swing)
                 
-        return sorted(nearby_zones, key=lambda z: abs(z.center_price - current_price))
+            # Check for swing low
+            if self._is_swing_low(low_values, i):
+                swing = Swing(
+                    price=low_values[i],
+                    time=data.index[i],
+                    bar_index=i
+                )
+                self.swing_lows.append(swing)
+                
+    def _is_swing_high(self, highs: np.ndarray, index: int) -> bool:
+        """Check if index is a swing high"""
+        if index < self.swing_length or index >= len(highs) - self.swing_length:
+            return False
+            
+        high_point = highs[index]
+        
+        # Check left side
+        for i in range(index - self.swing_length, index):
+            if highs[i] >= high_point:
+                return False
+                
+        # Check right side
+        for i in range(index + 1, index + self.swing_length + 1):
+            if i < len(highs) and highs[i] > high_point:
+                return False
+                
+        return True
+        
+    def _is_swing_low(self, lows: np.ndarray, index: int) -> bool:
+        """Check if index is a swing low"""
+        if index < self.swing_length or index >= len(lows) - self.swing_length:
+            return False
+            
+        low_point = lows[index]
+        
+        # Check left side
+        for i in range(index - self.swing_length, index):
+            if lows[i] <= low_point:
+                return False
+                
+        # Check right side
+        for i in range(index + 1, index + self.swing_length + 1):
+            if i < len(lows) and lows[i] < low_point:
+                return False
+                
+        return True
+        
+    def _process_order_blocks(self, data: pd.DataFrame):
+        """Process bars to identify order blocks"""
+        close_values = data['close'].values
+        open_values = data['open'].values
+        high_values = data['high'].values
+        low_values = data['low'].values
+        
+        # Get max/min values based on use_body setting
+        if self.use_body:
+            max_values = np.maximum(close_values, open_values)
+            min_values = np.minimum(close_values, open_values)
+        else:
+            max_values = high_values
+            min_values = low_values
+            
+        # Process each bar
+        for i in range(1, len(data)):
+            current_close = close_values[i]
+            current_time = data.index[i]
+            
+            # Check for bullish order blocks (close above swing high)
+            for swing in self.swing_highs:
+                if not swing.crossed and swing.bar_index < i:
+                    if current_close > swing.price:
+                        swing.crossed = True
+                        
+                        # Find the order block - looking for last down move before breakout
+                        # Start from bar before breakout
+                        ob_index = i - 1
+                        ob_bottom = low_values[ob_index]
+                        ob_top = high_values[ob_index]
+                        
+                        # Look back to find the lowest low before breakout
+                        min_low = low_values[ob_index]
+                        min_low_index = ob_index
+                        
+                        for j in range(i-2, max(swing.bar_index-1, i-10), -1):
+                            if j >= 0 and low_values[j] < min_low:
+                                min_low = low_values[j]
+                                min_low_index = j
+                                
+                        # The order block is the candle with the lowest low
+                        ob_bottom = low_values[min_low_index]
+                        ob_top = high_values[min_low_index]
+                        ob_time = data.index[min_low_index]
+                        
+                        ob = OrderBlock(
+                            block_type='bullish',
+                            top=ob_top,
+                            bottom=ob_bottom,
+                            time=ob_time,
+                            bar_index=min_low_index
+                        )
+                        self.bullish_obs.append(ob)
+                        
+            # Check for bearish order blocks (close below swing low)
+            for swing in self.swing_lows:
+                if not swing.crossed and swing.bar_index < i:
+                    if current_close < swing.price:
+                        swing.crossed = True
+                        
+                        # Find the order block - looking for last up move before breakout
+                        # Start from bar before breakout
+                        ob_index = i - 1
+                        ob_bottom = low_values[ob_index]
+                        ob_top = high_values[ob_index]
+                        
+                        # Look back to find the highest high before breakout
+                        max_high = high_values[ob_index]
+                        max_high_index = ob_index
+                        
+                        for j in range(i-2, max(swing.bar_index-1, i-10), -1):
+                            if j >= 0 and high_values[j] > max_high:
+                                max_high = high_values[j]
+                                max_high_index = j
+                                
+                        # The order block is the candle with the highest high
+                        ob_bottom = low_values[max_high_index]
+                        ob_top = high_values[max_high_index]
+                        ob_time = data.index[max_high_index]
+                        
+                        ob = OrderBlock(
+                            block_type='bearish',
+                            top=ob_top,
+                            bottom=ob_bottom,
+                            time=ob_time,
+                            bar_index=max_high_index
+                        )
+                        self.bearish_obs.append(ob)
+                        
+            # Check for breaker blocks
+            self._check_breaker_blocks(i, data)
+            
+    def _check_breaker_blocks(self, bar_index: int, data: pd.DataFrame):
+        """Check if any order blocks have become breaker blocks"""
+        if self.use_body:
+            current_min = min(data.iloc[bar_index]['close'], data.iloc[bar_index]['open'])
+            current_max = max(data.iloc[bar_index]['close'], data.iloc[bar_index]['open'])
+        else:
+            current_min = data.iloc[bar_index]['low']
+            current_max = data.iloc[bar_index]['high']
+            
+        current_close = data.iloc[bar_index]['close']
+        current_time = data.index[bar_index]
+        
+        # Check bullish OBs for breaks
+        for ob in self.bullish_obs:
+            if not ob.is_breaker and current_min < ob.bottom:
+                # Price went below bottom - OB is broken, becomes resistance
+                ob.is_breaker = True
+                ob.breaker_time = current_time
+                ob.breaker_bar_index = bar_index
+                
+        # Check bearish OBs for breaks  
+        for ob in self.bearish_obs:
+            if not ob.is_breaker and current_max > ob.top:
+                # Price went above top - OB is broken, becomes support
+                ob.is_breaker = True
+                ob.breaker_time = current_time
+                ob.breaker_bar_index = bar_index
+                
+        # Remove blocks when price CLOSES outside the zone range
+        self.bullish_obs = [
+            ob for ob in self.bullish_obs 
+            if not (ob.is_breaker and (current_close > ob.top or current_close < ob.bottom))
+        ]
+        
+        self.bearish_obs = [
+            ob for ob in self.bearish_obs 
+            if not (ob.is_breaker and (current_close > ob.top or current_close < ob.bottom))
+        ]
+        
+    def get_active_blocks(self, current_price: float) -> Dict[str, List[OrderBlock]]:
+        """Get currently active order blocks"""
+        active_bullish = []
+        active_bearish = []
+        
+        # Get most recent blocks
+        for ob in self.bullish_obs[-self.show_bullish:]:
+            if not ob.is_breaker or current_price <= ob.top:
+                active_bullish.append(ob)
+                
+        for ob in self.bearish_obs[-self.show_bearish:]:
+            if not ob.is_breaker or current_price >= ob.bottom:
+                active_bearish.append(ob)
+                
+        return {
+            'bullish': active_bullish,
+            'bearish': active_bearish
+        }
 
 
-# =============== Module-level async functions for data loading ===============
+# Legacy analyzer for compatibility
+class SupplyDemandAnalyzer(OrderBlockAnalyzer):
+    """Legacy class name for compatibility"""
+    pass
 
-# Global data manager instance (to be set by the application)
+
+# =============== Module-level async functions ===============
+
+# Global data manager instance
 _data_manager = None
 
 
@@ -451,35 +390,38 @@ def set_data_manager(data_manager):
     """Set the global data manager instance"""
     global _data_manager
     _data_manager = data_manager
+    logger.info("Data manager set in supply_demand module")
     
 
 async def analyze_supply_demand_zones(ticker: str, 
-                                    lookback_days: int = 7,  # Changed from 15 to 7
+                                    lookback_days: int = None,  # Keep for compatibility
+                                    analysis_lookback_days: int = 30,
+                                    display_lookback_days: int = 7,
+                                    show_bullish_obs: int = 3,
+                                    show_bearish_obs: int = 3,
                                     volume_threshold: float = 1.7) -> Dict:
     """
-    Async function to analyze supply/demand zones for a ticker
-    
-    Args:
-        ticker: Stock symbol
-        lookback_days: Days of historical data
-        volume_threshold: Volume threshold multiplier
-        
-    Returns:
-        Dictionary with analysis results
+    Analyze 30 days to find order blocks, but only return 7 days of price data
     """
+    # Handle backward compatibility
+    if lookback_days is not None:
+        display_lookback_days = lookback_days
+        analysis_lookback_days = max(30, lookback_days)  # Ensure we analyze enough data
+        
     if _data_manager is None:
         raise RuntimeError("Data manager not set. Call set_data_manager() first.")
         
     try:
-        # Load 15-minute data
+        # Load MORE data for analysis
         end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=lookback_days)
+        analysis_start_date = end_date - timedelta(days=analysis_lookback_days)
+        display_start_date = end_date - timedelta(days=display_lookback_days)
         
         # Load data using data manager
         data = await _data_manager.load_data_async(
             ticker=ticker,
             timeframe='15min',
-            start_date=start_date,
+            start_date=analysis_start_date,
             end_date=end_date
         )
         
@@ -489,37 +431,84 @@ async def analyze_supply_demand_zones(ticker: str,
                 'zones': []
             }
             
-        # Initialize analyzer
-        analyzer = SupplyDemandAnalyzer(
-            lookback_days=lookback_days,
-            volume_threshold_multiplier=volume_threshold
-        )
-        
-        # Analyze zones
-        zones = analyzer.analyze_zones(data)
-        
-        # Get current price
+        # Get current price FIRST
         current_price = float(data['close'].iloc[-1])
         
-        # Categorize zones
-        active_zones = analyzer.get_active_zones(current_price)
-        nearby_zones = analyzer.get_nearby_zones(current_price)
+        # But only return recent price data for display
+        display_data = data[data.index >= display_start_date]
+        
+        # Calculate ATR for reference
+        high = data['high'].values
+        low = data['low'].values
+        close = data['close'].values
+        
+        tr1 = high - low
+        tr2 = np.abs(high - np.roll(close, 1))
+        tr3 = np.abs(low - np.roll(close, 1))
+        tr = np.maximum(tr1, np.maximum(tr2, tr3))
+        atr = np.mean(tr[-14:])  # Simple 14-period ATR
+        
+        # Initialize analyzer with consistent swing length
+        analyzer = OrderBlockAnalyzer(
+            swing_length=7,  # Changed from 10 to match your init
+            show_bullish=show_bullish_obs,
+            show_bearish=show_bearish_obs,
+            use_body=False
+        )
+        
+        # Analyze ALL the data
+        zones = analyzer.analyze_zones(data)
+        
+        # Get ALL order blocks (including broken ones) for the table
+        all_order_blocks = analyzer.bullish_obs[-analyzer.show_bullish:] + analyzer.bearish_obs[-analyzer.show_bearish:]
+        all_zones = [SupplyDemandZone.from_order_block(ob) for ob in all_order_blocks]
+        
+        # Get only VALID blocks for chart display
+        chart_zones = []
+        for ob in all_order_blocks:
+            if not ob.is_breaker:
+                # Not broken, include it
+                chart_zones.append(SupplyDemandZone.from_order_block(ob))
+            else:
+                # Broken - only include if price is still within the zone
+                if ob.bottom <= current_price <= ob.top:
+                    chart_zones.append(SupplyDemandZone.from_order_block(ob))
+        
+        # Get active zones (zones that haven't been invalidated)
+        active_blocks = analyzer.get_active_blocks(current_price)
+        active_zones = [
+            SupplyDemandZone.from_order_block(ob) 
+            for ob in active_blocks['bullish'] + active_blocks['bearish']
+        ]
+        
+        # Calculate nearby zones (within 3% of current price)
+        price_threshold = current_price * 0.03
+        nearby_zones = [
+            zone for zone in all_zones
+            if abs(zone.center_price - current_price) <= price_threshold
+        ]
         
         return {
             'ticker': ticker,
             'current_price': current_price,
-            'current_atr': analyzer.current_atr,
-            'total_zones': len(zones),
+            'current_atr': atr,
+            'total_zones': len(all_zones),
             'active_zones': len(active_zones),
             'nearby_zones': len(nearby_zones),
-            'zones': zones,
+            'zones': chart_zones,  # Only valid zones for chart
+            'all_zones': all_zones,  # All zones for table
             'active_zone_list': active_zones,
             'nearby_zone_list': nearby_zones,
-            'analysis_time': datetime.now(timezone.utc)
+            'analysis_time': datetime.now(timezone.utc),
+            'bullish_obs': len(analyzer.bullish_obs),
+            'bearish_obs': len(analyzer.bearish_obs),
+            'display_data': display_data
         }
         
     except Exception as e:
         logger.error(f"Error analyzing {ticker}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             'error': str(e),
             'zones': []
@@ -530,7 +519,7 @@ async def get_strongest_zones(ticker: str,
                             top_n: int = 5,
                             min_strength: float = 70.0) -> List[SupplyDemandZone]:
     """
-    Get the strongest supply/demand zones for a ticker
+    Get the strongest order blocks for a ticker
     
     Args:
         ticker: Stock symbol
@@ -545,75 +534,22 @@ async def get_strongest_zones(ticker: str,
     if 'error' in result:
         return []
         
-    # Filter by strength and sort
-    strong_zones = [
-        zone for zone in result['zones'] 
-        if zone.strength >= min_strength
-    ]
+    # All order blocks have high strength by default
+    # Breaker blocks have slightly lower strength
+    zones = result['zones']
     
-    # Sort by strength and validation
-    strong_zones.sort(
-        key=lambda z: (z.validated, z.strength), 
-        reverse=True
-    )
+    # Sort by validated (non-breaker) first, then by recency
+    zones.sort(key=lambda z: (z.validated, z.strength), reverse=True)
     
-    return strong_zones[:top_n]
+    return zones[:top_n]
 
 
-# =============== Example usage for testing ===============
-
-if __name__ == "__main__":
-    # Example synchronous usage for testing
-    import asyncio
+# For backward compatibility
+def get_active_zones(self, current_price: float) -> List[SupplyDemandZone]:
+    """Legacy method for compatibility"""
+    return self.active_zone_list if hasattr(self, 'active_zone_list') else []
     
-    async def test_analysis():
-        # Mock data manager for testing
-        class MockDataManager:
-            async def load_data_async(self, **kwargs):
-                # Generate sample 15-minute data
-                dates = pd.date_range(
-                    start=kwargs['start_date'],
-                    end=kwargs['end_date'],
-                    freq='15min'
-                )
-                
-                # Generate random OHLCV data
-                np.random.seed(42)
-                df = pd.DataFrame({
-                    'open': 100 + np.random.randn(len(dates)).cumsum() * 0.5,
-                    'high': 0,
-                    'low': 0,
-                    'close': 0,
-                    'volume': np.random.randint(1000, 10000, len(dates))
-                }, index=dates)
-                
-                # Calculate OHLC properly
-                df['high'] = df['open'] + np.abs(np.random.randn(len(dates)) * 0.3)
-                df['low'] = df['open'] - np.abs(np.random.randn(len(dates)) * 0.3)
-                df['close'] = df['low'] + np.random.rand(len(dates)) * (df['high'] - df['low'])
-                
-                return df
-                
-        # Set mock data manager
-        set_data_manager(MockDataManager())
-        
-        # Test analysis with 7 days lookback
-        result = await analyze_supply_demand_zones('TEST', lookback_days=7)  # Changed to 7
-        
-        print(f"Analysis Results:")
-        print(f"Total zones found: {result['total_zones']}")
-        print(f"Active zones: {result['active_zones']}")
-        print(f"Current ATR: {result['current_atr']:.4f}")
-        
-        # Show top zones
-        strongest = await get_strongest_zones('TEST', top_n=3)
-        print(f"\nTop 3 Strongest Zones:")
-        for i, zone in enumerate(strongest, 1):
-            print(f"{i}. {zone.zone_type.upper()} Zone:")
-            print(f"   Range: ${zone.price_low:.2f} - ${zone.price_high:.2f}")
-            print(f"   Volume: {zone.volume_percent:.1f}%")
-            print(f"   Strength: {zone.strength:.0f}")
-            print(f"   Validated: {zone.validated}")
-            
-    # Run test
-    asyncio.run(test_analysis())
+    
+def get_nearby_zones(self, current_price: float, atr_distance: float = 3.0) -> List[SupplyDemandZone]:
+    """Legacy method for compatibility"""
+    return self.nearby_zone_list if hasattr(self, 'nearby_zone_list') else []

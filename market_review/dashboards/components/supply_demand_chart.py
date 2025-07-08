@@ -485,8 +485,11 @@ class SupplyDemandChart(QWidget):
         self.load_price_data()
         
         # Populate zone table
-        if result['zones']:
-            self.populate_zone_table(result['zones'])
+        if 'all_zones' in result and result['all_zones']:
+            self.populate_zone_table(result['all_zones'])
+        elif result['zones']:
+            self.populate_zone_table(result['zones'])  # Fallbackif 'all_zones' in result and result['all_zones']:
+
     
     def load_price_data(self):
         """Load price data for charting"""
@@ -620,18 +623,23 @@ class SupplyDemandChart(QWidget):
             else:
                 color = QColor(34, 197, 94)   # Green
                 
-            # Adjust alpha for validation
-            if zone.validated:
-                color.setAlpha(self.validated_alpha)
-            else:
+            # Adjust for breaker blocks
+            if not zone.validated:  # This is a breaker block
+                # Use dashed line for breakers
+                pen_style = Qt.PenStyle.DashLine
                 color.setAlpha(self.unvalidated_alpha)
+                label_suffix = " (B)"  # Add (B) for breaker
+            else:
+                pen_style = Qt.PenStyle.SolidLine
+                color.setAlpha(self.validated_alpha)
+                label_suffix = ""
                 
-            # Create zone rectangle
+            # Create zone rectangle with appropriate pen style
             zone_rect = pg.LinearRegionItem(
                 values=(zone_bottom, zone_top),
                 orientation='horizontal',
                 brush=pg.mkBrush(color),
-                pen=pg.mkPen(color, width=2),
+                pen=pg.mkPen(color, width=2, style=pen_style),
                 movable=False
             )
             
@@ -639,7 +647,7 @@ class SupplyDemandChart(QWidget):
             zones_plotted += 1
             
             # Add zone label
-            label_text = f"{zone.zone_type.upper()}\n{zone.strength:.0f}%"
+            label_text = f"{zone.zone_type.upper()}{label_suffix}\n{zone.strength:.0f}%"
             zone_label = pg.TextItem(
                 text=label_text,
                 color='w',
@@ -703,12 +711,16 @@ class SupplyDemandChart(QWidget):
                 strength_item.setForeground(QColor(251, 191, 36))
             self.zone_table.setItem(i, 3, strength_item)
             
-            # Validated
-            val_item = QTableWidgetItem("✓" if zone.validated else "✗")
-            val_item.setForeground(
-                QColor(34, 197, 94) if zone.validated 
-                else QColor(156, 163, 175)
-            )
+            # Validated column - show if it's broken
+            if zone.validated:
+                val_text = "✓"
+                val_color = QColor(34, 197, 94)  # Green for valid
+            else:
+                val_text = "Breaker"
+                val_color = QColor(245, 158, 11)  # Orange for breaker blocks
+                
+            val_item = QTableWidgetItem(val_text)
+            val_item.setForeground(val_color)
             self.zone_table.setItem(i, 4, val_item)
             
             # Distance

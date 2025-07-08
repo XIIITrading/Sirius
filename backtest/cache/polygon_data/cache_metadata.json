@@ -1550,7 +1550,7 @@
     "timeframe": "tick",
     "start_time": "2025-06-27T13:05:00+00:00",
     "end_time": "2025-06-27T13:35:00+00:00",
-    "cached_at": "2025-07-07T21:16:10.127208+00:00",
+    "cached_at": "2025-07-08T02:10:07.517060+00:00",
     "data_points": 32336
   },
   "1615a897521998b7ff29ece34aba11c5": {
@@ -1559,7 +1559,7 @@
     "timeframe": "tick",
     "start_time": "2025-06-27T13:05:00+00:00",
     "end_time": "2025-06-27T13:35:00+00:00",
-    "cached_at": "2025-07-07T21:16:10.333500+00:00",
+    "cached_at": "2025-07-08T02:10:07.790494+00:00",
     "data_points": 4656
   },
   "49e85c08b603f943a7ad2e875a3c3afb": {
@@ -1624,5 +1624,95 @@
     "end_time": "2025-06-27T13:35:00.147000+00:00",
     "cached_at": "2025-07-07T21:50:39.706686+00:00",
     "data_points": 4891
+  },
+  "48f4a782db15ba6e648e023b3f0db2b5": {
+    "symbol": "ORCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T02:54:00.268000+00:00",
+    "end_time": "2025-06-27T23:34:00.268000+00:00",
+    "cached_at": "2025-07-08T03:10:49.738089+00:00",
+    "data_points": 1493
+  },
+  "79ab0fa946c9383ef684876912756093": {
+    "symbol": "ORCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-24T23:54:00.268000+00:00",
+    "end_time": "2025-06-27T23:34:00.268000+00:00",
+    "cached_at": "2025-07-08T03:10:50.098256+00:00",
+    "data_points": 1497
+  },
+  "f5404754be8adf5cdb9b659f0a8eceb2": {
+    "symbol": "ORCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-22T04:54:00.268000+00:00",
+    "end_time": "2025-06-27T23:34:00.268000+00:00",
+    "cached_at": "2025-07-08T03:10:50.489473+00:00",
+    "data_points": 2625
+  },
+  "90e9bd6f44000ea88598d8cdb54c5c01": {
+    "symbol": "ORCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-24T18:54:00.268000+00:00",
+    "end_time": "2025-06-27T23:34:00.268000+00:00",
+    "cached_at": "2025-07-08T03:10:50.843749+00:00",
+    "data_points": 1637
+  },
+  "551d889525e257a450fdb9886a997e17": {
+    "symbol": "ORCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-24T03:54:00.268000+00:00",
+    "end_time": "2025-06-27T23:34:00.268000+00:00",
+    "cached_at": "2025-07-08T03:10:51.193556+00:00",
+    "data_points": 2053
+  },
+  "d1b3a78bd3b407e7221cc6d4d5e1641b": {
+    "symbol": "ORCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-23T07:54:00.268000+00:00",
+    "end_time": "2025-06-27T23:34:00.268000+00:00",
+    "cached_at": "2025-07-08T03:10:51.572813+00:00",
+    "data_points": 2625
+  },
+  "5e7d72220e7f7287a1522905f9d2a613": {
+    "symbol": "ORCL",
+    "data_type": "bars",
+    "timeframe": "1min",
+    "start_time": "2025-06-25T04:34:00.268000+00:00",
+    "end_time": "2025-06-27T23:34:00.268000+00:00",
+    "cached_at": "2025-07-08T03:10:51.919142+00:00",
+    "data_points": 1493
+  },
+  "1ff5a5e871996a29ab4bda3b0974a21b": {
+    "symbol": "ORCL",
+    "data_type": "bars",
+    "timeframe": "5min",
+    "start_time": "2025-06-19T14:34:00.268000+00:00",
+    "end_time": "2025-07-03T12:54:00.268000+00:00",
+    "cached_at": "2025-07-08T03:10:52.255986+00:00",
+    "data_points": 1433
+  },
+  "c695d407addd2bae65e081a23b972b7d": {
+    "symbol": "ORCL",
+    "data_type": "trades",
+    "timeframe": "tick",
+    "start_time": "2025-06-26T13:44:00.268000+00:00",
+    "end_time": "2025-06-26T14:14:00.268000+00:00",
+    "cached_at": "2025-07-08T03:12:04.963857+00:00",
+    "data_points": 12577
+  },
+  "211777a3749d24ebf311043c90a77705": {
+    "symbol": "ORCL",
+    "data_type": "quotes",
+    "timeframe": "tick",
+    "start_time": "2025-06-26T13:44:00.268000+00:00",
+    "end_time": "2025-06-26T14:14:00.268000+00:00",
+    "cached_at": "2025-07-08T03:12:05.330940+00:00",
+    "data_points": 3435
   }
 }

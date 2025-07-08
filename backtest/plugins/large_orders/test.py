@@ -73,6 +73,15 @@ async def test_with_real_data(symbol: str, timestamp_str: str, direction: str, s
         print(f"{'='*60}")
         print(f"Successful Large Orders Found: {large_orders_count}")
         
+        # Display diagnostics
+        diagnostics = result.get('diagnostics', {})
+        if diagnostics:
+            print(f"\nTotal Large Orders Detected: {diagnostics.get('total_large_orders', 0)}")
+            print(f"Status Breakdown:")
+            status_breakdown = diagnostics.get('status_breakdown', {})
+            for status, count in status_breakdown.items():
+                print(f"  {status}: {count}")
+        
         # Display table data
         display_data = result.get('display_data', {})
         table_data = display_data.get('table_data', [])
@@ -157,7 +166,7 @@ async def test_with_real_data(symbol: str, timestamp_str: str, direction: str, s
                 print("- Press ESC to close")
                 app.exec()
             else:
-                print("\nNo successful large orders found to display.")
+                print("\nNo large orders found to display.")
         
         # Save result to file for inspection
         output_file = f"large_orders_grid_{symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"

@@ -11,14 +11,14 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Callable, List
 
 from modules.calculations.order_flow.large_orders import LargeOrderDetector, ImpactStatus
-from modules.calculations.order_flow.buy_sell_ratio import Trade
 from backtest.data.polygon_data_manager import PolygonDataManager
+from backtest.data.trade_quote_aligner import TradeQuoteAligner
 
 logger = logging.getLogger(__name__)
 
 # Plugin metadata
 PLUGIN_NAME = "Large Orders Grid"
-PLUGIN_VERSION = "1.0.1"
+PLUGIN_VERSION = "1.0.2"
 PLUGIN_DESCRIPTION = "Displays successful large order trades with impact analysis"
 
 # Configuration
@@ -28,9 +28,11 @@ CONFIG = {
     'min_trades_for_std': 100,
     'ratio_threshold': 1.5,
     'stdev_threshold': 1.25,
-    'max_orders_display': 50,  # Increased from 30
-    'show_all_orders': False,  # Set to True to show all large orders regardless of impact
-    'min_impact_for_success': 0.5  # Minimum impact in spread units for success
+    'max_orders_display': 50,
+    'show_all_orders': False,
+    'min_impact_for_success': 0.5,
+    'max_quote_age_ms': 500,  # Maximum quote staleness for alignment
+    'min_confidence': 0.7,  # Minimum confidence for aligned trades
 }
 
 # Create module-level data manager
@@ -109,6 +111,12 @@ async def run_analysis_with_data_manager(symbol: str, entry_time: datetime, dire
             stdev_threshold=CONFIG['stdev_threshold']
         )
         
+        # Initialize TradeQuoteAligner
+        aligner = TradeQuoteAligner(
+            max_quote_age_ms=CONFIG['max_quote_age_ms'],
+            min_confidence_threshold=CONFIG['min_confidence']
+        )
+        
         if progress_callback:
             progress_callback(0, "Fetching trade and quote data...")
         
@@ -117,6 +125,7 @@ async def run_analysis_with_data_manager(symbol: str, entry_time: datetime, dire
         start_time = entry_time - timedelta(minutes=30)
         
         # Fetch trades
+        logger.info(f"Fetching trades for {symbol} from {start_time} to {end_time}")
         trades_df = await data_manager.load_trades(
             symbol=symbol,
             start_time=start_time,
@@ -127,6 +136,7 @@ async def run_analysis_with_data_manager(symbol: str, entry_time: datetime, dire
             progress_callback(25, f"Loaded {len(trades_df)} trades")
         
         # Fetch quotes
+        logger.info(f"Fetching quotes for {symbol}")
         quotes_df = await data_manager.load_quotes(
             symbol=symbol,
             start_time=start_time,
@@ -136,12 +146,25 @@ async def run_analysis_with_data_manager(symbol: str, entry_time: datetime, dire
         if progress_callback:
             progress_callback(50, f"Loaded {len(quotes_df)} quotes")
         
-        # Process data
+        if trades_df.empty or quotes_df.empty:
+            raise ValueError(f"No trade or quote data available for {symbol}")
+        
         if progress_callback:
-            progress_callback(60, "Detecting large orders...")
+            progress_callback(60, f"Aligning {len(trades_df):,} trades with {len(quotes_df):,} quotes...")
+        
+        # Align trades with quotes using TradeQuoteAligner
+        aligned_df, alignment_report = aligner.align_trades_quotes(trades_df, quotes_df)
+        
+        if aligned_df.empty:
+            raise ValueError("No trades could be aligned with quotes")
+        
+        logger.info(f"Successfully aligned {alignment_report.aligned_trades}/{alignment_report.total_trades} trades")
+        
+        if progress_callback:
+            progress_callback(70, "Detecting large orders...")
             
-        # Process all the data
-        _process_data(detector, trades_df, quotes_df, symbol)
+        # Process the aligned trades
+        large_orders_detected = _process_aligned_trades(detector, aligned_df, symbol)
         
         if progress_callback:
             progress_callback(80, "Analyzing order impact...")
@@ -159,7 +182,7 @@ async def run_analysis_with_data_manager(symbol: str, entry_time: datetime, dire
         signal = _generate_signal(display_orders, direction)
         
         # Get the complete display package with diagnostics
-        display_data = _prepare_complete_display_package(detector, display_orders, symbol, diagnostics)
+        display_data = _prepare_complete_display_package(detector, display_orders, symbol, diagnostics, alignment_report)
         
         if progress_callback:
             progress_callback(100, "Analysis complete")
@@ -172,7 +195,12 @@ async def run_analysis_with_data_manager(symbol: str, entry_time: datetime, dire
             'signal': signal,
             'display_data': display_data,
             'large_orders_count': len(display_orders),
-            'diagnostics': diagnostics  # Add diagnostic info
+            'diagnostics': diagnostics,
+            'alignment_report': {
+                'aligned_trades': alignment_report.aligned_trades,
+                'total_trades': alignment_report.total_trades,
+                'avg_quote_age_ms': alignment_report.avg_quote_age_ms
+            }
         }
         
     except Exception as e:
@@ -192,52 +220,62 @@ async def run_analysis_with_data_manager(symbol: str, entry_time: datetime, dire
         }
 
 
-def _process_data(detector: LargeOrderDetector, trades_df: pd.DataFrame, 
-                  quotes_df: pd.DataFrame, symbol: str) -> None:
-    """Process historical data through the detector."""
-    # Add symbol column if not present
-    if 'symbol' not in trades_df.columns:
-        trades_df['symbol'] = symbol
-    if 'symbol' not in quotes_df.columns:
-        quotes_df['symbol'] = symbol
+def _process_aligned_trades(detector: LargeOrderDetector, aligned_df: pd.DataFrame, symbol: str) -> int:
+    """
+    Process aligned trades through the detector.
     
-    # First update all quotes
-    for timestamp, quote_row in quotes_df.iterrows():
-        detector.update_quote(
-            symbol=symbol,
-            bid=quote_row['bid'],
-            ask=quote_row['ask'],
-            timestamp=timestamp
-        )
+    The aligned_df from TradeQuoteAligner has a RangeIndex and contains:
+    - trade_time, trade_price, trade_size columns
+    - quote_bid, quote_ask columns
+    - trade_side (buy/sell classification)
+    - confidence, alignment_method, quote_age_ms
     
-    # Then process trades
+    NOTE: We do NOT call detector.update_quote() to avoid buy_sell_ratio dependency
+    """
+    if aligned_df.empty:
+        logger.warning("No aligned trades to process")
+        return 0
+    
     large_order_count = 0
-    for timestamp, trade_row in trades_df.iterrows():
-        # Get the most recent quote at this time
-        quotes_before = quotes_df[quotes_df.index <= timestamp]
-        if not quotes_before.empty:
-            latest_quote = quotes_before.iloc[-1]
-            bid = latest_quote['bid']
-            ask = latest_quote['ask']
-        else:
-            bid = None
-            ask = None
+    
+    # Process trades directly without updating quotes separately
+    # The detector will use the embedded bid/ask values in each trade
+    for idx, row in aligned_df.iterrows():
+        # Extract trade data
+        trade_time = row['trade_time']
+        trade_price = row['trade_price']
+        trade_size = int(row['trade_size'])
         
-        trade = Trade(
+        # Get quote data (may be NaN if no quote was available)
+        bid = row.get('quote_bid', np.nan)
+        ask = row.get('quote_ask', np.nan)
+        
+        # Create a Trade-like object that the detector expects
+        class AlignedTrade:
+            def __init__(self, symbol, price, size, timestamp, bid, ask):
+                self.symbol = symbol
+                self.price = price
+                self.size = size
+                self.timestamp = timestamp
+                self.bid = bid if pd.notna(bid) else None
+                self.ask = ask if pd.notna(ask) else None
+        
+        trade = AlignedTrade(
             symbol=symbol,
-            price=trade_row['price'],
-            size=int(trade_row['size']),
-            timestamp=timestamp,
+            price=trade_price,
+            size=trade_size,
+            timestamp=trade_time,
             bid=bid,
             ask=ask
         )
         
-        # Process trade - detector handles everything
+        # Process trade - detector handles everything using embedded bid/ask
         large_order = detector.process_trade(trade)
         if large_order:
             large_order_count += 1
     
-    logger.info(f"Processed {len(trades_df)} trades, detected {large_order_count} large orders")
+    logger.info(f"Processed {len(aligned_df)} aligned trades, detected {large_order_count} large orders")
+    return large_order_count
 
 
 def _get_order_diagnostics(detector: LargeOrderDetector, symbol: str) -> Dict[str, Any]:
@@ -430,7 +468,8 @@ def _generate_signal(display_orders: List[Dict[str, Any]], direction: str) -> Di
 def _prepare_complete_display_package(detector: LargeOrderDetector, 
                                     display_orders: List[Dict[str, Any]], 
                                     symbol: str,
-                                    diagnostics: Dict[str, Any]) -> Dict[str, Any]:
+                                    diagnostics: Dict[str, Any],
+                                    alignment_report=None) -> Dict[str, Any]:
     """Prepare complete display data package with grid configuration."""
     # Calculate summary statistics
     total_orders = len(display_orders)
@@ -470,6 +509,14 @@ def _prepare_complete_display_package(detector: LargeOrderDetector,
             "",
             f"Median Impact: {impact_stats.get('median', 0):.3f} spreads"
         ]
+        
+        # Add alignment stats if available
+        if alignment_report:
+            description_lines.extend([
+                "",
+                f"Aligned Trades: {alignment_report.aligned_trades:,} / {alignment_report.total_trades:,}",
+                f"Avg Quote Age: {alignment_report.avg_quote_age_ms:.1f} ms"
+            ])
     else:
         summary = f"No large orders to display (of {total_detected} detected)"
         description_lines = [
@@ -486,6 +533,15 @@ def _prepare_complete_display_package(detector: LargeOrderDetector,
             "",
             "Note: Success requires price movement > 0.5 spreads within 1 second"
         ]
+        
+        # Add alignment stats if available
+        if alignment_report:
+            description_lines.extend([
+                "",
+                f"Aligned Trades: {alignment_report.aligned_trades:,} / {alignment_report.total_trades:,}",
+                f"Avg Quote Age: {alignment_report.avg_quote_age_ms:.1f} ms"
+            ])
+        
         buy_orders = []
         sell_orders = []
         avg_impact = 0
@@ -506,6 +562,13 @@ def _prepare_complete_display_package(detector: LargeOrderDetector,
         ("Median Impact (all)", f"{impact_stats.get('median', 0):.3f}"),
         ("Orders Shown", str(total_orders))
     ]
+    
+    # Add alignment stats to table if available
+    if alignment_report:
+        table_data.extend([
+            ("Aligned Trades", f"{alignment_report.aligned_trades:,} / {alignment_report.total_trades:,}"),
+            ("Avg Quote Age", f"{alignment_report.avg_quote_age_ms:.1f} ms")
+        ])
     
     # Configure grid columns based on what we're showing
     columns = [

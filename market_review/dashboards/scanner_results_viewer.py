@@ -1,4 +1,4 @@
-# modules/ui/dashboards/scanner_results_viewer.py
+# market_review/dashboards/scanner_results_viewer.py
 """
 Module: Scanner Results Viewer Dashboard
 Purpose: Display premarket scanner results from Supabase with integrated HVN charts
@@ -6,33 +6,25 @@ UI Framework: PyQt6 with PyQtGraph
 Note: All times are in UTC
 """
 
-import sys
+# Standard library imports
+import logging
 import os
+import sys
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
-import logging
 
+# Third-party imports
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                           QHBoxLayout, QLabel, QPushButton, QTableWidget, 
-                           QTableWidgetItem, QHeaderView, QGroupBox, QSplitter,
-                           QComboBox, QSpinBox, QDateEdit, QCheckBox,
-                           QAbstractItemView, QSizePolicy)
+                            QHBoxLayout, QLabel, QPushButton, QTableWidget, 
+                            QTableWidgetItem, QHeaderView, QGroupBox, QSplitter,
+                            QComboBox, QSpinBox, QDateEdit, QCheckBox,
+                            QAbstractItemView, QSizePolicy)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QDate, QTimer
 from PyQt6.QtGui import QFont, QColor, QBrush
 
-# Setup path for imports
-current_dir = os.path.dirname(os.path.abspath(__file__))
-dashboards_dir = current_dir
-ui_dir = os.path.dirname(dashboards_dir)
-modules_dir = os.path.dirname(ui_dir)
-vega_root = os.path.dirname(modules_dir)
-
-sys.path.insert(0, vega_root)
-
+# Local application imports
 from market_review.data.supabase_client import SupabaseClient
-from market_review.dashboard.components.dual_hvn_chart import DualHVNChart
-
-sys.path.remove(vega_root)
+from market_review.dashboards.components.dual_hvn_chart import DualHVNChart
 
 # Configure logging
 logging.basicConfig(

@@ -1,4 +1,4 @@
-# modules/ui/components/dual_hvn_chart.py
+# market_review/dashboards/components/dual_hvn_chart.py
 """
 Module: Dual HVN Chart Component
 Purpose: Reusable component showing two vertically stacked HVN charts
@@ -7,36 +7,25 @@ UI Framework: PyQt6 with PyQtGraph
 Note: All times are in UTC
 """
 
-import sys
+# Standard library imports
+import logging
 import os
-import numpy as np
-import pandas as pd
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
-import logging
 
+# Third-party imports
+import numpy as np
+import pandas as pd
+import pyqtgraph as pg
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                           QSplitter, QGroupBox, QSizePolicy, QLineEdit)
+                            QSplitter, QGroupBox, QSizePolicy, QLineEdit)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QColor
-import pyqtgraph as pg
 
-# Setup path for imports
-current_dir = os.path.dirname(os.path.abspath(__file__))
-components_dir = current_dir
-ui_dir = os.path.dirname(components_dir)
-modules_dir = os.path.dirname(ui_dir)
-vega_root = os.path.dirname(modules_dir)
-
-if 'polygon' in sys.modules:
-    del sys.modules['polygon']
-
-sys.path.insert(0, vega_root)
-
+# Local application imports
 from market_review.calculations.volume.hvn_engine import HVNEngine
 from market_review.data.polygon_bridge import PolygonHVNBridge
-
-sys.path.remove(vega_root)
 
 # Configure logging
 logging.basicConfig(

@@ -1,17 +1,20 @@
-# modules/filters/sp500_filter/market_filter.py
+# market_review/pre_market/sp500_filter/market_filter.py
 """
 Market Filter Engine - Pure Calculation Module
 Applies filtering criteria and calculates interest scores for stock screening.
 No data fetching - receives DataFrames and returns filtered/ranked results.
 """
 
-import pandas as pd
-import numpy as np
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime
+# Standard library imports
 import logging
 import os
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+
+# Third-party imports
+import numpy as np
+import pandas as pd
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -455,21 +458,11 @@ def get_user_confirmation(prompt: str) -> bool:
 
 def example_usage():
     """Example usage with real data from SP500Bridge."""
-    import os
-    import sys
     from datetime import datetime, timezone
     
-    # Add current directory to path for imports
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    sys.path.insert(0, current_dir)
-    
-    try:
-        from sp500_bridge import SP500Bridge
-        from sp500_tickers import get_sp500_tickers
-    except ImportError as e:
-        print(f"Error importing required modules: {e}")
-        print("Make sure sp500_bridge.py and sp500_tickers.py are in the same directory")
-        return
+    # Local application imports
+    from market_review.pre_market.sp500_filter.sp500_bridge import SP500Bridge
+    from market_review.pre_market.sp500_filter.sp500_tickers import get_sp500_tickers
     
     print("Market Filter - S&P 500 Full Scan")
     print("=" * 70)
@@ -568,7 +561,6 @@ def example_usage():
 
 def create_real_data_markdown(scan_results, summary, criteria, total_tickers_scanned):
     """Create a markdown file with real scan results."""
-    import os
     from datetime import datetime
     
     # Create temp directory if it doesn't exist

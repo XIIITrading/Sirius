@@ -6,28 +6,20 @@ Dependencies: volume_profile.py for base calculations
 Performance Target: Complete 14-day analysis in <2 seconds
 """
 
+# Standard library imports
+import os
+import sys
+from datetime import datetime, timedelta
+from dataclasses import dataclass
+from typing import Dict, List, Tuple, Optional
+
+# Third-party imports
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Optional
-from dataclasses import dataclass
-import sys
-import os
 
-# Fix the import path to work from any location
-try:
-    # Try relative import first (for when running hvn_engine.py directly)
-    from .volume_profile import VolumeProfile, PriceLevel
-except ImportError:
-    # If that fails, try absolute import
-    try:
-        from market_review.calculations.volume.volume_profile import VolumeProfile, PriceLevel
-    except ImportError:
-        # If still failing, add path and import
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(current_dir)
-        sys.path.append(parent_dir)
-        from volume_profile import VolumeProfile, PriceLevel
+# Local application imports
+from market_review.calculations.volume.volume_profile import VolumeProfile, PriceLevel
+
 
 @dataclass
 class HVNCluster:
@@ -39,6 +31,7 @@ class HVNCluster:
     total_volume: float
     total_percent: float
     highest_volume_level: PriceLevel
+
 
 @dataclass
 class HVNResult:

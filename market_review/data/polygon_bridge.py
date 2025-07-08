@@ -23,8 +23,8 @@ from polygon import DataFetcher, PolygonWebSocketClient
 from polygon.config import PolygonConfig
 
 # Import HVN components
-from modules.calculations.volume.hvn_engine import HVNEngine, HVNResult
-from modules.calculations.volume.volume_profile import PriceLevel
+from market_review.calculations.volume.hvn_engine import HVNEngine, HVNResult
+from market_review.calculations.volume.volume_profile import PriceLevel
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

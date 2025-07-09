@@ -5,6 +5,7 @@ Monitors 4 tickers with unified Bull/Bear signals from multiple calculations
 """
 
 import asyncio
+import aiohttp
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Set, Any
@@ -319,12 +320,16 @@ class LiveTradingMonitor:
         self.symbols = symbols
         self.display_interval = display_interval
         
+        # Always use server at fixed address
+        self.server_url = "ws://localhost:8200"
+        
         # Initialize managers
         self.managers = {symbol: CalculationManager(symbol) for symbol in symbols}
         self.aggregator = SignalAggregator()
         
-        # WebSocket client
-        self.ws_client = PolygonWebSocketClient()
+        # WebSocket client will be set when connecting to server
+        self.ws_client = None
+        self.session = None  # aiohttp session
         
         # Display state
         self.consensus_signals = {symbol: {} for symbol in symbols}
@@ -339,21 +344,43 @@ class LiveTradingMonitor:
             manager.initialize() for manager in self.managers.values()
         ])
         
-        # Connect WebSocket
-        await self.ws_client.connect()
+        # Connect to local server WebSocket
+        import aiohttp
+        import uuid
         
-        # Subscribe to trades and quotes
-        await self.ws_client.subscribe(
-            symbols=self.symbols,
-            channels=['T', 'Q'],  # Trades and Quotes
-            callback=self._handle_market_data
-        )
+        self.session = aiohttp.ClientSession()
+        client_id = str(uuid.uuid4())
         
-        # Start display loop
-        asyncio.create_task(self._display_loop())
-        
-        # Start listening
-        await self.ws_client.listen()
+        try:
+            # Connect to server
+            ws_url = f"{self.server_url}/ws/{client_id}"
+            async with self.session.ws_connect(ws_url) as ws:
+                self.ws_client = ws
+                logger.info(f"Connected to server at {ws_url}")
+                
+                # Subscribe to symbols
+                await ws.send_json({
+                    "action": "subscribe",
+                    "symbols": self.symbols,
+                    "channels": ["T", "Q"]  # Trades and Quotes
+                })
+                
+                # Start display loop
+                display_task = asyncio.create_task(self._display_loop())
+                
+                # Listen for messages
+                async for msg in ws:
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        data = msg.json()
+                        if data.get("type") == "market_data":
+                            await self._handle_market_data(data.get("data", {}))
+                    elif msg.type == aiohttp.WSMsgType.ERROR:
+                        logger.error(f"WebSocket error: {ws.exception()}")
+                        break
+                        
+        finally:
+            if self.session:
+                await self.session.close()
         
     async def _handle_market_data(self, data: Dict):
         """Handle incoming market data"""
@@ -444,10 +471,10 @@ class LiveTradingMonitor:
 
 async def main():
     """Main entry point"""
-    # Configure your symbols
+    # This is only used when running main.py directly
+    # Normally you should use run_live_monitor.py
     SYMBOLS = ['AAPL', 'TSLA', 'SPY', 'QQQ']
     
-    # Create and start monitor
     monitor = LiveTradingMonitor(symbols=SYMBOLS, display_interval=1)
     
     try:

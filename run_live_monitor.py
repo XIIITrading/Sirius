@@ -47,24 +47,6 @@ def parse_arguments():
     )
     
     parser.add_argument(
-        '--use-server',
-        action='store_true',
-        help='Connect through local Polygon server instead of direct connection'
-    )
-    
-    parser.add_argument(
-        '--server-url',
-        default='ws://localhost:8200',
-        help='Polygon server WebSocket URL (default: ws://localhost:8200)'
-    )
-    
-    parser.add_argument(
-        '--modules',
-        nargs='*',
-        help='Specific modules to enable (default: all)'
-    )
-    
-    parser.add_argument(
         '--debug',
         action='store_true',
         help='Enable debug logging'
@@ -92,23 +74,15 @@ async def main():
     logger.info("=" * 60)
     logger.info(f"Symbols: {', '.join(symbols)}")
     logger.info(f"Update Interval: {args.interval}s")
-    logger.info(f"Connection: {'Server' if args.use_server else 'Direct'}")
-    if args.modules:
-        logger.info(f"Modules: {', '.join(args.modules)}")
+    logger.info(f"Connection: Server (http://localhost:8200)")
     logger.info("=" * 60)
     
-    # Create monitor with configuration
-    monitor_config = {
-        'symbols': symbols,
-        'display_interval': args.interval,
-        'use_server': args.use_server,
-        'server_url': args.server_url,
-        'enabled_modules': args.modules  # None means all modules
-    }
-    
-    # Initialize monitor
+    # Create monitor - much simpler now!
     try:
-        monitor = LiveTradingMonitor(**monitor_config)
+        monitor = LiveTradingMonitor(
+            symbols=symbols,
+            display_interval=args.interval
+        )
         
         logger.info("Starting monitor... (Press Ctrl+C to stop)")
         await monitor.start()

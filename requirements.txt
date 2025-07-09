@@ -14,6 +14,7 @@ postgrest                   # Dependency of supabase
 gotrue                      # Dependency of supabase
 realtime                    # Dependency of supabase
 storage3                    # Dependency of supabase
+psutil                      # Polygon Server
 
 # ===== Configuration =====
 python-dotenv               # Load environment variables from .env

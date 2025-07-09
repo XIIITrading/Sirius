@@ -1,22 +1,28 @@
 # market_review/calculations/levels/camarilla_calculator.py
+# Updated version with proper UTC handling
+
 """
 Module: Camarilla Pivots Calculator
 Purpose: Calculate Camarilla pivot levels based on prior day's H/L/C
 Dependencies: pandas, numpy
 Performance: Optimized for live trading calculations
-Note: All timestamps in UTC
+Note: All timestamps in UTC, trading day resets at 09:00 UTC
 """
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Tuple
+from datetime import datetime, timedelta, timezone, time
+from typing import Dict, Optional, Tuple, Any
 
 import numpy as np
 import pandas as pd
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# Trading session constants (in UTC)
+TRADING_DAY_START_UTC = time(9, 0)  # 09:00 UTC = 4:00 AM ET (pre-market start)
+TRADING_DAY_END_UTC = time(23, 0)    # 23:00 UTC = 6:00 PM ET (after-hours end)
 
 
 @dataclass
@@ -42,12 +48,15 @@ class CamarillaResult:
     all_levels: Dict[str, CamarillaLevel]  # All levels as objects
     ticker: Optional[str] = None
     prior_day_date: Optional[datetime] = None
+    trading_session_start: Optional[datetime] = None
+    trading_session_end: Optional[datetime] = None
 
 
 class CamarillaCalculator:
     """
     Calculate Camarilla pivot levels for intraday trading.
     Uses traditional Camarilla formulas based on prior day's H/L/C.
+    Trading sessions are UTC-based, resetting at 09:00 UTC.
     """
     
     def __init__(self):
@@ -64,7 +73,85 @@ class CamarillaCalculator:
             'S4': 1.1/2
         }
         
-        logger.info("CamarillaCalculator initialized with traditional multipliers")
+        logger.info("CamarillaCalculator initialized with UTC trading sessions (09:00 UTC reset)")
+    
+    def _get_trading_session_bounds(self, dt: datetime) -> Tuple[datetime, datetime]:
+        """
+        Get the start and end of the trading session for a given datetime.
+        Trading session runs from 09:00 UTC to 08:59:59 UTC the next day.
+        
+        Args:
+            dt: Datetime to get session for (must be timezone-aware)
+            
+        Returns:
+            Tuple of (session_start, session_end)
+        """
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+            
+        # If time is before 09:00 UTC, we're still in the previous trading day
+        if dt.time() < TRADING_DAY_START_UTC:
+            session_date = dt.date() - timedelta(days=1)
+        else:
+            session_date = dt.date()
+            
+        # Session starts at 09:00 UTC
+        session_start = datetime.combine(
+            session_date, 
+            TRADING_DAY_START_UTC,
+            tzinfo=timezone.utc
+        )
+        
+        # Session ends at 08:59:59 UTC the next day
+        session_end = session_start + timedelta(days=1) - timedelta(seconds=1)
+        
+        return session_start, session_end
+    
+    def _convert_to_daily_sessions(self, intraday_data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Convert intraday data to daily OHLC based on UTC trading sessions.
+        Groups data from 09:00 UTC to 08:59:59 UTC as one trading day.
+        """
+        if intraday_data.empty:
+            return pd.DataFrame()
+            
+        # Ensure timezone awareness
+        if intraday_data.index.tz is None:
+            # Assume UTC if not specified
+            intraday_data.index = intraday_data.index.tz_localize('UTC')
+        else:
+            # Convert to UTC if in another timezone
+            intraday_data.index = intraday_data.index.tz_convert('UTC')
+            
+        # Create session labels for grouping
+        session_labels = []
+        session_starts = []
+        
+        for timestamp in intraday_data.index:
+            session_start, _ = self._get_trading_session_bounds(timestamp)
+            session_labels.append(session_start.date())
+            session_starts.append(session_start)
+            
+        intraday_data['session_date'] = session_labels
+        intraday_data['session_start'] = session_starts
+        
+        # Group by trading session
+        daily_groups = intraday_data.groupby('session_date')
+        
+        daily_data = pd.DataFrame({
+            'open': daily_groups['open'].first(),
+            'high': daily_groups['high'].max(),
+            'low': daily_groups['low'].min(),
+            'close': daily_groups['close'].last(),
+            'volume': daily_groups['volume'].sum() if 'volume' in intraday_data.columns else 0,
+            'session_start': daily_groups['session_start'].first()
+        })
+        
+        # Use session start as index
+        daily_data.index = pd.to_datetime(daily_data['session_start'])
+        daily_data = daily_data.drop('session_start', axis=1)
+        
+        return daily_data
     
     def calculate(self, 
                   data: pd.DataFrame,
@@ -76,7 +163,7 @@ class CamarillaCalculator:
         Args:
             data: DataFrame with OHLCV data (must include at least 2 days)
             ticker: Optional ticker symbol for reference
-            target_date: Date to calculate pivots for (uses prior day's data)
+            target_date: Date to calculate pivots for (uses prior session's data)
                         If None, uses most recent data
         
         Returns:
@@ -90,16 +177,16 @@ class CamarillaCalculator:
         if not all(col in data.columns for col in required_cols):
             raise ValueError(f"DataFrame must contain columns: {required_cols}")
         
-        # Get prior day's data
-        prior_day_data = self._get_prior_day_data(data, target_date)
+        # Get prior trading session's data
+        prior_session_data = self._get_prior_session_data(data, target_date)
         
-        if prior_day_data is None:
-            raise ValueError("Could not find prior day data for calculation")
+        if prior_session_data is None:
+            raise ValueError("Could not find prior session data for calculation")
         
         # Extract H/L/C
-        high = float(prior_day_data['high'])
-        low = float(prior_day_data['low'])
-        close = float(prior_day_data['close'])
+        high = float(prior_session_data['high'])
+        low = float(prior_session_data['low'])
+        close = float(prior_session_data['close'])
         
         # Calculate range
         daily_range = high - low
@@ -121,10 +208,12 @@ class CamarillaCalculator:
             central_pivot
         )
         
-        # Get prior day date if available
-        prior_day_date = None
-        if hasattr(prior_day_data, 'name') and pd.api.types.is_datetime64_any_dtype(type(prior_day_data.name)):
-            prior_day_date = prior_day_data.name
+        # Get session bounds if available
+        session_start = None
+        session_end = None
+        if hasattr(prior_session_data, 'name') and pd.api.types.is_datetime64_any_dtype(type(prior_session_data.name)):
+            session_start = prior_session_data.name
+            session_end = session_start + timedelta(days=1) - timedelta(seconds=1)
         
         return CamarillaResult(
             calculation_time=datetime.now(timezone.utc),
@@ -137,21 +226,23 @@ class CamarillaCalculator:
             support_levels=support_levels,
             all_levels=all_levels,
             ticker=ticker,
-            prior_day_date=prior_day_date
+            prior_day_date=session_start,
+            trading_session_start=session_start,
+            trading_session_end=session_end
         )
     
-    def _get_prior_day_data(self, 
-                           data: pd.DataFrame, 
-                           target_date: Optional[datetime] = None) -> Optional[pd.Series]:
+    def _get_prior_session_data(self, 
+                               data: pd.DataFrame, 
+                               target_date: Optional[datetime] = None) -> Optional[pd.Series]:
         """
-        Extract prior day's OHLC data.
+        Extract prior trading session's OHLC data based on UTC sessions.
         
         Args:
             data: DataFrame with daily or intraday data
-            target_date: Date to get prior day for (None = use latest)
+            target_date: Date to get prior session for (None = use latest)
             
         Returns:
-            Series with prior day's OHLC data
+            Series with prior session's OHLC data
         """
         # Ensure index is datetime
         if not pd.api.types.is_datetime64_any_dtype(data.index):
@@ -163,33 +254,36 @@ class CamarillaCalculator:
         # Sort by date
         data = data.sort_index()
         
-        # If intraday data, convert to daily
+        # If intraday data, convert to daily sessions
         if len(data) > 0 and self._is_intraday_data(data):
-            daily_data = self._convert_to_daily(data)
+            daily_data = self._convert_to_daily_sessions(data)
         else:
             daily_data = data
         
         if daily_data.empty:
             return None
         
-        # Determine which day to use
+        # Determine which session to use
         if target_date is None:
-            # Use the last available day
+            # Use the last available session
             if len(daily_data) >= 2:
-                return daily_data.iloc[-2]  # Prior day
+                return daily_data.iloc[-2]  # Prior session
             else:
-                logger.warning("Only one day of data available, using it for calculation")
+                logger.warning("Only one session of data available, using it for calculation")
                 return daily_data.iloc[-1]
         else:
-            # Find the prior trading day before target_date
+            # Find the prior trading session before target_date
             if target_date.tzinfo is None:
                 target_date = target_date.replace(tzinfo=timezone.utc)
             
-            # Get all dates before target
-            prior_dates = daily_data[daily_data.index < target_date]
+            # Get session bounds for target date
+            target_session_start, _ = self._get_trading_session_bounds(target_date)
             
-            if not prior_dates.empty:
-                return prior_dates.iloc[-1]  # Most recent prior day
+            # Get all sessions before target
+            prior_sessions = daily_data[daily_data.index < target_session_start]
+            
+            if not prior_sessions.empty:
+                return prior_sessions.iloc[-1]  # Most recent prior session
             else:
                 return None
     
@@ -204,24 +298,6 @@ class CamarillaCalculator:
         
         # If average difference is less than 1 day, it's intraday
         return avg_diff < 86400  # seconds in a day
-    
-    def _convert_to_daily(self, intraday_data: pd.DataFrame) -> pd.DataFrame:
-        """Convert intraday data to daily OHLC."""
-        # Group by date
-        daily_groups = intraday_data.groupby(intraday_data.index.date)
-        
-        daily_data = pd.DataFrame({
-            'open': daily_groups['open'].first(),
-            'high': daily_groups['high'].max(),
-            'low': daily_groups['low'].min(),
-            'close': daily_groups['close'].last(),
-            'volume': daily_groups['volume'].sum() if 'volume' in intraday_data.columns else 0
-        })
-        
-        # Convert index back to datetime
-        daily_data.index = pd.to_datetime(daily_data.index)
-        
-        return daily_data
     
     def _calculate_resistance_levels(self, close: float, daily_range: float) -> Dict[str, float]:
         """Calculate resistance levels R1-R4."""
@@ -308,80 +384,31 @@ class CamarillaCalculator:
         supports.sort(key=lambda x: current_price - x.price)
         
         return resistances[:count], supports[:count]
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    import sys
-    import os
     
-    # Add parent directory to path
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-    
-    print("=== Testing Camarilla Calculator ===\n")
-    
-    # Test 1: Create sample daily data
-    print("Test 1: Sample daily data calculation")
-    dates = pd.date_range(end=datetime.now(), periods=5, freq='D')
-    sample_data = pd.DataFrame({
-        'open': [150.0, 152.0, 151.5, 153.0, 154.0],
-        'high': [152.5, 153.5, 154.0, 155.5, 156.0],
-        'low': [149.5, 150.5, 151.0, 152.0, 153.5],
-        'close': [151.5, 151.0, 153.5, 154.5, 155.0],
-        'volume': [1000000, 1100000, 1200000, 1300000, 1400000]
-    }, index=dates)
-    
-    calc = CamarillaCalculator()
-    result = calc.calculate(sample_data, ticker='TEST')
-    
-    print(f"Prior Day: H={result.prior_day_high}, L={result.prior_day_low}, C={result.prior_day_close}")
-    print(f"Daily Range: {result.prior_day_range:.2f}")
-    print(f"\nCalculated Levels:")
-    print(f"Central Pivot: {result.central_pivot:.2f}")
-    print("\nResistance Levels:")
-    for name, price in sorted(result.resistance_levels.items()):
-        print(f"  {name}: {price:.2f}")
-    print("\nSupport Levels:")
-    for name, price in sorted(result.support_levels.items(), reverse=True):
-        print(f"  {name}: {price:.2f}")
-    
-    # Test 2: Integration with live data
-    print("\n\nTest 2: Live data integration test")
-    try:
-        from market_review.data.polygon_bridge import PolygonHVNBridge
+    def get_current_session_info(self, current_time: Optional[datetime] = None) -> Dict[str, Any]:
+        """
+        Get information about the current trading session.
         
-        bridge = PolygonHVNBridge()
-        print("Fetching TSLA data...")
+        Args:
+            current_time: Time to check (defaults to now)
+            
+        Returns:
+            Dict with session information
+        """
+        if current_time is None:
+            current_time = datetime.now(timezone.utc)
+        elif current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+            
+        session_start, session_end = self._get_trading_session_bounds(current_time)
         
-        # Get recent data
-        state = bridge.calculate_hvn('TSLA', timeframe='15min')
-        
-        # Calculate Camarilla levels
-        result = calc.calculate(state.recent_bars, ticker='TSLA')
-        
-        print(f"\nTSLA Camarilla Levels (calculated at {result.calculation_time.strftime('%Y-%m-%d %H:%M:%S UTC')})")
-        print(f"Based on: {result.prior_day_date}")
-        print(f"Prior Day: H=${result.prior_day_high:.2f}, L=${result.prior_day_low:.2f}, C=${result.prior_day_close:.2f}")
-        
-        # Get nearest levels to current price
-        current_price = state.current_price
-        print(f"\nCurrent Price: ${current_price:.2f}")
-        
-        nearest_r, nearest_s = calc.get_nearest_levels(result, current_price, count=2)
-        
-        print("\nNearest Resistance Levels:")
-        for level in nearest_r:
-            distance = level.price - current_price
-            print(f"  {level.name}: ${level.price:.2f} (+${distance:.2f})")
-        
-        print("\nNearest Support Levels:")
-        for level in nearest_s:
-            distance = current_price - level.price
-            print(f"  {level.name}: ${level.price:.2f} (-${distance:.2f})")
-        
-    except ImportError:
-        print("Could not import PolygonHVNBridge - skipping live data test")
-    except Exception as e:
-        print(f"Error in live data test: {e}")
-    
-    print("\n=== Camarilla Calculator Test Complete ===")
+        return {
+            'current_time_utc': current_time,
+            'session_start_utc': session_start,
+            'session_end_utc': session_end,
+            'session_date': session_start.date(),
+            'time_until_new_session': session_end - current_time + timedelta(seconds=1),
+            'is_pre_market': current_time.time() < time(13, 30),  # Before 13:30 UTC (9:30 AM ET)
+            'is_regular_hours': time(13, 30) <= current_time.time() < time(20, 0),  # 9:30 AM - 4:00 PM ET
+            'is_after_hours': current_time.time() >= time(20, 0)  # After 20:00 UTC (4:00 PM ET)
+        }

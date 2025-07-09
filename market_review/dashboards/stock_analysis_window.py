@@ -18,6 +18,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from market_review.dashboards.components.dual_hvn_chart import DualHVNChart
 from market_review.dashboards.components.camarilla_pivot_chart import CamarillaPivotChart
 from market_review.dashboards.components.supply_demand_chart import SupplyDemandChart
+from market_review.dashboards.components.summary_chart import SummaryChart
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -164,11 +165,15 @@ class StockAnalysisWindow(QMainWindow):
         # Camarilla Pivots Tab
         self.camarilla_tab = self.create_camarilla_tab()
         self.tab_widget.addTab(self.camarilla_tab, "Camarilla Pivots")
+
+        # Summary Chart Tab
+        self.summary_tab = self.create_summary_tab()
+        self.tab_widget.addTab(self.summary_tab, "Summary")
         
         # Trading Plan Tab (placeholder for now)
         self.trading_plan_tab = self.create_trading_plan_tab()
         self.tab_widget.addTab(self.trading_plan_tab, "Trading Plan")
-        
+                
         # Add tabs to main layout
         main_layout.addWidget(self.tab_widget, 1)
         
@@ -326,6 +331,31 @@ class StockAnalysisWindow(QMainWindow):
         
         layout.addWidget(info_label)
         return widget
+    
+    def create_summary_tab(self):
+        """Create summary analysis tab with all indicators."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Create Summary chart
+        self.summary_chart = SummaryChart(
+            lookback_days=7,
+            display_bars=182  # 7 days of 15-min bars
+        )
+        
+        # Connect signals
+        self.summary_chart.loading_started.connect(
+            lambda: self.update_status("Loading comprehensive analysis...")
+        )
+        self.summary_chart.loading_finished.connect(
+            lambda: self.update_status("Summary analysis complete", success=True)
+        )
+        self.summary_chart.error_occurred.connect(
+            lambda err: self.update_status(f"Summary Error: {err}", error=True)
+        )
+        
+        layout.addWidget(self.summary_chart)
+        return widget
         
     def validate_ticker(self, ticker: str) -> bool:
         """Basic ticker validation."""
@@ -386,6 +416,9 @@ class StockAnalysisWindow(QMainWindow):
         
         # Load Camarilla data
         self.camarilla_chart.load_ticker(self.ticker)
+        
+        # Load Summary data
+        self.summary_chart.load_ticker(self.ticker)
         
     def update_status(self, message: str, success: bool = False, error: bool = False):
         """Update status label."""

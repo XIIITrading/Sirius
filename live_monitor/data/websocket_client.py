@@ -53,7 +53,7 @@ class PolygonWebSocketClient(QObject):
     connection_status = pyqtSignal(bool)  # True=connected, False=disconnected
     
     def __init__(self, server_url: str = "ws://localhost:8200/ws/{client_id}", 
-                 client_id: str = "live_monitor"):
+             client_id: str = "live_monitor"):
         super().__init__()
         
         self.server_url = server_url.format(client_id=client_id)
@@ -75,10 +75,14 @@ class PolygonWebSocketClient(QObject):
         self.current_symbols: set = set()
         self.current_channels = ["T", "Q", "AM"]  # Trades, Quotes, Minute Aggregates
         
+        # Track current symbol for easy access
+        self.current_symbol: Optional[str] = None
+        
         # Reconnection settings
         self.reconnect_delay = 1.0
         self.max_reconnect_delay = 30.0
         self.reconnect_attempts = 0
+        self.max_reconnect_attempts = 10
         
     def connect_to_server(self):
         """Initiate connection to WebSocket server"""

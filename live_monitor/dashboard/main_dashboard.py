@@ -17,6 +17,9 @@ from .components import (TickerEntry, TickerCalculations, EntryCalculations,
 # Import data manager
 from live_monitor.data import PolygonDataManager
 
+# Polygon Aggregate Data Handler
+from live_monitor.dashboard.components.chart.data.aggregate_data_handler import AggregateDataHandler
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -65,6 +68,15 @@ class LiveMonitorDashboard(QMainWindow):
         
         # Initialize data manager
         self.data_manager = PolygonDataManager()
+        
+        # Create and connect aggregate handler for chart data
+        self.aggregate_handler = AggregateDataHandler()
+        self.aggregate_handler.chart_data_updated.connect(
+            lambda data: logger.info(f"Chart update: {data['symbol']} {data['timeframe']} - {len(data['bars'])} bars")
+        )
+        self.data_manager.set_aggregate_handler(self.aggregate_handler)
+        logger.info("Aggregate handler connected to data manager")
+
         
         # Initialize UI
         self.init_ui()
@@ -233,7 +245,11 @@ class LiveMonitorDashboard(QMainWindow):
         """Setup connections to data manager"""
         # Connect data signals
         self.data_manager.market_data_updated.connect(self._on_market_data_updated)
-        self.data_manager.chart_data_updated.connect(self._on_chart_data_updated)
+        
+        # IMPORTANT: Connect chart data updates to chart widget
+        self.data_manager.chart_data_updated.connect(self.chart_widget.update_chart_data)
+        logger.info("Chart widget connected to data manager chart updates")
+        
         self.data_manager.entry_signal_generated.connect(self._on_entry_signal)
         self.data_manager.exit_signal_generated.connect(self._on_exit_signal)
         
@@ -279,11 +295,6 @@ class LiveMonitorDashboard(QMainWindow):
                 f"Ask: ${data.get('ask', 0):.2f}", 
                 2000
             )
-    
-    def _on_chart_data_updated(self, data):
-        """Handle chart data updates"""
-        # TODO: Update chart widget when implemented
-        self.chart_widget.update_chart_data(data)
     
     def _on_entry_signal(self, signal_data):
         """Handle new entry signal"""
@@ -334,15 +345,12 @@ class LiveMonitorDashboard(QMainWindow):
     def _on_calculation_complete(self, results):
         """Handle calculation completion"""
         logger.info(f"Calculation complete: {results}")
-        # You can emit this to data manager if needed for tracking
         
     def _on_entry_selected(self, entry_data):
         """Handle entry signal selection"""
         logger.info(f"Entry selected: {entry_data}")
-        # Update entry calculations with selected price
         if 'price' in entry_data:
             try:
-                # Extract numeric price from formatted string
                 price_str = entry_data['price'].replace('$', '').replace(',', '')
                 price = float(price_str)
                 self.entry_calculations.update_entry_price(price)
@@ -352,17 +360,14 @@ class LiveMonitorDashboard(QMainWindow):
     def _on_exit_selected(self, exit_data):
         """Handle exit signal selection"""
         logger.info(f"Exit selected: {exit_data}")
-        # Future: Process exit signal for analysis
         
     def _on_timeframe_changed(self, timeframe):
         """Handle timeframe changes"""
         logger.info(f"Timeframe changed to: {timeframe}")
-        # TODO: Update chart data fetching when implemented
         
     def _on_indicator_toggled(self, indicator, enabled):
         """Handle indicator toggle"""
         logger.info(f"Indicator {indicator} toggled: {enabled}")
-        # TODO: Show/hide indicator on chart when implemented
     
     def closeEvent(self, event: QCloseEvent):
         """Handle window close event"""

@@ -1,453 +1,222 @@
-Polygon.io Data Integration Module - Technical Documentation
-Overview
-The Polygon module is a comprehensive, self-contained Python package for integrating with Polygon.io's market data APIs. It provides both REST and WebSocket connectivity, intelligent caching, data validation, and includes a standalone server for unified data access across multiple applications.
-Key Features
+1. README.md (Main Documentation)
+markdown# Polygon Data Module - Complete Documentation
 
-Complete REST API Integration: Historical data fetching with intelligent caching
-WebSocket Real-time Streaming: Live market data with automatic reconnection
-Unified Data Server: FastAPI server exposing both REST and WebSocket endpoints
-Advanced Tier Optimized: Built for Polygon's advanced subscription tier
-Self-contained: No external dependencies on other modules
-Production Ready: Comprehensive error handling, logging, and validation
+## Overview
 
-Architecture
+The Polygon module is a comprehensive Python package for accessing Polygon.io market data. It provides a unified interface for fetching historical data, streaming real-time data, managing local caching, and serving data through REST/WebSocket APIs.
+
+## Architecture
 polygon/
-├── __init__.py              # Public API exports
-├── config.py                # Configuration management
-├── core.py                  # Low-level Polygon client
-├── websocket.py             # WebSocket streaming client
-├── fetcher.py               # High-level data fetching
-├── storage.py               # SQLite + Parquet caching
-├── rate_limiter.py          # API rate limit management
-├── exceptions.py            # Custom exception types
-├── utils.py                 # Utility functions
-├── validators/              # Data validation suite
-│   ├── symbol.py
-│   ├── ohlcv.py
-│   ├── gaps.py
-│   ├── anomalies.py
-│   ├── market_hours.py
-│   └── api_features.py
-└── polygon_server/          # Standalone data server
-    ├── server.py            # FastAPI application
-    ├── config.py            # Server configuration
-    ├── models.py            # Pydantic models
-    ├── endpoints/           # API endpoints
-    │   ├── rest.py          # REST endpoints
-    │   ├── websocket.py     # WebSocket endpoints
-    │   └── health.py        # Health/status endpoints
-    ├── requirements.txt     # Server dependencies
-    └── start_server.py      # Server startup script
-Installation
-Prerequisites
+├── Core Components
+│   ├── config.py          # Configuration management (PolygonConfig)
+│   ├── core.py           # API client (PolygonClient, PolygonSession)
+│   ├── fetcher.py        # High-level data fetching (DataFetcher, BatchDataFetcher)
+│   ├── storage.py        # Local caching (StorageManager, CacheMetadata)
+│   ├── rate_limiter.py   # API rate limiting (RateLimiter, AsyncRateLimiter)
+│   └── exceptions.py     # Custom exceptions
+│
+├── Validators
+│   ├── data_quality.py   # DataQualityReport, validation orchestration
+│   ├── symbol.py         # Symbol validation (validate_symbol_detailed)
+│   ├── ohlcv.py         # OHLCV data validation
+│   ├── gaps.py          # Gap detection
+│   ├── anomalies.py     # Anomaly detection
+│   └── market_hours.py  # Market hours validation
+│
+├── Real-time
+│   └── websocket.py     # WebSocket client (PolygonWebSocketClient)
+│
+├── Server
+│   └── polygon_server/
+│       ├── server.py    # FastAPI application
+│       ├── models.py    # Pydantic models
+│       └── endpoints/   # REST/WebSocket endpoints
+│
+└── Utilities
+└── utils.py         # Helper functions
 
-Python 3.8 or higher
-Polygon.io API key (Advanced tier)
-Windows/Linux/macOS
+## Core Classes
 
-Setup
+### PolygonConfig (config.py)
+Central configuration management for the entire module.
 
-Clone or copy the polygon module to your project:
-your_project/
-└── polygon/
+**Key Attributes:**
+- `api_key`: Your Polygon.io API key (from POLYGON_API_KEY env var)
+- `base_url`: "https://api.polygon.io"
+- `subscription_tier`: 'basic', 'starter', 'developer', or 'advanced'
+- `data_dir`: Local storage directory (./data)
+- `cache_enabled`: Whether to use local caching (default: True)
+- `market_timezone`: pytz.UTC (all times in UTC)
 
-Install dependencies:
-bashpip install -r polygon/polygon_server/requirements.txt
+**Usage:**
+```python
+from polygon.config import get_config
+config = get_config()
+PolygonClient (core.py)
+Low-level API client for direct Polygon.io interaction.
+Key Methods:
 
-Configure environment variables:
-Create a .env file in your project root:
-env# Required
-POLYGON_API_KEY=your_polygon_api_key_here
+get_aggregates(ticker, multiplier, timespan, from_date, to_date)
+get_ticker_details(ticker, date=None)
+get_market_status()
+search_tickers(search, active=True, limit=100)
+validate_ticker(ticker)
 
-# Optional server configuration
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8200
-LOG_LEVEL=INFO
-POLYGON_TIER=advanced
+Usage:
+pythonfrom polygon.core import PolygonClient
+client = PolygonClient()
+data = client.get_aggregates('AAPL', 1, 'day', '2023-01-01', '2023-01-31')
+DataFetcher (fetcher.py)
+High-level interface for fetching data with caching, validation, and rate limiting.
+Key Methods:
 
+fetch_data(symbol, timeframe, start_date, end_date, use_cache=True)
+fetch_multiple_symbols(symbols, timeframe, start_date, end_date)
+fetch_latest_bars(symbols, timeframe='1min', bars=100)
+update_cache(symbol, timeframe)
+get_data_summary(symbol, timeframe, start_date, end_date)
 
-Quick Start
-Using the Module Directly
-pythonimport polygon
+Usage:
+pythonfrom polygon.fetcher import DataFetcher
+fetcher = DataFetcher()
+df = fetcher.fetch_data('AAPL', '5min', '2023-01-01', '2023-01-31')
+StorageManager (storage.py)
+Manages local data caching using SQLite for metadata and Parquet files for OHLCV data.
+Key Methods:
 
-# Initialize (optional - will use env vars)
-polygon.initialize(api_key='your_key')
+save_data(df, symbol, timeframe)
+load_data(symbol, timeframe, start_date=None, end_date=None)
+has_cache(symbol, timeframe, start_date=None, end_date=None)
+get_missing_ranges(symbol, timeframe, start_date, end_date)
+clear_cache(symbol=None, timeframe=None, older_than_days=None)
+get_cache_statistics()
 
-# Fetch historical data
-df = polygon.get_bars('AAPL', timeframe='5min', start='2024-01-01', end='2024-01-31')
+Database Schema:
 
-# Get latest price
-price = polygon.get_latest_price('AAPL')
+cache_metadata: Tracks cached data ranges, file paths, checksums
+cache_access_log: Records cache usage for analytics
+cleanup_log: Tracks cache maintenance operations
 
-# Stream real-time data
-async def handle_trade(data):
-    print(f"Trade: {data['symbol']} @ ${data['price']}")
+RateLimiter (rate_limiter.py)
+Intelligent rate limiting with per-minute and daily limits based on subscription tier.
+Key Methods:
 
-client = await polygon.stream_trades(['AAPL', 'MSFT'], handle_trade)
-Using the Data Server
+check_limit() -> (is_allowed, wait_time)
+wait_if_needed(priority=5) -> seconds_waited
+record_request(response_time=None, success=True)
+get_current_usage() -> usage statistics
+queue_request(callback, *args, priority=5)
 
-Start the server:
-bash# Windows
-start_polygon_server.bat
+Subscription Tiers:
 
-# Or directly
-python -m polygon.polygon_server.start_server
+basic: 5 requests/minute, 1,000/day
+starter: 100 requests/minute, 50,000/day
+developer: 1,000 requests/minute, 500,000/day
+advanced: 10,000 requests/minute, unlimited/day
 
-Access the API:
+Data Validation
+DataQualityReport (validators/data_quality.py)
+Comprehensive validation results container.
+Validation Types:
 
-REST API: http://localhost:8200/api/v1/
-API Docs: http://localhost:8200/docs
-WebSocket: ws://localhost:8200/ws/{client_id}
+Symbol Validation: Validates ticker format and type
+OHLCV Integrity: Checks price relationships, NaN values, duplicates
+Gap Detection: Identifies missing data points
+Anomaly Detection: Statistical outliers, extreme changes
+Volume Profile: Volume distribution analysis
+Market Hours: Validates trading session data
 
-
-
-API Documentation
-REST API Endpoints
-Get Historical Bars
-httpPOST /api/v1/bars
-Content-Type: application/json
-
-{
-    "symbol": "AAPL",
-    "timeframe": "5min",
-    "start_date": "2024-01-01",
-    "end_date": "2024-01-31",
-    "use_cache": true,
-    "validate": true
-}
-Response:
-json{
-    "symbol": "AAPL",
-    "timeframe": "5min",
-    "start_date": "2024-01-01",
-    "end_date": "2024-01-31",
-    "bar_count": 7800,
-    "data": [
-        {
-            "timestamp": "2024-01-01T09:30:00",
-            "open": 185.50,
-            "high": 185.75,
-            "low": 185.25,
-            "close": 185.60,
-            "volume": 125000,
-            "vwap": 185.55,
-            "transactions": 850
-        }
-    ],
-    "cached": true,
-    "validation": {
-        "overall_quality": "EXCELLENT",
-        "issues": []
-    }
-}
-Get Latest Price
-httpGET /api/v1/latest/AAPL
-Validate Symbols
-httpPOST /api/v1/validate
-Content-Type: application/json
-
-{
-    "symbols": ["AAPL", "MSFT", "INVALID"],
-    "detailed": true
-}
-Search Symbols
-httpGET /api/v1/search?query=apple&active_only=true
-Cache Management
-httpGET /api/v1/cache/stats
-DELETE /api/v1/cache?symbol=AAPL&older_than_days=30
-Rate Limit Status
-httpGET /api/v1/rate-limit
-WebSocket API
-Connection
-javascriptconst ws = new WebSocket('ws://localhost:8200/ws/my-client-id');
-
-ws.onopen = () => {
-    console.log('Connected to Polygon data stream');
-};
-
-ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    console.log('Received:', data);
-};
-Subscribe to Data
-javascript// Subscribe to trades and quotes
-ws.send(JSON.stringify({
-    action: 'subscribe',
-    symbols: ['AAPL', 'MSFT'],
-    channels: ['T', 'Q']  // T=Trades, Q=Quotes, A=Aggregates
-}));
-Data Format
-javascript// Trade data
-{
-    "type": "market_data",
-    "data": {
-        "event_type": "trade",
-        "symbol": "AAPL",
-        "timestamp": 1706284800000,
-        "price": 185.50,
-        "size": 100,
-        "conditions": [14, 37],
-        "exchange": 4,
-        "trade_id": "12345"
-    },
-    "timestamp": "2024-01-26T09:30:00"
-}
-
-// Quote data
-{
-    "type": "market_data",
-    "data": {
-        "event_type": "quote",
-        "symbol": "AAPL",
-        "timestamp": 1706284800000,
-        "bid_price": 185.48,
-        "bid_size": 300,
-        "ask_price": 185.52,
-        "ask_size": 500,
-        "exchange": 4
-    },
-    "timestamp": "2024-01-26T09:30:00"
-}
-Module API Reference
-Simple Functions
-python# Get historical data
-polygon.get_bars(symbol, timeframe, start, end, use_cache=True, validate=True)
-
-# Get latest price
-polygon.get_latest_price(symbol)
-
-# Validate ticker
-polygon.validate_ticker(symbol)
-
-# Clear cache
-polygon.clear_cache(symbol=None, older_than_days=None)
-
-# Get statistics
-polygon.get_storage_statistics()
-polygon.get_rate_limit_status()
-Advanced Usage
-pythonfrom polygon import PolygonDataManager
-
-manager = PolygonDataManager()
-
-# Fetch multiple symbols in parallel
-data = manager.fetch_multiple_symbols(
-    symbols=['AAPL', 'GOOGL', 'MSFT'],
-    timeframe='1day',
-    start_date='2024-01-01',
-    end_date='2024-01-31'
-)
-
-# Validate data quality
-validation = manager.validate_data(df, 'AAPL', '5min')
-
-# Search symbols
-results = manager.search_symbols('Tesla')
-WebSocket Client
-pythonfrom polygon import PolygonWebSocketClient
-
-async def stream_data():
-    client = PolygonWebSocketClient()
-    
-    async def handle_data(data):
-        print(f"{data['event_type']}: {data['symbol']} @ ${data['price']}")
-    
-    await client.connect()
-    await client.subscribe(['AAPL', 'TSLA'], ['T', 'Q'], handle_data)
-    await client.listen()
-Integration Examples
-Electron/JavaScript Integration
-javascript// Using REST API
-async function fetchHistoricalData(symbol, timeframe) {
-    const response = await fetch('http://localhost:8200/api/v1/bars', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            symbol,
-            timeframe,
-            start_date: '2024-01-01',
-            end_date: '2024-01-31'
-        })
-    });
-    
-    return await response.json();
-}
-
-// Using WebSocket
-class PolygonStream {
-    constructor(clientId) {
-        this.ws = new WebSocket(`ws://localhost:8200/ws/${clientId}`);
-        this.setupHandlers();
-    }
-    
-    setupHandlers() {
-        this.ws.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            if (message.type === 'market_data') {
-                this.handleMarketData(message.data);
-            }
-        };
-    }
-    
-    subscribe(symbols, channels = ['T']) {
-        this.ws.send(JSON.stringify({
-            action: 'subscribe',
-            symbols,
-            channels
-        }));
-    }
-    
-    handleMarketData(data) {
-        // Process incoming data
-        console.log(`${data.symbol}: $${data.price}`);
-    }
-}
-Python Integration
-pythonimport requests
-import asyncio
-import websockets
-import json
-
-# REST API client
-class PolygonAPIClient:
-    def __init__(self, base_url='http://localhost:8200'):
-        self.base_url = base_url
-    
-    def get_bars(self, symbol, timeframe, start_date, end_date):
-        response = requests.post(
-            f'{self.base_url}/api/v1/bars',
-            json={
-                'symbol': symbol,
-                'timeframe': timeframe,
-                'start_date': start_date,
-                'end_date': end_date
-            }
-        )
-        return response.json()
-
-# WebSocket client
-async def stream_market_data():
-    uri = 'ws://localhost:8200/ws/python-client'
-    
-    async with websockets.connect(uri) as websocket:
-        # Subscribe
-        await websocket.send(json.dumps({
-            'action': 'subscribe',
-            'symbols': ['AAPL', 'MSFT'],
-            'channels': ['T', 'Q']
-        }))
-        
-        # Listen for data
-        async for message in websocket:
-            data = json.loads(message)
-            if data.get('type') == 'market_data':
-                print(f"Received: {data['data']}")
+Usage:
+pythonfrom polygon.validators import generate_validation_summary
+summary = generate_validation_summary(df, 'AAPL', '5min', start_date, end_date)
 Configuration
 Environment Variables
-VariableDescriptionDefaultRequiredPOLYGON_API_KEYYour Polygon.io API key-YesSERVER_HOSTServer bind address0.0.0.0NoSERVER_PORTServer port8200NoLOG_LEVELLogging levelINFONoPOLYGON_TIERSubscription tieradvancedNoCACHE_DIRCache directory./polygon_cacheNoWS_MAX_CONNECTIONSMax WebSocket clients100No
-Cache Configuration
-The module uses SQLite for metadata and Parquet files for data storage:
-polygon/data/
-├── cache/
-│   └── polygon_cache.db      # Metadata
-└── parquet/
-    └── symbols/
-        ├── AAPL/
-        │   ├── AAPL_1min.parquet
-        │   └── AAPL_1day.parquet
-        └── MSFT/
-            └── ...
-Troubleshooting
-Common Issues
-1. "POLYGON_API_KEY not found"
+bash# Required
+POLYGON_API_KEY=your_api_key_here
 
-Ensure .env file exists in project root
-Set environment variable: set POLYGON_API_KEY=your_key
+# Optional
+POLYGON_SUBSCRIPTION_TIER=advanced  # default: advanced
+POLYGON_LOG_LEVEL=INFO             # default: INFO
+Timeframe Formats
+The module accepts flexible timeframe strings:
 
-2. "No data returned"
+Minutes: '1min', '5min', '15min', '30min', '60min'
+Hours: '1h', '4h', '1hour', '4hour'
+Days: '1d', 'D', '1day'
+Weeks: '1w', 'W', '1week'
+Months: '1m', 'M', '1month'
 
-Check if markets are open (WebSocket data)
-Verify date range is valid
-Ensure symbol is valid US equity
+Important Notes
 
-3. "Rate limit exceeded"
+UTC Timezone: All timestamps are in UTC (POLYGON_TIMEZONE = pytz.UTC)
+Market Hours: Configured in UTC (e.g., 9:30 AM ET = 2:30 PM UTC)
+Data Storage: Parquet files in ./data/parquet/symbols/{SYMBOL}/
+Cache Database: SQLite at ./data/cache/polygon_cache.db
 
-Check current usage: /api/v1/rate-limit
-Advanced tier has high limits (10,000/min)
-Use caching to reduce API calls
+Basic Usage Examples
+Fetch Historical Data
+pythonfrom polygon import PolygonDataManager
 
-4. WebSocket connection drops
+# Initialize manager
+manager = PolygonDataManager()
 
-Module has automatic reconnection
-Check network connectivity
-Verify API key is valid
+# Fetch daily data
+df = manager.fetch_data('AAPL', '1day', '2023-01-01', '2023-12-31')
 
-Debug Mode
-Enable debug logging:
-python# In .env
-LOG_LEVEL=DEBUG
+# Fetch with validation
+df = manager.fetch_data('AAPL', '5min', '2023-01-01', '2023-01-31', validate=True)
+Batch Operations
+python# Fetch multiple symbols
+symbols = ['AAPL', 'GOOGL', 'MSFT']
+data = manager.fetch_multiple_symbols(symbols, '1day', '2023-01-01', '2023-12-31')
 
-# Or in code
-import logging
-logging.getLogger('polygon').setLevel(logging.DEBUG)
-Performance Considerations
-Caching Strategy
+# Create universe dataset
+universe = manager.batch_fetcher.fetch_universe(
+    symbols, '1day', '2023-01-01', '2023-12-31', aligned=True
+)
+Cache Management
+python# Check cache statistics
+stats = manager.get_storage_statistics()
 
-Historical data is cached locally in Parquet format
-Cache is checked before API calls
-Use use_cache=False to force fresh data
+# Clear old data
+manager.clear_cache(older_than_days=30)
 
-Rate Limits (Advanced Tier)
+# Update cache for symbol
+manager.update_cache('AAPL', '5min')
+Error Handling
+The module provides specific exception types:
 
-10,000 requests per minute
-Unlimited daily requests
-Up to 1,000 concurrent symbol subscriptions
+PolygonError: Base exception
+PolygonAPIError: API response errors (with status codes)
+PolygonAuthenticationError: Invalid API key
+PolygonRateLimitError: Rate limit exceeded
+PolygonSymbolError: Invalid ticker symbol
+PolygonDataError: Data validation failures
+PolygonTimeRangeError: Invalid date ranges
+PolygonStorageError: Cache/storage errors
+PolygonNetworkError: Connection issues
+PolygonWebSocketError: WebSocket streaming errors
 
-Memory Usage
+Module Initialization
+python# Option 1: Use convenience functions
+from polygon import fetch_data, fetch_latest
+df = fetch_data('AAPL', '5min')
+latest = fetch_latest('AAPL', '1min', bars=20)
 
-Large date ranges are automatically chunked
-WebSocket buffers are managed automatically
-Cache files are compressed
+# Option 2: Use the manager
+from polygon import PolygonDataManager
+manager = PolygonDataManager()
+df = manager.fetch_data('AAPL', '5min', start_date, end_date)
 
-Development
-Running Tests
-bash# Run WebSocket test
-python polygon/tests/test_websocket_live.py
+# Option 3: Direct component access
+from polygon.fetcher import DataFetcher
+from polygon.storage import get_storage_manager
+fetcher = DataFetcher()
+storage = get_storage_manager()
+Performance Optimization
 
-# Test server endpoints
-python polygon/polygon_server/start_server.py --test
-Adding New Endpoints
-
-Add endpoint to polygon/polygon_server/endpoints/rest.py:
-
-python@router.get("/api/v1/my-endpoint")
-async def my_endpoint():
-    return {"status": "ok"}
-
-Add model to polygon/polygon_server/models.py if needed
-Restart server to load changes
-
-Security Notes
-
-Never commit .env files
-API keys are masked in logs
-Server uses CORS protection
-Input validation on all endpoints
-Rate limiting prevents abuse
-
-Support
-Polygon.io Resources
-
-API Documentation: https://polygon.io/docs
-Status Page: https://status.polygon.io
-Support: https://polygon.io/support
-
-Module Information
-
-Version: 1.0.0
-Python: 3.8+
-License: Proprietary
-Author: AlphaXIII
-
-
-This module provides a complete, production-ready integration with Polygon.io's market data services, suitable for high-frequency trading, market analysis, and real-time data applications.
+Caching: Automatic local caching reduces API calls
+Rate Limiting: Intelligent throttling with priority queuing
+Batch Operations: Parallel fetching for multiple symbols
+Data Compression: Parquet files with Snappy compression
+Smart Merging: Efficiently combines cached and new data

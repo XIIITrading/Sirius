@@ -1,10 +1,14 @@
 # live_monitor/dashboard/main_dashboard.py
 """
 Main Live Monitor Dashboard with Polygon Data Integration
+Updated to use three table widgets instead of charts
 """
 
 import sys
 import logging
+import pandas as pd
+import numpy as np
+from datetime import datetime, timezone
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout, 
                              QVBoxLayout, QSplitter, QStatusBar, QLabel)
 from PyQt6.QtCore import Qt, QTimer
@@ -13,16 +17,15 @@ from PyQt6.QtGui import QCloseEvent, QPainter, QBrush, QPen, QColor
 # Import styles and components
 from ..styles import BaseStyles
 from .components import (TickerEntry, TickerCalculations, EntryCalculations,
-                        PointCallEntry, PointCallExit, ChartWidget)
+                        PointCallEntry, PointCallExit, HVNTableWidget,
+                        SupplyDemandTableWidget, OrderBlocksTableWidget)
 
 # Import data manager
 from live_monitor.data import PolygonDataManager
 
-# Polygon Aggregate Data Handler
-from live_monitor.dashboard.components.chart.data.aggregate_data_handler import AggregateDataHandler
-
-# Zone Calculator
-from live_monitor.dashboard.components.chart.zone_calculator import ZoneCalculator
+# Import calculation modules
+from live_monitor.calculations.volume.hvn_engine import HVNEngine
+from live_monitor.calculations.zones.supply_demand import OrderBlockAnalyzer
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -73,21 +76,22 @@ class LiveMonitorDashboard(QMainWindow):
         # Initialize data manager
         self.data_manager = PolygonDataManager()
         
-        # Create zone calculator first
-        self.zone_calculator = ZoneCalculator(update_interval_ms=60000)  # Update every minute
-        self.zone_calculator.zones_calculated.connect(self._on_zones_calculated)
-        self.zone_calculator.calculation_error.connect(
-            lambda error: logger.error(f"Zone calculation error: {error}")
+        # Initialize calculation engines
+        self.hvn_engine = HVNEngine(
+            levels=100,
+            percentile_threshold=80.0,
+            proximity_atr_minutes=30
         )
         
-        # Create and connect aggregate handler with zone calculator
-        self.aggregate_handler = AggregateDataHandler(zone_calculator=self.zone_calculator)
+        self.order_block_analyzer = OrderBlockAnalyzer(
+            swing_length=7,
+            show_bullish=3,
+            show_bearish=3
+        )
         
-        # Connect chart data updates to both chart widget AND zone calculator
-        self.aggregate_handler.chart_data_updated.connect(self._on_chart_data_updated)
-        
-        self.data_manager.set_aggregate_handler(self.aggregate_handler)
-        logger.info("Aggregate handler connected to data manager")
+        # Data storage
+        self.accumulated_data = []
+        self.current_symbol = None
         
         # Initialize UI
         self.init_ui()
@@ -97,6 +101,11 @@ class LiveMonitorDashboard(QMainWindow):
         
         # Connect to Polygon server after UI is ready
         QTimer.singleShot(100, self.connect_to_polygon)
+        
+        # Start calculation timer
+        self.calculation_timer = QTimer()
+        self.calculation_timer.timeout.connect(self.run_calculations)
+        self.calculation_timer.start(30000)  # Run every 30 seconds
         
     def init_ui(self):
         """Initialize the UI"""
@@ -188,12 +197,27 @@ class LiveMonitorDashboard(QMainWindow):
         self.point_call_exit = PointCallExit()
         top_layout.addWidget(self.point_call_exit, 1)
         
-        # BOTTOM SECTION - Chart spanning full width
-        self.chart_widget = ChartWidget()
+        # BOTTOM SECTION - Three table widgets side by side
+        bottom_widget = QWidget()
+        bottom_layout = QHBoxLayout(bottom_widget)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setSpacing(5)
+        
+        # HVN Table
+        self.hvn_table = HVNTableWidget()
+        bottom_layout.addWidget(self.hvn_table, 1)
+        
+        # Supply/Demand Table
+        self.supply_demand_table = SupplyDemandTableWidget()
+        bottom_layout.addWidget(self.supply_demand_table, 1)
+        
+        # Order Blocks Table
+        self.order_blocks_table = OrderBlocksTableWidget()
+        bottom_layout.addWidget(self.order_blocks_table, 1)
         
         # Add top and bottom to vertical splitter
         vertical_splitter.addWidget(top_widget)
-        vertical_splitter.addWidget(self.chart_widget)
+        vertical_splitter.addWidget(bottom_widget)
         
         # Set vertical splitter proportions (40% top, 60% bottom)
         vertical_splitter.setSizes([360, 540])
@@ -248,19 +272,15 @@ class LiveMonitorDashboard(QMainWindow):
         self.point_call_entry.entry_selected.connect(self._on_entry_selected)
         self.point_call_exit.exit_selected.connect(self._on_exit_selected)
         
-        # Connect chart controls
-        self.chart_widget.timeframe_changed.connect(self._on_timeframe_changed)
-        self.chart_widget.indicator_toggled.connect(self._on_indicator_toggled)
+        # Connect supply/demand table signals
+        self.supply_demand_table.add_zone_requested.connect(self._on_add_zone_requested)
+        self.supply_demand_table.refresh_requested.connect(self._on_refresh_zones_requested)
         
     def setup_data_connections(self):
         """Setup connections to data manager"""
         # Connect data signals
         self.data_manager.market_data_updated.connect(self._on_market_data_updated)
-        
-        # IMPORTANT: Connect chart data updates through our handler
-        # self.data_manager.chart_data_updated.connect(self.chart_widget.update_chart_data)  # REMOVED
-        # Now handled through aggregate_handler -> _on_chart_data_updated
-        
+        self.data_manager.chart_data_updated.connect(self._on_chart_data_updated)
         self.data_manager.entry_signal_generated.connect(self._on_entry_signal)
         self.data_manager.exit_signal_generated.connect(self._on_exit_signal)
         
@@ -274,13 +294,11 @@ class LiveMonitorDashboard(QMainWindow):
         self.status_bar.showMessage("Connecting to Polygon server...", 2000)
         self.data_manager.connect()
         
-        # Start zone calculations after connection
-        QTimer.singleShot(5000, self.zone_calculator.calculate_zones)  # Initial calculation after 5 seconds
-        
     def _on_ticker_changed(self, ticker):
         """Handle ticker symbol changes"""
         if ticker:
             logger.info(f"Ticker changed to: {ticker}")
+            self.current_symbol = ticker
             self.symbol_label.setText(f"Symbol: {ticker}")
             self.status_bar.showMessage(f"Subscribing to {ticker}...", 2000)
             
@@ -288,13 +306,18 @@ class LiveMonitorDashboard(QMainWindow):
             self.ticker_calculations.clear_calculations()
             self.point_call_entry.clear_signals()
             self.point_call_exit.clear_signals()
+            self.accumulated_data.clear()
+            
+            # Clear tables
+            self.hvn_table.clear_zones()
+            self.supply_demand_table.clear_zones()
+            self.order_blocks_table.clear_blocks()
             
             # Change symbol in data manager
             self.data_manager.change_symbol(ticker)
             
-            # Update zone calculator
-            self.zone_calculator.set_symbol(ticker)
-            self.zone_calculator.start_calculations()
+            # Run calculations after a delay to allow data to load
+            QTimer.singleShot(5000, self.run_calculations)
         
     def _on_market_data_updated(self, data):
         """Handle market data updates"""
@@ -315,44 +338,147 @@ class LiveMonitorDashboard(QMainWindow):
             )
     
     def _on_chart_data_updated(self, data: dict):
-        """Handle chart data updates - forward to chart and zone calculator"""
-        # Forward to chart widget
-        self.chart_widget.update_chart_data(data)
-        
-        # Update zone calculator with new data
-        if self.zone_calculator and data.get('bars'):
-            self.zone_calculator.update_data(data['bars'])
-        
-        # Log the update
-        logger.info(f"Chart update: {data['symbol']} {data['timeframe']} - {len(data['bars'])} bars")
+        """Handle chart data updates - accumulate for calculations"""
+        if data.get('bars'):
+            # Add bars to accumulated data
+            self.accumulated_data.extend(data['bars'])
+            
+            # Keep only recent data (e.g., last 2000 bars)
+            if len(self.accumulated_data) > 2000:
+                self.accumulated_data = self.accumulated_data[-2000:]
+            
+            logger.info(f"Accumulated {len(self.accumulated_data)} bars for {data['symbol']}")
     
-    def _on_zones_calculated(self, zones_data):
-        """Handle calculated zones"""
-        logger.info(f"MainDashboard: Zones calculated for {zones_data['symbol']}")
-        logger.info(f"  - HVN zones: {len(zones_data.get('hvn_zones', []))}")
-        logger.info(f"  - S/D zones: {len(zones_data.get('supply_demand_zones', []))}")
-        logger.info(f"  - Camarilla levels: {len(zones_data.get('camarilla_levels', {}))}")
-        
-        # Update chart with HVN zones
-        if 'hvn_zones' in zones_data:
-            self.chart_widget.add_hvn_zones(zones_data['hvn_zones'])
+    def calculate_m15_atr(self, df: pd.DataFrame, period: int = 14) -> float:
+        """Calculate M15 ATR from 1-minute data"""
+        try:
+            # Resample to 15-minute bars
+            df_15m = df.resample('15T').agg({
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            }).dropna()
             
-        # Update chart with supply/demand zones
-        if 'supply_demand_zones' in zones_data:
-            self.chart_widget.add_supply_demand_zones(zones_data['supply_demand_zones'])
+            if len(df_15m) < period:
+                return 0.0
+                
+            # Calculate ATR
+            high = df_15m['high'].values
+            low = df_15m['low'].values
+            close = df_15m['close'].values
             
-        # Update chart with Camarilla levels
-        if 'camarilla_levels' in zones_data:
-            self.chart_widget.add_camarilla_levels(zones_data['camarilla_levels'])
+            # True Range calculation
+            tr1 = high - low
+            tr2 = np.abs(high - np.roll(close, 1))
+            tr3 = np.abs(low - np.roll(close, 1))
             
-        # Update status bar with zone info
-        nearby_count = len(zones_data.get('nearby_zones', []))
-        self.status_bar.showMessage(
-            f"Zones updated: {len(zones_data.get('hvn_zones', []))} HVN, "
-            f"{len(zones_data.get('supply_demand_zones', []))} S/D, "
-            f"{nearby_count} nearby zones", 
-            5000
-        )
+            tr = np.maximum(tr1, np.maximum(tr2, tr3))
+            atr = np.mean(tr[-period:])
+            
+            return float(atr)
+        except Exception as e:
+            logger.error(f"Error calculating M15 ATR: {e}")
+            return 0.0
+    
+    def run_calculations(self):
+        """Run HVN and Order Block calculations"""
+        if not self.current_symbol or len(self.accumulated_data) < 100:
+            logger.warning(f"Not enough data for calculations: {len(self.accumulated_data)} bars")
+            return
+            
+        try:
+            # Convert accumulated data to DataFrame
+            df = pd.DataFrame(self.accumulated_data)
+            
+            # Ensure timestamp column exists and is timezone-aware
+            if 'timestamp' in df.columns:
+                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                if df['timestamp'].dt.tz is None:
+                    df['timestamp'] = df['timestamp'].dt.tz_localize('UTC')
+                df.set_index('timestamp', inplace=True)
+            
+            current_price = float(df['close'].iloc[-1])
+            
+            # Calculate M15 ATR for the tables
+            m15_atr = self.calculate_m15_atr(df)
+            
+            # Run HVN calculation
+            logger.info("Running HVN calculation...")
+            hvn_result = self.hvn_engine.analyze(df, include_pre=True, include_post=True)
+            
+            # Convert HVN clusters to display format
+            hvn_zones = []
+            for cluster in hvn_result.clusters[:5]:  # Top 5 clusters
+                hvn_zones.append({
+                    'price_low': cluster.cluster_low,
+                    'price_high': cluster.cluster_high,
+                    'center_price': cluster.center_price,
+                    'strength': cluster.total_percent,
+                    'type': 'hvn'
+                })
+            
+            # Update HVN table
+            self.hvn_table.update_hvn_zones(hvn_zones, current_price, m15_atr)
+            
+            # Run Order Block calculation
+            logger.info("Running Order Block calculation...")
+            order_blocks_raw = self.order_block_analyzer.analyze_zones(df)
+            
+            # Convert to display format
+            order_blocks = []
+            for ob in self.order_block_analyzer.bullish_obs[-3:] + self.order_block_analyzer.bearish_obs[-3:]:
+                order_blocks.append({
+                    'block_type': ob.block_type,
+                    'top': ob.top,
+                    'bottom': ob.bottom,
+                    'center': ob.center,
+                    'is_breaker': ob.is_breaker,
+                    'time': ob.time
+                })
+            
+            # Update Order Blocks table
+            self.order_blocks_table.update_order_blocks(order_blocks, current_price, m15_atr)
+            
+            # For Supply/Demand, we'll use placeholder data for now
+            # In production, this would come from Supabase
+            supply_zones = [
+                {'price_low': current_price * 1.01, 'price_high': current_price * 1.02, 
+                 'center_price': current_price * 1.015, 'strength': 75},
+            ]
+            demand_zones = [
+                {'price_low': current_price * 0.98, 'price_high': current_price * 0.99, 
+                 'center_price': current_price * 0.985, 'strength': 80},
+            ]
+            
+            # Update Supply/Demand table
+            self.supply_demand_table.update_zones(supply_zones, demand_zones, current_price, m15_atr)
+            
+            self.status_bar.showMessage(
+                f"Calculations updated: {len(hvn_zones)} HVN zones, "
+                f"{len(order_blocks)} order blocks | "
+                f"M15 ATR: ${m15_atr:.2f}", 
+                3000
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in calculations: {e}", exc_info=True)
+            self.status_bar.showMessage(f"Calculation error: {str(e)}", 5000)
+    
+    def _on_add_zone_requested(self):
+        """Handle request to add new supply/demand zone"""
+        # In production, this would open a dialog to add zone to Supabase
+        logger.info("Add zone requested - would open Supabase dialog")
+        self.status_bar.showMessage("Add zone feature coming soon...", 2000)
+    
+    def _on_refresh_zones_requested(self):
+        """Handle request to refresh supply/demand zones"""
+        # In production, this would fetch latest zones from Supabase
+        logger.info("Refresh zones requested - would query Supabase")
+        self.status_bar.showMessage("Refreshing zones from database...", 2000)
+        # Run calculations to update with latest data
+        self.run_calculations()
     
     def _on_entry_signal(self, signal_data):
         """Handle new entry signal"""
@@ -418,21 +544,13 @@ class LiveMonitorDashboard(QMainWindow):
     def _on_exit_selected(self, exit_data):
         """Handle exit signal selection"""
         logger.info(f"Exit selected: {exit_data}")
-        
-    def _on_timeframe_changed(self, timeframe):
-        """Handle timeframe changes"""
-        logger.info(f"Timeframe changed to: {timeframe}")
-        
-    def _on_indicator_toggled(self, indicator, enabled):
-        """Handle indicator toggle"""
-        logger.info(f"Indicator {indicator} toggled: {enabled}")
     
     def closeEvent(self, event: QCloseEvent):
         """Handle window close event"""
         logger.info("Closing dashboard...")
         
-        # Stop zone calculations
-        self.zone_calculator.stop_calculations()
+        # Stop calculation timer
+        self.calculation_timer.stop()
         
         # Disconnect from data server
         self.data_manager.disconnect()

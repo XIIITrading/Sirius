@@ -4,7 +4,7 @@ Main data manager for Polygon WebSocket integration
 """
 import json
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from datetime import datetime
 
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
@@ -13,7 +13,7 @@ from live_monitor.data.websocket_client import PolygonWebSocketClient
 from .models import (
     TradeData, QuoteData, AggregateData,
     MarketDataUpdate, TickerCalculationData,
-    ChartUpdate, EntrySignal, ExitSignal
+    EntrySignal, ExitSignal
 )
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class PolygonDataManager(QObject):
     
     # UI Update Signals
     market_data_updated = pyqtSignal(dict)      # For TickerCalculations
-    chart_data_updated = pyqtSignal(dict)       # For ChartWidget  
+    chart_data_updated = pyqtSignal(dict)       # For bar data accumulation
     calculation_updated = pyqtSignal(dict)      # For calculated metrics
     entry_signal_generated = pyqtSignal(dict)   # For PointCallEntry
     exit_signal_generated = pyqtSignal(dict)    # For PointCallExit
@@ -58,8 +58,9 @@ class PolygonDataManager(QObject):
         self.current_symbol: Optional[str] = None
         self.market_state: Dict[str, MarketDataUpdate] = {}
         
-        # Aggregate handler will be set by dashboard
-        self.aggregate_handler = None
+        # Bar data accumulation
+        self.accumulated_bars: List[Dict] = []
+        self.max_bars = 2000  # Keep last 2000 bars
         
         # Add heartbeat tracking
         self.last_data_time = {}  # Track last data time per symbol
@@ -71,14 +72,6 @@ class PolygonDataManager(QObject):
         self.heartbeat_timer.start(5000)  # Check every 5 seconds
         
         logger.info("PolygonDataManager initialized with heartbeat monitoring")
-        
-    def set_aggregate_handler(self, handler):
-        """Set the aggregate handler (to avoid circular imports)"""
-        self.aggregate_handler = handler
-        # Connect signals
-        if self.aggregate_handler:
-            self.aggregate_handler.chart_data_updated.connect(self.chart_data_updated.emit)
-            logger.info("Aggregate handler connected")
     
     def connect(self):
         """Connect to Polygon WebSocket server"""
@@ -108,12 +101,11 @@ class PolygonDataManager(QObject):
             if old_symbol and old_symbol in self.last_data_time:
                 del self.last_data_time[old_symbol]
             
+            # Clear accumulated bars
+            self.accumulated_bars.clear()
+            
             # Update current symbol
             self.current_symbol = symbol
-            
-            # Notify aggregate handler to load historical data
-            if self.aggregate_handler:
-                self.aggregate_handler.set_symbol(symbol)
                 
             # Change WebSocket subscription (this will handle unsubscribe)
             self.ws_client.change_symbol(symbol)
@@ -264,11 +256,39 @@ class PolygonDataManager(QObject):
         
         # Handle both possible formats from polygon WebSocket
         if event_type in ['AM', 'A', 'aggregate']:
-            # Route to aggregate handler for chart data if available
-            if self.aggregate_handler:
-                self.aggregate_handler.process_aggregate(aggregate)
-            else:
-                logger.warning("No aggregate handler set - cannot process chart data")
+            # Convert to bar format for accumulation
+            symbol = aggregate.get('symbol', aggregate.get('sym'))
+            timestamp = aggregate.get('s', aggregate.get('timestamp', 0))
+            
+            # Create bar data
+            bar_data = {
+                'timestamp': datetime.fromtimestamp(timestamp / 1000.0) if timestamp else datetime.now(),
+                'open': aggregate.get('o', aggregate.get('open', 0)),
+                'high': aggregate.get('h', aggregate.get('high', 0)),
+                'low': aggregate.get('l', aggregate.get('low', 0)),
+                'close': aggregate.get('c', aggregate.get('close', 0)),
+                'volume': aggregate.get('v', aggregate.get('volume', 0)),
+                'trades': aggregate.get('n', aggregate.get('transactions', 0))
+            }
+            
+            # Accumulate bar
+            self.accumulated_bars.append(bar_data)
+            
+            # Trim to max bars
+            if len(self.accumulated_bars) > self.max_bars:
+                self.accumulated_bars = self.accumulated_bars[-self.max_bars:]
+            
+            # Emit chart data update with accumulated bars
+            chart_update = {
+                'symbol': symbol,
+                'timeframe': '1m',
+                'bars': [bar_data],  # Send just the new bar
+                'is_update': True,
+                'latest_bar_complete': True
+            }
+            
+            self.chart_data_updated.emit(chart_update)
+            logger.info(f"Emitted chart update for {symbol} with new bar")
         
         # Update volume for market data
         symbol = aggregate.get('symbol', aggregate.get('sym'))
@@ -302,18 +322,9 @@ class PolygonDataManager(QObject):
             
             self.market_data_updated.emit(ticker_data)
     
-    def get_chart_data(self, timeframe: str, count: Optional[int] = None) -> dict:
-        """Get historical chart data"""
-        if self.aggregate_handler:
-            return self.aggregate_handler.get_chart_data(timeframe, count)
-        else:
-            return {
-                'symbol': '',
-                'timeframe': timeframe,
-                'bars': [],
-                'is_update': False,
-                'latest_bar_complete': False
-            }
+    def get_accumulated_bars(self) -> List[Dict]:
+        """Get all accumulated bars"""
+        return self.accumulated_bars.copy()
     
     def test_chart_update(self):
         """Test the chart update pipeline with fake data"""

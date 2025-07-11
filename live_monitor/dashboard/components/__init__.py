@@ -7,7 +7,9 @@ from .ticker_calculations import TickerCalculations
 from .entry_calculations import EntryCalculations
 from .point_call_entry import PointCallEntry
 from .point_call_exit import PointCallExit
-from .chart_widget import ChartWidget
+from .hvn_table import HVNTableWidget
+from .supply_demand_table import SupplyDemandTableWidget
+from .order_blocks_table import OrderBlocksTableWidget
 
 __all__ = [
     'TickerEntry',
@@ -15,5 +17,7 @@ __all__ = [
     'EntryCalculations',
     'PointCallEntry',
     'PointCallExit',
-    'ChartWidget'
+    'HVNTableWidget',
+    'SupplyDemandTableWidget',
+    'OrderBlocksTableWidget'
 ]

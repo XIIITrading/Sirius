@@ -7,7 +7,7 @@ import logging
 from typing import Dict, Optional
 from datetime import datetime
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 
 from live_monitor.data.websocket_client import PolygonWebSocketClient
 from .models import (
@@ -61,6 +61,17 @@ class PolygonDataManager(QObject):
         # Aggregate handler will be set by dashboard
         self.aggregate_handler = None
         
+        # Add heartbeat tracking
+        self.last_data_time = {}  # Track last data time per symbol
+        self.no_data_threshold = 30  # seconds
+        
+        # Create a timer to check data flow periodically
+        self.heartbeat_timer = QTimer()
+        self.heartbeat_timer.timeout.connect(self.check_data_flow)
+        self.heartbeat_timer.start(5000)  # Check every 5 seconds
+        
+        logger.info("PolygonDataManager initialized with heartbeat monitoring")
+        
     def set_aggregate_handler(self, handler):
         """Set the aggregate handler (to avoid circular imports)"""
         self.aggregate_handler = handler
@@ -77,20 +88,55 @@ class PolygonDataManager(QObject):
     def disconnect(self):
         """Disconnect from server"""
         logger.info("Disconnecting from Polygon server...")
+        self.heartbeat_timer.stop()  # Stop heartbeat timer
         self.ws_client.disconnect()
     
     def change_symbol(self, symbol: str):
         """Change the active symbol"""
         if symbol and symbol != self.current_symbol:
-            logger.info(f"Changing symbol from {self.current_symbol} to {symbol}")
+            # Store old symbol for cleanup
+            old_symbol = self.current_symbol
+            
+            logger.info(f"Changing symbol from {old_symbol} to {symbol}")
+            
+            # Clear market state for old symbol
+            if old_symbol and old_symbol in self.market_state:
+                logger.info(f"Clearing market state for {old_symbol}")
+                del self.market_state[old_symbol]
+            
+            # Clear last data time for old symbol
+            if old_symbol and old_symbol in self.last_data_time:
+                del self.last_data_time[old_symbol]
+            
+            # Update current symbol
             self.current_symbol = symbol
             
             # Notify aggregate handler to load historical data
             if self.aggregate_handler:
                 self.aggregate_handler.set_symbol(symbol)
                 
-            # Change WebSocket subscription
+            # Change WebSocket subscription (this will handle unsubscribe)
             self.ws_client.change_symbol(symbol)
+    
+    def check_data_flow(self):
+        """Check if we're receiving data for current symbol"""
+        if not self.current_symbol:
+            return
+            
+        last_time = self.last_data_time.get(self.current_symbol)
+        if last_time:
+            elapsed = (datetime.now() - last_time).total_seconds()
+            if elapsed > self.no_data_threshold:
+                logger.warning(f"No data received for {self.current_symbol} in {elapsed:.1f} seconds")
+                # Emit a status update
+                self.market_data_updated.emit({
+                    'symbol': self.current_symbol,
+                    'last_update': f"No data for {int(elapsed)}s",
+                    'market_state': 'low_activity'
+                })
+        else:
+            # No data received yet for this symbol
+            logger.debug(f"No data received yet for {self.current_symbol}")
     
     def _on_connected(self):
         """Handle connection established"""
@@ -109,9 +155,6 @@ class PolygonDataManager(QObject):
         
         Routes data to appropriate transformers and emits signals
         """
-        # Add debug logging
-        logger.debug(f"Received data: {json.dumps(data, indent=2)[:500]}")
-        
         event_type = data.get('event_type')
         symbol = data.get('symbol')
         
@@ -121,15 +164,20 @@ class PolygonDataManager(QObject):
         if not symbol:
             symbol = data.get('sym')  # Polygon uses 'sym' for symbol
         
+        # Only process data for current symbol - add more explicit logging
+        if symbol != self.current_symbol:
+            if symbol:  # Only log if we actually have a symbol
+                logger.debug(f"Ignoring data for {symbol}, current symbol is {self.current_symbol}")
+            return
+        
+        # Update last data time for heartbeat
+        if symbol == self.current_symbol:
+            self.last_data_time[symbol] = datetime.now()
+        
         logger.info(f"Processing: event_type={event_type}, symbol={symbol}")
         
         if not event_type or not symbol:
             logger.warning(f"Missing event_type or symbol in data: {data.keys()}")
-            return
-        
-        # Only process data for current symbol
-        if symbol != self.current_symbol:
-            logger.debug(f"Ignoring data for {symbol}, current symbol is {self.current_symbol}")
             return
         
         try:

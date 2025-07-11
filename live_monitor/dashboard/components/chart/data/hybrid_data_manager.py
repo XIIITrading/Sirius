@@ -46,6 +46,12 @@ class HybridDataManager(QObject):
             'duplicates_filtered': 0
         }
         
+        # Add minute tracking for complete bar detection
+        self.current_minute = {}  # Track current minute being built per symbol
+        self.last_complete_minute = {}  # Track last completed minute per symbol
+        
+        logger.info("HybridDataManager initialized with minute boundary detection")
+        
     def change_symbol(self, symbol: str):
         """Change to new symbol - load historical data"""
         if symbol == self.current_symbol:
@@ -57,6 +63,10 @@ class HybridDataManager(QObject):
         # Clear existing data
         self.aggregator.clear()
         self.last_am_timestamp.clear()
+        
+        # Clear minute tracking
+        self.current_minute.clear()
+        self.last_complete_minute.clear()
         
         # Load historical data
         self.load_historical_data(symbol)
@@ -108,7 +118,7 @@ class HybridDataManager(QObject):
             logger.error(f"[HYBRID] Failed to load historical data: {e}")
             
     def process_am_event(self, data: dict):
-        """Process AM event from WebSocket"""
+        """Process AM event from WebSocket - only emit on complete bars"""
         if not self.current_symbol:
             return
             
@@ -129,24 +139,48 @@ class HybridDataManager(QObject):
         
         # Create bar from AM data
         try:
-            bar = Bar(
-                timestamp=datetime.fromtimestamp(timestamp / 1000.0),
-                open=data.get('o', data.get('open')),
-                high=data.get('h', data.get('high')),
-                low=data.get('l', data.get('low')),
-                close=data.get('c', data.get('close')),
-                volume=data.get('v', data.get('volume')),
-                trades=data.get('n', data.get('transactions')) or 0
-            )
+            # Convert timestamp to datetime
+            bar_time = datetime.fromtimestamp(timestamp / 1000.0)
+            bar_minute = bar_time.replace(second=0, microsecond=0)
             
-            # Add to aggregator
-            updates = self.aggregator.add_minute_bar(bar)
-            self.stats['am_bars'] += 1
-            
-            # Emit updates
-            for timeframe, update in updates.items():
-                update.symbol = symbol
-                self.emit_update(update, timeframe)
+            # Check if this is a new minute
+            current_minute = self.current_minute.get(symbol)
+            if current_minute is None:
+                # First bar for this symbol
+                self.current_minute[symbol] = bar_minute
+                logger.info(f"First bar for {symbol} at minute {bar_minute}")
+            elif bar_minute > current_minute:
+                # New minute detected - the previous minute is complete
+                logger.info(f"New minute detected for {symbol}: {bar_minute} > {current_minute}")
+                
+                # Create bar object
+                bar = Bar(
+                    timestamp=current_minute,  # Use the completed minute
+                    open=data.get('o', data.get('open')),
+                    high=data.get('h', data.get('high')),
+                    low=data.get('l', data.get('low')),
+                    close=data.get('c', data.get('close')),
+                    volume=data.get('v', data.get('volume')),
+                    trades=data.get('n', data.get('transactions')) or 0
+                )
+                
+                # Add to aggregator
+                updates = self.aggregator.add_minute_bar(bar)
+                self.stats['am_bars'] += 1
+                
+                # Emit updates for completed bar
+                for timeframe, update in updates.items():
+                    update.symbol = symbol
+                    self.emit_update(update, timeframe)
+                    
+                # Update tracking
+                self.last_complete_minute[symbol] = current_minute
+                self.current_minute[symbol] = bar_minute
+                
+                logger.info(f"Emitted update for completed minute: {current_minute}")
+            else:
+                # Same minute update - don't emit
+                logger.debug(f"Same minute update for {symbol}: {bar_minute}")
                 
         except Exception as e:
             logger.error(f"[HYBRID] Error processing AM event: {e}")

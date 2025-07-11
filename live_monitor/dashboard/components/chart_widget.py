@@ -1,3 +1,4 @@
+# live_monitor/dashboard/components/chart_widget.py
 """
 Chart Widget Module - Real-time chart with HVN, Supply/Demand, and Camarilla overlays
 """
@@ -153,10 +154,10 @@ class ChartWidget(QWidget):
         self.init_ui()
         self.apply_styles()
         
-        # Setup update timer for smooth animations
-        self.update_timer = QTimer()
-        self.update_timer.timeout.connect(self.refresh_display)
-        self.update_timer.start(1000)  # Update every second
+        # Remove the auto-refresh timer - chart only updates on data changes
+        # self.update_timer = QTimer()
+        # self.update_timer.timeout.connect(self.refresh_display)
+        # self.update_timer.start(1000)  # REMOVED
         
     def init_ui(self):
         """Initialize the UI"""
@@ -328,6 +329,8 @@ class ChartWidget(QWidget):
             is_update = data['is_update']
             latest_bar_complete = data['latest_bar_complete']
             
+            logger.debug(f"ChartWidget: Received update - symbol: {symbol}, bars: {len(bars_data)}, is_update: {is_update}")
+            
             # Update current symbol
             if symbol != self.current_symbol:
                 self.current_symbol = symbol
@@ -352,23 +355,16 @@ class ChartWidget(QWidget):
             if timeframe == '1m':
                 if is_update and latest_bar_complete:
                     # New complete bar
+                    logger.info(f"ChartWidget: Adding {len(bars)} new complete bars")
                     for bar in bars:
                         self.bar_data['1m'].append(bar)
                 elif is_update and not latest_bar_complete:
-                    # Update incomplete bar
-                    if bars and self.bar_data['1m']:
-                        # Check if we're updating the last bar
-                        last_bar = self.bar_data['1m'][-1]
-                        new_bar = bars[0]
-                        
-                        if last_bar.timestamp == new_bar.timestamp:
-                            # Update existing bar
-                            self.bar_data['1m'][-1] = new_bar
-                        else:
-                            # New bar
-                            self.bar_data['1m'].append(new_bar)
+                    # Update incomplete bar - SKIP for now to prevent stuttering
+                    logger.debug("ChartWidget: Skipping incomplete bar update")
+                    return
                 else:
                     # Full refresh
+                    logger.info(f"ChartWidget: Full refresh with {len(bars)} bars")
                     self.bar_data['1m'].clear()
                     self.bar_data['1m'].extend(bars)
                 
@@ -383,7 +379,7 @@ class ChartWidget(QWidget):
                         f"Close: ${latest_bar.close:.2f} | "
                         f"Vol: {latest_bar.volume:,}"
                     )
-                
+            
         except Exception as e:
             logger.error(f"Error updating chart data: {e}", exc_info=True)
     
@@ -595,16 +591,19 @@ class ChartWidget(QWidget):
     
     def add_hvn_zones(self, zones: List[dict]):
         """Add HVN zones to chart"""
+        logger.info(f"ChartWidget: Adding {len(zones)} HVN zones")
         self.hvn_zones = zones
         self.update_overlays()
         
     def add_supply_demand_zones(self, zones: List[dict]):
         """Add supply/demand zones to chart"""
+        logger.info(f"ChartWidget: Adding {len(zones)} supply/demand zones")
         self.supply_demand_zones = zones
         self.update_overlays()
         
     def add_camarilla_levels(self, levels: dict):
         """Add Camarilla pivot levels to chart"""
+        logger.info(f"ChartWidget: Adding Camarilla levels: {list(levels.keys())}")
         self.camarilla_levels = levels
         self.update_overlays()
         

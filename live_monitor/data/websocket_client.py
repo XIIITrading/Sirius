@@ -203,6 +203,7 @@ class PolygonWebSocketClient(QObject):
                 "action": "unsubscribe",
                 "symbols": symbols
             }
+            logger.info(f"Sending unsubscribe message: {unsub_msg}")
             await self.ws_connection.send(json.dumps(unsub_msg))
             logger.info(f"Unsubscribed from {symbols}")
     
@@ -226,6 +227,7 @@ class PolygonWebSocketClient(QObject):
     def subscribe(self, symbols: list):
         """Subscribe to symbols (thread-safe)"""
         logger.info(f"subscribe() called with symbols: {symbols}")
+        logger.info(f"Current symbols before change: {self.current_symbols}")
         
         # Update tracking
         old_symbols = self.current_symbols.copy()
@@ -235,9 +237,12 @@ class PolygonWebSocketClient(QObject):
         to_unsub = list(old_symbols - self.current_symbols)
         to_sub = list(self.current_symbols - old_symbols)
         
+        logger.info(f"Subscription changes - Unsubscribe: {to_unsub}, Subscribe: {to_sub}")
+        
         if self.ws_thread.loop and self.ws_connection:
             # Unsubscribe old
             if to_unsub:
+                logger.info(f"Unsubscribing from: {to_unsub}")
                 asyncio.run_coroutine_threadsafe(
                     self._unsubscribe(to_unsub),
                     self.ws_thread.loop
@@ -245,18 +250,38 @@ class PolygonWebSocketClient(QObject):
             
             # Subscribe new
             if to_sub:
+                logger.info(f"Subscribing to: {to_sub}")
                 asyncio.run_coroutine_threadsafe(
                     self._subscribe(to_sub),
                     self.ws_thread.loop
                 )
         else:
-            logger.warning(f"Cannot subscribe - WebSocket not connected (loop: {bool(self.ws_thread.loop)}, connection: {bool(self.ws_connection)})")
+            logger.warning(f"Cannot subscribe - WebSocket not connected")
+            
+        logger.info(f"Current symbols after change: {self.current_symbols}")
     
     def change_symbol(self, symbol: str):
         """Convenience method to change to single symbol"""
         logger.info(f"change_symbol() called with: {symbol}")
         if symbol:
+            self.current_symbol = symbol  # Track current symbol
             self.subscribe([symbol.upper()])
+    
+    def unsubscribe_all(self):
+        """Unsubscribe from all symbols"""
+        logger.info(f"Unsubscribing from all symbols: {self.current_symbols}")
+        if self.current_symbols:
+            symbols_to_unsub = list(self.current_symbols)
+            self.current_symbols.clear()
+            self.current_symbol = None  # Clear current symbol
+            
+            if self.ws_thread.loop and self.ws_connection:
+                asyncio.run_coroutine_threadsafe(
+                    self._unsubscribe(symbols_to_unsub),
+                    self.ws_thread.loop
+                )
+            else:
+                logger.warning("Cannot unsubscribe - WebSocket not connected")
     
     def disconnect(self):
         """Disconnect and cleanup"""

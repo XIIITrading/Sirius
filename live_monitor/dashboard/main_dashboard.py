@@ -1,3 +1,4 @@
+# live_monitor/dashboard/main_dashboard.py
 """
 Main Live Monitor Dashboard with Polygon Data Integration
 """
@@ -19,6 +20,9 @@ from live_monitor.data import PolygonDataManager
 
 # Polygon Aggregate Data Handler
 from live_monitor.dashboard.components.chart.data.aggregate_data_handler import AggregateDataHandler
+
+# Zone Calculator
+from live_monitor.dashboard.components.chart.zone_calculator import ZoneCalculator
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -69,14 +73,21 @@ class LiveMonitorDashboard(QMainWindow):
         # Initialize data manager
         self.data_manager = PolygonDataManager()
         
-        # Create and connect aggregate handler for chart data
-        self.aggregate_handler = AggregateDataHandler()
-        self.aggregate_handler.chart_data_updated.connect(
-            lambda data: logger.info(f"Chart update: {data['symbol']} {data['timeframe']} - {len(data['bars'])} bars")
+        # Create zone calculator first
+        self.zone_calculator = ZoneCalculator(update_interval_ms=60000)  # Update every minute
+        self.zone_calculator.zones_calculated.connect(self._on_zones_calculated)
+        self.zone_calculator.calculation_error.connect(
+            lambda error: logger.error(f"Zone calculation error: {error}")
         )
+        
+        # Create and connect aggregate handler with zone calculator
+        self.aggregate_handler = AggregateDataHandler(zone_calculator=self.zone_calculator)
+        
+        # Connect chart data updates to both chart widget AND zone calculator
+        self.aggregate_handler.chart_data_updated.connect(self._on_chart_data_updated)
+        
         self.data_manager.set_aggregate_handler(self.aggregate_handler)
         logger.info("Aggregate handler connected to data manager")
-
         
         # Initialize UI
         self.init_ui()
@@ -246,9 +257,9 @@ class LiveMonitorDashboard(QMainWindow):
         # Connect data signals
         self.data_manager.market_data_updated.connect(self._on_market_data_updated)
         
-        # IMPORTANT: Connect chart data updates to chart widget
-        self.data_manager.chart_data_updated.connect(self.chart_widget.update_chart_data)
-        logger.info("Chart widget connected to data manager chart updates")
+        # IMPORTANT: Connect chart data updates through our handler
+        # self.data_manager.chart_data_updated.connect(self.chart_widget.update_chart_data)  # REMOVED
+        # Now handled through aggregate_handler -> _on_chart_data_updated
         
         self.data_manager.entry_signal_generated.connect(self._on_entry_signal)
         self.data_manager.exit_signal_generated.connect(self._on_exit_signal)
@@ -262,6 +273,9 @@ class LiveMonitorDashboard(QMainWindow):
         logger.info("Connecting to Polygon data server...")
         self.status_bar.showMessage("Connecting to Polygon server...", 2000)
         self.data_manager.connect()
+        
+        # Start zone calculations after connection
+        QTimer.singleShot(5000, self.zone_calculator.calculate_zones)  # Initial calculation after 5 seconds
         
     def _on_ticker_changed(self, ticker):
         """Handle ticker symbol changes"""
@@ -277,6 +291,10 @@ class LiveMonitorDashboard(QMainWindow):
             
             # Change symbol in data manager
             self.data_manager.change_symbol(ticker)
+            
+            # Update zone calculator
+            self.zone_calculator.set_symbol(ticker)
+            self.zone_calculator.start_calculations()
         
     def _on_market_data_updated(self, data):
         """Handle market data updates"""
@@ -295,6 +313,46 @@ class LiveMonitorDashboard(QMainWindow):
                 f"Ask: ${data.get('ask', 0):.2f}", 
                 2000
             )
+    
+    def _on_chart_data_updated(self, data: dict):
+        """Handle chart data updates - forward to chart and zone calculator"""
+        # Forward to chart widget
+        self.chart_widget.update_chart_data(data)
+        
+        # Update zone calculator with new data
+        if self.zone_calculator and data.get('bars'):
+            self.zone_calculator.update_data(data['bars'])
+        
+        # Log the update
+        logger.info(f"Chart update: {data['symbol']} {data['timeframe']} - {len(data['bars'])} bars")
+    
+    def _on_zones_calculated(self, zones_data):
+        """Handle calculated zones"""
+        logger.info(f"MainDashboard: Zones calculated for {zones_data['symbol']}")
+        logger.info(f"  - HVN zones: {len(zones_data.get('hvn_zones', []))}")
+        logger.info(f"  - S/D zones: {len(zones_data.get('supply_demand_zones', []))}")
+        logger.info(f"  - Camarilla levels: {len(zones_data.get('camarilla_levels', {}))}")
+        
+        # Update chart with HVN zones
+        if 'hvn_zones' in zones_data:
+            self.chart_widget.add_hvn_zones(zones_data['hvn_zones'])
+            
+        # Update chart with supply/demand zones
+        if 'supply_demand_zones' in zones_data:
+            self.chart_widget.add_supply_demand_zones(zones_data['supply_demand_zones'])
+            
+        # Update chart with Camarilla levels
+        if 'camarilla_levels' in zones_data:
+            self.chart_widget.add_camarilla_levels(zones_data['camarilla_levels'])
+            
+        # Update status bar with zone info
+        nearby_count = len(zones_data.get('nearby_zones', []))
+        self.status_bar.showMessage(
+            f"Zones updated: {len(zones_data.get('hvn_zones', []))} HVN, "
+            f"{len(zones_data.get('supply_demand_zones', []))} S/D, "
+            f"{nearby_count} nearby zones", 
+            5000
+        )
     
     def _on_entry_signal(self, signal_data):
         """Handle new entry signal"""
@@ -372,6 +430,9 @@ class LiveMonitorDashboard(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         """Handle window close event"""
         logger.info("Closing dashboard...")
+        
+        # Stop zone calculations
+        self.zone_calculator.stop_calculations()
         
         # Disconnect from data server
         self.data_manager.disconnect()

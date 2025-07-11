@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Optional
 from datetime import datetime
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 
 from .models import Bar, ChartDataUpdate
 from .hybrid_data_manager import HybridDataManager
@@ -26,7 +26,7 @@ class AggregateDataHandler(QObject):
     # Signals
     chart_data_updated = pyqtSignal(dict)  # This was missing!
     
-    def __init__(self):
+    def __init__(self, zone_calculator: Optional['ZoneCalculator'] = None):
         super().__init__()
         
         # Use hybrid manager
@@ -38,6 +38,12 @@ class AggregateDataHandler(QObject):
         # Track current symbol
         self.current_symbol = None
         
+        # Zone calculator reference
+        self.zone_calculator = zone_calculator
+        
+        # Add flag to track if initial data loaded
+        self.initial_data_loaded = False
+        
         logger.info("AggregateDataHandler initialized with HybridDataManager")
         
     def _on_chart_update(self, update_dict):
@@ -46,23 +52,28 @@ class AggregateDataHandler(QObject):
         self.chart_data_updated.emit(update_dict)
         
     def process_aggregate(self, data: dict):
-        """
-        Process incoming AM (minute bar) data
-        Routes to hybrid manager for processing
-        """
+        """Process incoming AM (minute bar) data"""
         # Validate it's an aggregate event
         event_type = data.get('event_type', data.get('ev'))
         if event_type not in ['aggregate', 'AM', 'A']:
             return
             
+        # Only process if initial data has been loaded
+        if not self.initial_data_loaded:
+            logger.debug("Ignoring aggregate - waiting for initial data load")
+            return
+            
         # Route to hybrid manager
         self.hybrid_manager.process_am_event(data)
+        
+        # Note: Zone calculator updates are now handled by chart_data_updated signal
         
     def set_symbol(self, symbol: str):
         """Set current symbol and load historical data"""
         if symbol != self.current_symbol:
             logger.info(f"AggregateDataHandler: Symbol changed to {symbol}")
             self.current_symbol = symbol
+            self.initial_data_loaded = False
             
             # This should trigger historical data loading
             logger.info(f"AggregateDataHandler: Calling hybrid_manager.change_symbol({symbol})")
@@ -70,12 +81,28 @@ class AggregateDataHandler(QObject):
             
             # After symbol change, request initial data update
             logger.info("AggregateDataHandler: Requesting initial chart data after symbol change")
-            initial_data = self.get_chart_data('1m')
-            if initial_data['bars']:
-                logger.info(f"AggregateDataHandler: Emitting initial data with {len(initial_data['bars'])} bars")
-                self.chart_data_updated.emit(initial_data)
-            else:
-                logger.warning("AggregateDataHandler: No initial data available after symbol change")
+            
+            # Use QTimer to delay the initial emit slightly to ensure data is loaded
+            QTimer.singleShot(500, self._emit_initial_data)
+    
+    def _emit_initial_data(self):
+        """Emit initial data after REST load completes"""
+        if not self.current_symbol:
+            return
+            
+        initial_data = self.get_chart_data('1m')
+        if initial_data['bars']:
+            logger.info(f"AggregateDataHandler: Emitting initial data with {len(initial_data['bars'])} bars")
+            self.initial_data_loaded = True
+            self.chart_data_updated.emit(initial_data)
+            
+            # Update zone calculator with initial data
+            if self.zone_calculator:
+                self.zone_calculator.update_data(initial_data['bars'])
+        else:
+            logger.warning("AggregateDataHandler: No initial data available after symbol change")
+            # Retry after another delay
+            QTimer.singleShot(1000, self._emit_initial_data)
     
     def get_chart_data(self, timeframe: str, count: Optional[int] = None) -> dict:
         """

@@ -58,7 +58,7 @@ pg.setConfigOptions(antialias=True)
 
 
 class CandlestickItem(pg.GraphicsObject):
-    """Custom candlestick item for real-time updates"""
+    """Kept for compatibility but now draws a line instead"""
     
     def __init__(self):
         pg.GraphicsObject.__init__(self)
@@ -85,30 +85,21 @@ class CandlestickItem(pg.GraphicsObject):
             self.update()
             
     def generatePicture(self):
-        """Generate the picture for painting"""
+        """Generate the picture for painting - now draws a line"""
         self.picture = pg.QtGui.QPicture()
         p = pg.QtGui.QPainter(self.picture)
         
-        for i, bar in enumerate(self.bars):
-            # Determine color
-            if bar.close >= bar.open:
-                p.setPen(pg.mkPen('#10b981', width=1))
-                p.setBrush(pg.mkBrush('#10b981'))
-            else:
-                p.setPen(pg.mkPen('#ef4444', width=1))
-                p.setBrush(pg.mkBrush('#ef4444'))
+        if len(self.bars) < 2:
+            p.end()
+            return
             
-            # Draw high-low line
-            p.drawLine(pg.QtCore.QPointF(i, bar.low), 
-                      pg.QtCore.QPointF(i, bar.high))
-            
-            # Draw open-close rectangle
-            height = abs(bar.close - bar.open)
-            if height > 0:
-                p.drawRect(pg.QtCore.QRectF(i - 0.3, 
-                                           min(bar.open, bar.close), 
-                                           0.6, 
-                                           height))
+        # Set pen for line
+        p.setPen(pg.mkPen('#3b82f6', width=2))
+        
+        # Draw line connecting close prices
+        for i in range(len(self.bars) - 1):
+            p.drawLine(pg.QtCore.QPointF(i, self.bars[i].close), 
+                      pg.QtCore.QPointF(i + 1, self.bars[i + 1].close))
         
         p.end()
     
@@ -125,7 +116,7 @@ class CandlestickItem(pg.GraphicsObject):
 class ChartWidget(QWidget):
     """Widget for displaying real-time charts with indicators"""
     
-    # Signals
+    # Signals - keeping all for compatibility
     timeframe_changed = pyqtSignal(str)
     indicator_toggled = pyqtSignal(str, bool)
     lookback_changed = pyqtSignal(int)
@@ -134,11 +125,11 @@ class ChartWidget(QWidget):
         super().__init__(parent)
         
         self.max_bars = max_bars
-        self.current_timeframe: TimeframeType = '5m'
+        self.current_timeframe: TimeframeType = '1m'  # Fixed to 1m
         self.current_symbol: Optional[str] = None
         self.current_lookback = 390  # Default lookback
         
-        # Data storage
+        # Data storage - keep structure but only use 1m
         self.bar_data: Dict[TimeframeType, Deque[Bar]] = {
             tf: deque(maxlen=max_bars) 
             for tf in ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
@@ -176,7 +167,7 @@ class ChartWidget(QWidget):
         layout.setSpacing(0)
         
         # Header
-        header = QLabel("Chart Analysis")
+        header = QLabel("Chart Analysis - 1 Minute")
         header.setObjectName("chart_header")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
@@ -214,7 +205,7 @@ class ChartWidget(QWidget):
         
         layout.addWidget(self.chart_widget, 1)  # Give it stretch factor
         
-        # Initialize candlestick item
+        # Initialize candlestick item (which now draws lines)
         self.candlestick_item = CandlestickItem()
         self.plot.addItem(self.candlestick_item)
         
@@ -225,7 +216,7 @@ class ChartWidget(QWidget):
         controls_layout = QHBoxLayout(controls_widget)
         controls_layout.setContentsMargins(10, 5, 10, 5)
         
-        # Lookback selector (NEW)
+        # Lookback selector
         self.lookback_combo = QComboBox()
         self.lookback_combo.setObjectName("lookback_selector")
         self.lookback_combo.addItems(["50", "100", "200", "390", "500", "1000"])
@@ -236,14 +227,13 @@ class ChartWidget(QWidget):
         
         controls_layout.addSpacing(10)
         
-        # Timeframe selector
+        # Timeframe selector - hidden but kept for compatibility
         self.timeframe_combo = QComboBox()
         self.timeframe_combo.setObjectName("timeframe_selector")
-        self.timeframe_combo.addItems(["1m", "5m", "15m", "30m", "1h", "4h", "1d"])
-        self.timeframe_combo.setCurrentText("5m")
+        self.timeframe_combo.addItems(["1m"])  # Only 1m now
+        self.timeframe_combo.setCurrentText("1m")
         self.timeframe_combo.currentTextChanged.connect(self.on_timeframe_changed)
-        controls_layout.addWidget(QLabel("Timeframe:"))
-        controls_layout.addWidget(self.timeframe_combo)
+        self.timeframe_combo.setVisible(False)  # Hide it
         
         controls_layout.addSpacing(20)
         
@@ -358,42 +348,41 @@ class ChartWidget(QWidget):
                 )
                 bars.append(bar)
             
-            # Update bar storage
-            if is_update and latest_bar_complete:
-                # New complete bar
-                for bar in bars:
-                    self.bar_data[timeframe].append(bar)
-            elif is_update and not latest_bar_complete:
-                # Update incomplete bar
-                if bars and self.bar_data[timeframe]:
-                    # Check if we're updating the last bar
-                    last_bar = self.bar_data[timeframe][-1]
-                    new_bar = bars[0]
-                    
-                    if last_bar.timestamp == new_bar.timestamp:
-                        # Update existing bar
-                        self.bar_data[timeframe][-1] = new_bar
-                    else:
-                        # New bar
-                        self.bar_data[timeframe].append(new_bar)
-            else:
-                # Full refresh
-                self.bar_data[timeframe].clear()
-                self.bar_data[timeframe].extend(bars)
-            
-            # Update display if this is the current timeframe
-            if timeframe == self.current_timeframe:
-                self.refresh_display()
+            # Update bar storage - only care about 1m
+            if timeframe == '1m':
+                if is_update and latest_bar_complete:
+                    # New complete bar
+                    for bar in bars:
+                        self.bar_data['1m'].append(bar)
+                elif is_update and not latest_bar_complete:
+                    # Update incomplete bar
+                    if bars and self.bar_data['1m']:
+                        # Check if we're updating the last bar
+                        last_bar = self.bar_data['1m'][-1]
+                        new_bar = bars[0]
+                        
+                        if last_bar.timestamp == new_bar.timestamp:
+                            # Update existing bar
+                            self.bar_data['1m'][-1] = new_bar
+                        else:
+                            # New bar
+                            self.bar_data['1m'].append(new_bar)
+                else:
+                    # Full refresh
+                    self.bar_data['1m'].clear()
+                    self.bar_data['1m'].extend(bars)
                 
-            # Update info label
-            if bars:
-                latest_bar = bars[-1]
-                self.info_label.setText(
-                    f"{symbol} | {timeframe} | "
-                    f"O: ${latest_bar.open:.2f} H: ${latest_bar.high:.2f} "
-                    f"L: ${latest_bar.low:.2f} C: ${latest_bar.close:.2f} | "
-                    f"Vol: {latest_bar.volume:,}"
-                )
+                # Always refresh display for 1m updates
+                self.refresh_display()
+                    
+                # Update info label
+                if bars:
+                    latest_bar = bars[-1]
+                    self.info_label.setText(
+                        f"{symbol} | 1m | "
+                        f"Close: ${latest_bar.close:.2f} | "
+                        f"Vol: {latest_bar.volume:,}"
+                    )
                 
         except Exception as e:
             logger.error(f"Error updating chart data: {e}", exc_info=True)
@@ -403,7 +392,7 @@ class ChartWidget(QWidget):
         if not self.current_symbol:
             return
             
-        bars = list(self.bar_data[self.current_timeframe])
+        bars = list(self.bar_data['1m'])  # Always use 1m
         if not bars:
             return
             
@@ -412,7 +401,7 @@ class ChartWidget(QWidget):
         if len(bars) > self.current_lookback:
             display_bars = bars[-self.current_lookback:]
             
-        # Update candlesticks
+        # Update candlesticks (now line)
         self.candlestick_item.set_data(display_bars)
         
         # Update time axis
@@ -428,38 +417,59 @@ class ChartWidget(QWidget):
         self.plot.setXRange(0, len(display_bars))
     
     def update_time_axis(self, bars: List[Bar]):
-        """Update time axis labels"""
+        """Update time axis labels with UTC times at 15-minute intervals"""
         if not bars:
             return
             
-        # Create time strings
-        time_strings = []
-        for bar in bars:
-            if self.current_timeframe in ['1d']:
-                time_strings.append(bar.timestamp.strftime('%m/%d'))
-            elif self.current_timeframe in ['1h', '4h']:
-                time_strings.append(bar.timestamp.strftime('%m/%d %H:%M'))
-            else:
-                time_strings.append(bar.timestamp.strftime('%H:%M'))
+        # Find 15-minute interval marks
+        tick_positions = []
+        tick_labels = []
+        
+        for i, bar in enumerate(bars):
+            # Get UTC time (assuming your bars are in UTC)
+            utc_time = bar.timestamp
+            
+            # Check if this bar is at a 15-minute interval
+            if utc_time.minute % 15 == 0 and utc_time.second == 0:
+                tick_positions.append(i)
+                # Format as HH:MM UTC
+                tick_labels.append(utc_time.strftime('%H:%M UTC'))
+        
+        # Ensure we have at least some labels
+        if len(tick_positions) < 2:
+            # Add first and last if we don't have enough 15-minute marks
+            if 0 not in tick_positions:
+                tick_positions.insert(0, 0)
+                tick_labels.insert(0, bars[0].timestamp.strftime('%H:%M UTC'))
+            if len(bars) - 1 not in tick_positions:
+                tick_positions.append(len(bars) - 1)
+                tick_labels.append(bars[-1].timestamp.strftime('%H:%M UTC'))
+        
+        # Limit the number of labels to avoid crowding
+        # If we have too many labels, thin them out
+        if len(tick_positions) > 20:
+            # Keep every nth label to have around 10-15 labels
+            step = len(tick_positions) // 15
+            tick_positions = tick_positions[::step]
+            tick_labels = tick_labels[::step]
+            
+            # Always include the last label
+            if tick_positions[-1] != len(bars) - 1:
+                tick_positions.append(len(bars) - 1)
+                tick_labels.append(bars[-1].timestamp.strftime('%H:%M UTC'))
         
         # Create tick dictionary
-        x_dict = dict(enumerate(time_strings))
-        
-        # Show subset of labels to avoid crowding
-        num_bars = len(bars)
-        if num_bars > 50:
-            step = num_bars // 10
-        elif num_bars > 20:
-            step = 5
-        else:
-            step = 1
-            
-        x_dict_sparse = {k: v for k, v in x_dict.items() if k % step == 0}
+        x_dict = dict(zip(tick_positions, tick_labels))
         
         # Update axis
         stringaxis = pg.AxisItem(orientation='bottom')
-        stringaxis.setTicks([list(x_dict_sparse.items())])
+        stringaxis.setTicks([list(x_dict.items())])
         stringaxis.setTextPen(BaseStyles.TEXT_SECONDARY)
+        
+        # Set valid style options only
+        if len(tick_positions) > 10:
+            stringaxis.setStyle(tickTextOffset=10)
+        
         self.plot.setAxisItems(axisItems={'bottom': stringaxis})
     
     def update_current_price(self, price: float):
@@ -470,16 +480,17 @@ class ChartWidget(QWidget):
         self.current_price_line = pg.InfiniteLine(
             pos=price,
             angle=0,
-            pen=pg.mkPen('#3b82f6', width=2),
+            pen=pg.mkPen('#3b82f6', width=2, style=Qt.PenStyle.DashLine),
             label=f'${price:.2f}',
             labelOpts={'position': 0.95, 'color': '#3b82f6'}
         )
         self.plot.addItem(self.current_price_line)
     
     def on_timeframe_changed(self, timeframe: str):
-        """Handle timeframe change"""
-        self.current_timeframe = timeframe
-        self.timeframe_changed.emit(timeframe)
+        """Handle timeframe change - kept for compatibility"""
+        # Always use 1m regardless
+        self.current_timeframe = '1m'
+        self.timeframe_changed.emit('1m')
         self.refresh_display()
     
     def toggle_overlay(self, overlay_name: str, enabled: bool):
@@ -632,7 +643,7 @@ class ChartWidget(QWidget):
     def add_entry_marker(self, price: float, time: datetime):
         """Add entry marker to chart"""
         # Find the bar index for this time
-        bars = list(self.bar_data[self.current_timeframe])
+        bars = list(self.bar_data['1m'])
         bar_index = None
         
         for i, bar in enumerate(bars):
@@ -656,7 +667,7 @@ class ChartWidget(QWidget):
     def add_exit_marker(self, price: float, time: datetime):
         """Add exit marker to chart"""
         # Find the bar index for this time
-        bars = list(self.bar_data[self.current_timeframe])
+        bars = list(self.bar_data['1m'])
         bar_index = None
         
         for i, bar in enumerate(bars):

@@ -33,12 +33,17 @@ class AggregateDataHandler(QObject):
         self.hybrid_manager = HybridDataManager()
         
         # Forward signals
-        self.hybrid_manager.chart_update_ready.connect(self.chart_data_updated.emit)
+        self.hybrid_manager.chart_update_ready.connect(self._on_chart_update)
         
         # Track current symbol
         self.current_symbol = None
         
         logger.info("AggregateDataHandler initialized with HybridDataManager")
+        
+    def _on_chart_update(self, update_dict):
+        """Forward chart updates from hybrid manager"""
+        logger.debug(f"Forwarding chart update: {update_dict.get('timeframe')} with {len(update_dict.get('bars', []))} bars")
+        self.chart_data_updated.emit(update_dict)
         
     def process_aggregate(self, data: dict):
         """
@@ -58,7 +63,19 @@ class AggregateDataHandler(QObject):
         if symbol != self.current_symbol:
             logger.info(f"AggregateDataHandler: Symbol changed to {symbol}")
             self.current_symbol = symbol
+            
+            # This should trigger historical data loading
+            logger.info(f"AggregateDataHandler: Calling hybrid_manager.change_symbol({symbol})")
             self.hybrid_manager.change_symbol(symbol)
+            
+            # After symbol change, request initial data update
+            logger.info("AggregateDataHandler: Requesting initial chart data after symbol change")
+            initial_data = self.get_chart_data('1m')
+            if initial_data['bars']:
+                logger.info(f"AggregateDataHandler: Emitting initial data with {len(initial_data['bars'])} bars")
+                self.chart_data_updated.emit(initial_data)
+            else:
+                logger.warning("AggregateDataHandler: No initial data available after symbol change")
     
     def get_chart_data(self, timeframe: str, count: Optional[int] = None) -> dict:
         """
@@ -82,6 +99,8 @@ class AggregateDataHandler(QObject):
         
         # Get bars from hybrid manager's aggregator
         bars = self.hybrid_manager.aggregator.get_bars(timeframe, count)
+        
+        logger.debug(f"get_chart_data: Retrieved {len(bars)} bars for {timeframe}")
         
         return {
             'symbol': self.current_symbol,

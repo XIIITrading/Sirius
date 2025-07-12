@@ -13,6 +13,8 @@ from datetime import datetime
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from live_monitor.calculations.indicators.m1_ema import M1EMAResult
+from live_monitor.calculations.indicators.m5_ema import M5EMAResult
+from live_monitor.calculations.indicators.m15_ema import M15EMAResult
 from live_monitor.data.models.signals import EntrySignal, ExitSignal
 
 logger = logging.getLogger(__name__)
@@ -184,6 +186,195 @@ class SignalInterpreter(QObject):
         
         return signal
     
+    def process_m5_ema(self, result: M5EMAResult) -> StandardSignal:
+        """
+        Convert M5 EMA result to standard signal
+        
+        Scale mapping:
+        - signal_strength (0-100) → magnitude (0-50)
+        - Apply direction based on BULL/BEAR
+        - Adjust for special conditions
+        """
+        # Base conversion: map strength to magnitude
+        magnitude = result.signal_strength / 2  # 0-100 → 0-50
+        
+        # Enhance magnitude for special conditions
+        if result.is_crossover:
+            # Crossovers are stronger signals
+            if result.crossover_type == 'bullish' and result.signal == 'BULL':
+                magnitude = min(50, magnitude * 1.2)
+            elif result.crossover_type == 'bearish' and result.signal == 'BEAR':
+                magnitude = min(50, magnitude * 1.2)
+            else:
+                # Crossover against trend - reduce strength
+                magnitude *= 0.8
+        
+        # Fine-tune based on spread percentage
+        if abs(result.spread_pct) < 0.1:  # Very tight spread
+            magnitude *= 0.5  # Reduce to weak zone
+        elif abs(result.spread_pct) > 1.0:  # Strong spread
+            magnitude = max(25, magnitude)  # Ensure at least strong signal
+        
+        # Apply direction
+        value = magnitude if result.signal == 'BULL' else -magnitude
+        
+        # Adjust for price position relative to EMAs
+        if result.signal == 'BULL' and result.price_position == 'below':
+            # Price below EMA in uptrend - reduce bullish signal
+            value *= 0.7
+        elif result.signal == 'BEAR' and result.price_position == 'above':
+            # Price above EMA in downtrend - reduce bearish signal
+            value *= 0.7
+        
+        # Ensure value stays in range
+        value = max(-50, min(50, value))
+        
+        # Determine category
+        category = SignalCategory.from_value(value)
+        
+        # Determine strength for display
+        if abs(value) >= 25:
+            strength = 'Strong'
+        elif abs(value) >= 10:
+            strength = 'Medium'
+        else:
+            strength = 'Weak'
+        
+        # Calculate confidence
+        confidence = self._calculate_m5_ema_confidence(result, value)
+        
+        # Get previous value for comparison
+        prev_signal = self.previous_signals.get('M5_EMA')
+        previous_value = prev_signal.value if prev_signal else 0
+        
+        signal = StandardSignal(
+            value=round(value, 1),
+            category=category,
+            source="M5_EMA",
+            confidence=confidence,
+            direction='LONG' if value > 0 else 'SHORT',
+            strength=strength,
+            metadata={
+                'ema_9': result.ema_9,
+                'ema_21': result.ema_21,
+                'spread_pct': result.spread_pct,
+                'is_crossover': result.is_crossover,
+                'crossover_type': result.crossover_type,
+                'price_position': result.price_position,
+                'trend_strength': result.trend_strength,
+                'previous_value': previous_value,
+                'reason': result.reason,
+                'last_5min_close': result.last_5min_close,
+                'last_5min_volume': result.last_5min_volume,
+                'bars_processed': result.bars_processed
+            }
+        )
+        
+        # Store for next comparison
+        self.previous_signals['M5_EMA'] = signal
+        
+        # Check if we should generate trading signals
+        self._check_and_generate_signals(signal)
+        
+        return signal
+    
+    def process_m15_ema(self, result: M15EMAResult) -> StandardSignal:
+        """
+        Convert M15 EMA result to standard signal
+        
+        Scale mapping:
+        - signal_strength (0-100) → magnitude (0-50)
+        - Apply direction based on BULL/BEAR/NEUTRAL
+        - Adjust for special conditions
+        """
+        # Base conversion: map strength to magnitude
+        magnitude = result.signal_strength / 2  # 0-100 → 0-50
+        
+        # Handle NEUTRAL signal specially
+        if result.signal == 'NEUTRAL':
+            # NEUTRAL signals get very low magnitude
+            magnitude = min(10, magnitude * 0.3)
+            # Direction is based on underlying trend
+            value = magnitude if result.ema_9 > result.ema_21 else -magnitude
+        else:
+            # Enhance magnitude for special conditions
+            if result.is_crossover:
+                # Crossovers are stronger signals
+                if result.crossover_type == 'bullish' and result.signal == 'BULL':
+                    magnitude = min(50, magnitude * 1.2)
+                elif result.crossover_type == 'bearish' and result.signal == 'BEAR':
+                    magnitude = min(50, magnitude * 1.2)
+                else:
+                    # Crossover against trend - reduce strength
+                    magnitude *= 0.8
+            
+            # Fine-tune based on spread percentage
+            if abs(result.spread_pct) < 0.1:  # Very tight spread
+                magnitude *= 0.5  # Reduce to weak zone
+            elif abs(result.spread_pct) > 1.0:  # Strong spread
+                magnitude = max(25, magnitude)  # Ensure at least strong signal
+            
+            # Apply direction
+            value = magnitude if result.signal == 'BULL' else -magnitude
+        
+        # Ensure value stays in range
+        value = max(-50, min(50, value))
+        
+        # Determine category
+        category = SignalCategory.from_value(value)
+        
+        # Determine strength for display
+        if result.signal == 'NEUTRAL':
+            strength = 'Neutral'
+        elif abs(value) >= 25:
+            strength = 'Strong'
+        elif abs(value) >= 10:
+            strength = 'Medium'
+        else:
+            strength = 'Weak'
+        
+        # Calculate confidence
+        confidence = self._calculate_m15_ema_confidence(result, value)
+        
+        # Get previous value for comparison
+        prev_signal = self.previous_signals.get('M15_EMA')
+        previous_value = prev_signal.value if prev_signal else 0
+        
+        # Determine direction for display (even for NEUTRAL)
+        direction = 'LONG' if value > 0 else 'SHORT'
+        
+        signal = StandardSignal(
+            value=round(value, 1),
+            category=category,
+            source="M15_EMA",
+            confidence=confidence,
+            direction=direction,
+            strength=strength,
+            metadata={
+                'ema_9': result.ema_9,
+                'ema_21': result.ema_21,
+                'spread_pct': result.spread_pct,
+                'is_crossover': result.is_crossover,
+                'crossover_type': result.crossover_type,
+                'price_position': result.price_position,
+                'trend_strength': result.trend_strength,
+                'previous_value': previous_value,
+                'reason': result.reason,
+                'last_15min_close': result.last_15min_close,
+                'last_15min_volume': result.last_15min_volume,
+                'bars_processed': result.bars_processed,
+                'signal_type': result.signal  # Store original BULL/BEAR/NEUTRAL
+            }
+        )
+        
+        # Store for next comparison
+        self.previous_signals['M15_EMA'] = signal
+        
+        # Check if we should generate trading signals
+        self._check_and_generate_signals(signal)
+        
+        return signal
+    
     def _calculate_m1_ema_confidence(self, result: M1EMAResult, signal_value: float) -> float:
         """Calculate confidence level for M1 EMA signal"""
         confidence = 0.5  # Base confidence
@@ -208,6 +399,92 @@ class SignalInterpreter(QObject):
         if (result.signal == 'BULL' and result.price_position == 'above') or \
            (result.signal == 'BEAR' and result.price_position == 'below'):
             confidence += 0.1
+        
+        # Ensure signal strength matches confidence
+        if abs(signal_value) >= 25 and confidence < 0.6:
+            confidence = 0.6  # Minimum confidence for strong signals
+        
+        return min(1.0, max(0.1, confidence))
+    
+    def _calculate_m5_ema_confidence(self, result: M5EMAResult, signal_value: float) -> float:
+        """Calculate confidence level for M5 EMA signal"""
+        confidence = 0.5  # Base confidence
+        
+        # Boost for crossovers
+        if result.is_crossover:
+            confidence += 0.2
+        
+        # Boost for strong trends
+        if result.trend_strength > 70:
+            confidence += 0.2
+        elif result.trend_strength < 30:
+            confidence -= 0.1
+        
+        # Boost for good spread
+        if 0.3 <= abs(result.spread_pct) <= 1.5:
+            confidence += 0.1
+        elif abs(result.spread_pct) > 2.0:
+            confidence -= 0.1  # Too extended
+        
+        # Boost for price position alignment
+        if (result.signal == 'BULL' and result.price_position == 'above') or \
+           (result.signal == 'BEAR' and result.price_position == 'below'):
+            confidence += 0.1
+        
+        # Additional M5-specific confidence factors
+        # Boost if we have sufficient data
+        if result.bars_processed >= 50:  # Good amount of 5-min bars
+            confidence += 0.05
+        
+        # Boost for volume confirmation (if volume is above average)
+        if result.last_5min_volume > 0:  # Has volume data
+            confidence += 0.05
+        
+        # Ensure signal strength matches confidence
+        if abs(signal_value) >= 25 and confidence < 0.6:
+            confidence = 0.6  # Minimum confidence for strong signals
+        
+        return min(1.0, max(0.1, confidence))
+    
+    def _calculate_m15_ema_confidence(self, result: M15EMAResult, signal_value: float) -> float:
+        """Calculate confidence level for M15 EMA signal"""
+        confidence = 0.5  # Base confidence
+        
+        # Lower confidence for NEUTRAL signals
+        if result.signal == 'NEUTRAL':
+            confidence = 0.3  # Start lower for neutral
+        
+        # Boost for crossovers
+        if result.is_crossover and result.signal != 'NEUTRAL':
+            confidence += 0.2
+        
+        # Boost for strong trends
+        if result.trend_strength > 70:
+            confidence += 0.2
+        elif result.trend_strength < 30:
+            confidence -= 0.1
+        
+        # Boost for good spread (but not for NEUTRAL)
+        if result.signal != 'NEUTRAL':
+            if 0.3 <= abs(result.spread_pct) <= 1.5:
+                confidence += 0.1
+            elif abs(result.spread_pct) > 2.0:
+                confidence -= 0.1  # Too extended
+        
+        # Boost for price position alignment (only for non-NEUTRAL)
+        if result.signal != 'NEUTRAL':
+            if (result.signal == 'BULL' and result.price_position == 'above') or \
+               (result.signal == 'BEAR' and result.price_position == 'below'):
+                confidence += 0.1
+        
+        # Additional M15-specific confidence factors
+        # Boost if we have sufficient data
+        if result.bars_processed >= 30:  # Good amount of 15-min bars
+            confidence += 0.05
+        
+        # Boost for volume confirmation
+        if result.last_15min_volume > 0:
+            confidence += 0.05
         
         # Ensure signal strength matches confidence
         if abs(signal_value) >= 25 and confidence < 0.6:
@@ -242,6 +519,18 @@ class SignalInterpreter(QObject):
                 signal_desc = f"M1 EMA {signal.metadata['crossover_type'].title()} Crossover"
             else:
                 signal_desc = f"M1 EMA {signal.direction} Signal"
+        elif signal.source == 'M5_EMA':
+            if signal.metadata.get('is_crossover'):
+                signal_desc = f"M5 EMA {signal.metadata['crossover_type'].title()} Crossover"
+            else:
+                signal_desc = f"M5 EMA {signal.direction} Signal"
+        elif signal.source == 'M15_EMA':
+            if signal.metadata.get('signal_type') == 'NEUTRAL':
+                signal_desc = f"M15 EMA NEUTRAL (Price vs Trend Conflict)"
+            elif signal.metadata.get('is_crossover'):
+                signal_desc = f"M15 EMA {signal.metadata['crossover_type'].title()} Crossover"
+            else:
+                signal_desc = f"M15 EMA {signal.direction} Signal"
         else:
             signal_desc = f"{signal.source} {signal.direction} Signal"
         

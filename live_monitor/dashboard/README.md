@@ -1,445 +1,468 @@
-I'll create a comprehensive README.md for your dashboard/ directory that covers the entire trading dashboard system.
-markdown# Live Monitor Dashboard Module
+# Live Monitor Dashboard - Complete Technical Reference
 
-## Overview
+## Table of Contents
+1. [System Overview](#system-overview)
+2. [Architecture](#architecture)
+3. [Core Classes](#core-classes)
+4. [Component System](#component-system)
+5. [Data Flow](#data-flow)
+6. [Signal System](#signal-system)
+7. [Calculation Integration](#calculation-integration)
+8. [Key Methods Reference](#key-methods-reference)
+9. [Extension Guide](#extension-guide)
+10. [Technical Details](#technical-details)
 
-The `live_monitor/dashboard/` module is a sophisticated PyQt6-based trading dashboard that provides real-time market monitoring, technical analysis visualization, and trade management tools. Built with a modular architecture, it serves as a pure UI layer that receives data from the Polygon WebSocket connection and presents it through specialized widgets.
+## System Overview
+
+The Live Monitor Dashboard is a sophisticated PyQt6-based trading application that provides:
+- Real-time market data visualization via Polygon WebSocket
+- Technical analysis with HVN zones, Order Blocks, and EMA calculations
+- Signal generation and interpretation for entry/exit decisions
+- Position sizing and risk management tools
+- Multi-timeframe analysis (M1, M5, M15)
+
+### Key Features
+- **Real-time Data**: WebSocket connection to Polygon for live market data
+- **Zone Analysis**: HVN (High Volume Nodes), Supply/Demand zones, Order Blocks
+- **Signal System**: Automated entry/exit signal generation with confidence levels
+- **Risk Management**: Position sizing calculator with account/risk parameters
+- **Modular Design**: Segment-based architecture for maintainability
 
 ## Architecture
-dashboard/
-├── init.py                    # Module exports
-├── main_dashboard.py              # Main window orchestrator
-├── README.md                      # This documentation
-└── components/                    # UI components
-├── init.py               # Component exports
-├── ticker_entry.py           # Symbol input widget
-├── ticker_calculations.py    # Market data display
-├── entry_calculations.py     # Position sizing calculator
-├── point_call_entry.py       # Entry signals grid
-├── point_call_exit.py        # Exit signals grid
-├── hvn_table.py              # HVN zones table
-├── supply_demand_table.py    # S/D zones table
-├── order_blocks_table.py     # Order blocks table
-└── zone_aggregator.py        # Zone overlap detection
+live_monitor/dashboard/
+├── main_dashboard.py          # Main application window
+├── segments/                  # Functional segments
+│   ├── calculations_segment.py    # All calculation logic
+│   ├── data_handler_segment.py    # Data update callbacks
+│   ├── ui_builder_segment.py      # UI construction
+│   └── signal_display_segment.py  # Signal visualization
+├── components/                # Reusable UI widgets
+│   ├── ticker_entry.py       # Symbol input
+│   ├── ticker_calculations.py # Market data display
+│   ├── entry_calculations.py  # Position sizing
+│   ├── point_call_entry.py   # Entry signals grid
+│   ├── point_call_exit.py    # Exit signals grid
+│   ├── hvn_table.py          # HVN zones table
+│   ├── supply_demand_table.py # S/D zones table
+│   ├── order_blocks_table.py  # Order blocks table
+│   └── zone_aggregator.py    # Zone overlap utility
+└── widgets/                  # Custom widgets
+└── server_status.py      # Connection indicator
 
-## Main Dashboard
+## Core Classes
 
-### LiveMonitorDashboard (`main_dashboard.py`)
+### LiveMonitorDashboard
 
-The central orchestrator that manages all components and data flow.
+**Location**: `main_dashboard.py`
 
-**Key Features:**
-- 3-column responsive layout with QSplitter
-- Real-time Polygon data integration
-- Automatic calculation scheduling (30-second intervals)
-- Server connection status indicators
-- Comprehensive error handling
+The main application window that orchestrates all components and data flow.
 
-**Layout Structure:**
-┌─────────────────────────────────────────────────────────┐
-│                    Header with Status                    │
-├─────────────┬───────────────────────────────────────────┤
-│             │        Point & Call Entry/Exit            │
-│   Ticker    ├───────────────────────────────────────────┤
-│   Entry     │                                           │
-│   Calcs     │    HVN Table │ S/D Table │ Order Blocks  │
-│             │                                           │
-└─────────────┴───────────────────────────────────────────┘
-
-**Data Flow:**
-1. Ticker change → Data subscription → Market data updates
-2. Bar accumulation → Calculation engine → Table updates
-3. Signal generation → Entry/Exit grids → Position calculator
-
-## Component Reference
-
-### 1. TickerEntry (`ticker_entry.py`)
-
-Symbol input and management widget.
-
-**Features:**
-- Auto-uppercase conversion
-- Enter key submission
-- Visual feedback on submit
-- Current symbol display
-
-**Signals:**
 ```python
-ticker_changed = pyqtSignal(str)  # Emitted on symbol change
-Usage:
-pythonticker_entry = TickerEntry()
-ticker_entry.ticker_changed.connect(on_symbol_change)
-ticker_entry.set_ticker("AAPL")  # Programmatic setting
-current = ticker_entry.get_current_ticker()
-2. TickerCalculations (ticker_calculations.py)
-Real-time market data display widget.
+class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment, 
+                          CalculationsSegment, SignalDisplaySegment):
+Key Attributes:
+
+data_manager: PolygonDataManager instance for WebSocket data
+signal_interpreter: Processes raw signals into standardized format
+hvn_engine: HVN calculation engine
+order_block_analyzer: Order block detection
+m1_ema_calculator, m5_ema_calculator, m15_ema_calculator: EMA calculators
+accumulated_data: List storing recent market bars (max 2000)
+current_symbol: Currently monitored ticker symbol
+
+Key Methods:
+
+__init__(): Initializes all engines, UI, and connections
+connect_signals(): Connects UI component signals
+setup_data_connections(): Links data manager signals
+setup_signal_connections(): Links signal interpreter
+connect_to_polygon(): Establishes WebSocket connection
+closeEvent(): Cleanup on window close
+
+Initialization Flow:
+
+Create calculation engines
+Build UI (via UIBuilderSegment)
+Connect all signals
+Start WebSocket connection
+Begin calculation timer (30-second intervals)
+
+Segment Classes
+UIBuilderSegment
+Purpose: Constructs the entire UI layout
+Key Methods:
+
+init_ui(): Main UI initialization
+_create_header(): Top header with server status
+_create_content(): Main content area with splitters
+_create_left_column(): Ticker entry, calculations, position sizing
+_create_middle_right_section(): Signal grids and zone tables
+setup_status_bar(): Status bar with connection and signal indicators
+
+Layout Structure:
+┌─────────────────────────────────────────────────────┐
+│                  Header (40px)                       │
+├─────────┬───────────────────────────────────────────┤
+│         │          Point & Call Grids               │
+│  Left   ├───────────────────────────────────────────┤
+│  25%    │     HVN │ Supply/Demand │ Order Blocks   │
+│         │              (3 tables)                    │
+└─────────┴───────────────────────────────────────────┘
+DataHandlerSegment
+Purpose: Handles all data update callbacks from PolygonDataManager
+Key Callback Methods:
+
+_on_ticker_changed(ticker): Symbol change handling
+_on_market_data_updated(data): Live price/volume updates
+_on_chart_data_updated(data): Bar data accumulation
+_on_entry_signal(signal_data): Entry signal processing
+_on_exit_signal(signal_data): Exit signal processing
+_on_connection_status_changed(is_connected): Connection state
+_on_data_error(error_msg): Error handling
+
+Data Accumulation Logic:
+
+Stores up to 2000 bars in accumulated_data
+Clears old data when switching symbols
+Triggers calculations after 5-second delay on symbol change
+
+CalculationsSegment
+Purpose: Executes all technical analysis calculations
+Key Methods:
+
+run_calculations(): Main calculation orchestrator
+_process_ema_calculations(df): Runs M1/M5/M15 EMA analysis
+_process_zone_calculations(df, current_price, m15_atr): HVN & Order Blocks
+calculate_m15_atr(df, period=14): Calculates 15-minute ATR
+
+Calculation Flow:
+
+Convert accumulated data to DataFrame
+Calculate M15 ATR for proximity detection
+Process EMA signals (M1, M5, M15)
+Run HVN analysis (top 5 clusters)
+Detect Order Blocks (3 bullish, 3 bearish)
+Update all display tables
+
+SignalDisplaySegment
+Purpose: Updates signal displays in status bar
+Key Method:
+
+update_signal_display(signal_value, category, timeframe): Updates M1/M5/M15 labels
+
+Signal Categories & Colors:
+
+Strong Bullish (≥25): Dark Green (#26a69a)
+Weak Bullish (>0): Light Green (#66bb6a)
+Weak Bearish (>-25): Light Red (#ef5350)
+Strong Bearish (≤-25): Dark Red (#d32f2f)
+
+Component System
+Core Components
+TickerEntry
+Purpose: Symbol input and submission
+Signals:
+pythonticker_changed = pyqtSignal(str)  # Emitted on valid symbol
+Key Methods:
+
+submit_ticker(): Validates and emits symbol
+get_current_ticker(): Returns current symbol
+set_ticker(ticker): Programmatic symbol setting
+
+TickerCalculations
+Purpose: Real-time market data display
 Display Sections:
 
 Price Info: Last, Change, Bid/Ask, Spread
 Volume Info: Current, Average, Ratio
-Range Info: Day range, ATR, Position in range
+Range Info: Day range, ATR, Position %
 
-Data Format:
-python{
-    'last_price': 150.25,
-    'bid': 150.20,
-    'ask': 150.30,
-    'change': 2.50,
-    'change_pct': 1.69,
-    'volume': 1234567,
-    'avg_volume': 1000000,
-    'day_high': 151.00,
-    'day_low': 149.00,
-    'atr': 2.15
-}
-Dynamic Styling:
-
-Green text for positive changes
-Red text for negative changes
-Automatic number formatting
-
-3. EntryCalculations (entry_calculations.py)
-Position sizing and risk management calculator.
-Input Fields:
-
-Account Size
-Risk Percentage
-Entry Price
-Stop Loss
-
-Calculated Outputs:
-
-Position Size (dollar amount)
-Shares/Contracts
-Risk Amount
-Risk/Reward ratio
-
+Key Method:
+pythonupdate_calculations(data: dict)  # Updates all displays
+EntryCalculations
+Purpose: Position sizing and risk management
 Signals:
-pythoncalculation_complete = pyqtSignal(dict)  # Results dictionary
-Risk Level Indicators:
+pythoncalculation_complete = pyqtSignal(dict)  # Emits calculation results
+Calculations:
 
-Low (≤1%): Green
-Medium (1-2%): Orange
-High (>2%): Red
+Position Size = (Account Size × Risk%) / (Entry - Stop Loss)
+Risk Amount = Account Size × Risk%
+Shares = Risk Amount / (Entry - Stop Loss)
 
-4. PointCallEntry (point_call_entry.py)
-Entry signal management grid.
-Table Columns:
-
-Time
-Type (LONG/SHORT)
-Price
-Signal description
-Strength (Strong/Medium/Weak)
-Notes
-
-Features:
-
-Row selection emits signal details
-Color-coded signal types
-Strength indicators
-
-Adding Signals:
-pythonpoint_call_entry.add_entry_signal(
-    time="09:30:15",
-    signal_type="LONG",
-    price="150.25",
-    signal="HVN Break",
-    strength="Strong",
-    notes="Volume confirmation"
-)
-5. PointCallExit (point_call_exit.py)
-Exit signal management grid.
-Table Columns:
-
-Time
-Type (TARGET/STOP/TRAIL)
-Price
-P&L percentage
-Signal description
-Urgency (Urgent/Warning/Normal)
-
-Visual Indicators:
-
-P&L coloring (green/red)
-Urgency highlighting
-Exit type badges
-
-6. HVNTableWidget (hvn_table.py)
-High Volume Node zones display.
-Features:
-
-Real-time zone updates from HVN engine
-Distance to current price calculation
-M15 ATR proximity highlighting
-Strength percentage indicators
-
-Table Columns:
-
-Zone #
-Price High/Low
-Strength %
-Within M15 ATR
-
-Zone Highlighting:
-
-Strong (≥80%): Green
-Medium (50-80%): Orange
-Weak (<50%): Red
-
-7. SupplyDemandTableWidget (supply_demand_table.py)
-User-defined supply and demand zones.
-Features:
-
-Add/Refresh zone buttons
-Supply (red) and Demand (green) coloring
-ATR proximity detection
-Database integration ready
-
+PointCallEntry & PointCallExit
+Purpose: Signal management grids
+Signals:
+pythonentry_selected = pyqtSignal(dict)  # Row selection
+exit_selected = pyqtSignal(dict)   # Row selection
+Entry Grid Columns: Time, Type, Price, Signal, Strength, Notes
+Exit Grid Columns: Time, Type, Price, P&L, Signal, Urgency
+Zone Display Tables
+HVNTableWidget
+Purpose: High Volume Node zones from technical analysis
+Key Method:
+pythonupdate_hvn_zones(zones: List[Dict], current_price: float, m15_atr: float)
+Zone Format:
+python{
+    'price_high': 151.50,
+    'price_low': 150.75,
+    'center_price': 151.125,
+    'strength': 85.5,
+    'type': 'hvn'
+}
+SupplyDemandTableWidget
+Purpose: User-defined supply/demand zones
 Signals:
 pythonzone_clicked = pyqtSignal(dict)
 add_zone_requested = pyqtSignal()
 refresh_requested = pyqtSignal()
-8. OrderBlocksTableWidget (order_blocks_table.py)
-Smart money order blocks display.
-Features:
-
-Bullish/Bearish block detection
-Breaker block identification
-Status tracking (Valid/Broken)
-Row highlighting for nearby blocks
-
-Visual Coding:
-
-Bullish blocks: Green
-Bearish blocks: Red
-Broken blocks: Orange
-
-9. ZoneAggregator (zone_aggregator.py)
-Intelligent zone overlap detection and merging.
-Features:
-
-Configurable overlap threshold
-Multi-source zone combination
-Unified zone representation
-Priority-based merging
-
-Usage:
-pythonaggregator = ZoneAggregator(overlap_threshold=0.1)
-unified_zones = aggregator.aggregate_zones(
-    hvn_result=hvn_data,
-    supply_demand_result=sd_data
+OrderBlocksTableWidget
+Purpose: Smart money order blocks
+Block Format:
+python{
+    'block_type': 'bullish',  # or 'bearish'
+    'top': 152.00,
+    'bottom': 151.50,
+    'center': 151.75,
+    'is_breaker': False,
+    'time': datetime
+}
+Data Flow
+1. Symbol Change Flow
+User Input → TickerEntry → ticker_changed signal
+    ↓
+LiveMonitorDashboard._on_ticker_changed()
+    ↓
+Clear existing data → data_manager.change_symbol()
+    ↓
+WebSocket subscription → Bar accumulation
+    ↓
+5-second delay → run_calculations()
+2. Real-time Data Flow
+Polygon WebSocket → PolygonDataManager
+    ↓
+market_data_updated signal → _on_market_data_updated()
+    ↓
+TickerCalculations.update_calculations()
+    ↓
+Status bar update
+3. Calculation Flow
+30-second timer → run_calculations()
+    ↓
+DataFrame conversion → EMA calculations
+    ↓
+HVN analysis → Order Block detection
+    ↓
+Table updates → Signal display updates
+Signal System
+Signal Interpreter Integration
+The dashboard integrates with SignalInterpreter to process raw calculation results into standardized signals:
+python# M1 EMA Processing
+m1_result = self.m1_ema_calculator.calculate(df)
+standard_signal = self.signal_interpreter.process_m1_ema(m1_result)
+self.update_signal_display(
+    standard_signal.value,
+    standard_signal.category.value,
+    'M1'
 )
-nearby = aggregator.get_zones_near_price(zones, current_price, 0.03)
-Integration Examples
-Basic Setup
-pythonfrom live_monitor.dashboard import LiveMonitorDashboard
-from PyQt6.QtWidgets import QApplication
+Signal Flow
 
-app = QApplication([])
-dashboard = LiveMonitorDashboard()
-dashboard.show()
-app.exec()
-Custom Data Integration
-pythonclass CustomDashboard(LiveMonitorDashboard):
-    def __init__(self):
-        super().__init__()
-        # Add custom data source
-        self.custom_data_source = MyDataSource()
-        self.custom_data_source.data_ready.connect(self.process_custom_data)
-    
-    def process_custom_data(self, data):
-        # Update specific widgets
-        self.ticker_calculations.update_calculations({
-            'last_price': data['price'],
-            'volume': data['volume']
-        })
-Adding Custom Signals
-python# Generate entry signal
-def generate_entry_signal(self, indicator_data):
-    if indicator_data['rsi'] < 30:
-        self.point_call_entry.add_entry_signal(
-            time=datetime.now().strftime("%H:%M:%S"),
-            signal_type="LONG",
-            price=str(indicator_data['price']),
-            signal="RSI Oversold",
-            strength="Strong",
-            notes=f"RSI: {indicator_data['rsi']:.1f}"
-        )
-Zone Management
-python# Update all zone tables with calculated data
-def update_zones(self):
-    current_price = self.get_current_price()
-    m15_atr = self.calculate_m15_atr()
-    
-    # Update HVN zones
-    hvn_zones = self.hvn_engine.get_zones()
-    self.hvn_table.update_hvn_zones(hvn_zones, current_price, m15_atr)
-    
-    # Update order blocks
-    order_blocks = self.order_block_analyzer.get_blocks()
-    self.order_blocks_table.update_order_blocks(
-        order_blocks, current_price, m15_atr
-    )
-Signal Flow Diagram
-User Input (Ticker) → LiveMonitorDashboard
-                            ↓
-                    PolygonDataManager
-                            ↓
-                    WebSocket Data Stream
-                            ↓
-                    Bar Accumulation
-                            ↓
-                 ┌──────────┴──────────┐
-                 ↓                     ↓
-          Market Data Updates    Calculation Timer
-                 ↓                     ↓
-          TickerCalculations    HVN/OrderBlock Analysis
-                                      ↓
-                               Zone Table Updates
-                                      ↓
-                              Signal Generation
-                                      ↓
-                          Entry/Exit Signal Grids
-                                      ↓
-                          Position Calculator
+Calculator produces raw result
+SignalInterpreter standardizes the signal
+Dashboard updates display with category and confidence
+Entry/Exit signals generated based on thresholds
+
 Calculation Integration
-HVN Engine Integration
-python# In main_dashboard.py
-self.hvn_engine = HVNEngine(
-    levels=100,                    # Price levels for analysis
-    percentile_threshold=80.0,     # Strength threshold
+HVN Engine Configuration
+pythonself.hvn_engine = HVNEngine(
+    levels=100,                    # Price levels for volume analysis
+    percentile_threshold=80.0,     # Minimum strength threshold
     proximity_atr_minutes=30       # ATR period for proximity
 )
-
-# Analysis execution
-hvn_result = self.hvn_engine.analyze(df, include_pre=True, include_post=True)
-Order Block Analysis
+Order Block Analyzer
 pythonself.order_block_analyzer = OrderBlockAnalyzer(
-    swing_length=7,    # Bars for swing detection
-    show_bullish=3,    # Max bullish blocks
-    show_bearish=3     # Max bearish blocks
+    swing_length=7,    # Bars for swing high/low detection
+    show_bullish=3,    # Maximum bullish blocks to display
+    show_bearish=3     # Maximum bearish blocks to display
 )
+EMA Calculators
 
-# Analysis execution
-order_blocks = self.order_block_analyzer.analyze_zones(df)
-Status Management
-Connection Status
-The dashboard provides multiple connection status indicators:
+M1 EMA: 1-minute exponential moving average analysis
+M5 EMA: 5-minute EMA with resampling
+M15 EMA: 15-minute EMA with confidence levels
 
-Header Widget: Visual server connection indicator
-Status Bar: Text-based connection status
-Window Title: Connection state in title
-
-Error Handling
-pythondef _on_data_error(self, error_msg):
-    """Comprehensive error handling"""
-    logger.error(f"Data error: {error_msg}")
-    self.status_bar.showMessage(f"Error: {error_msg}", 5000)
-    # Additional error recovery logic
-Performance Optimization
+Key Methods Reference
 Data Management
-
-Bar accumulation limited to 2000 bars
-30-second calculation intervals
-Efficient DataFrame operations
-
-UI Updates
-
-Conditional widget updates
-Cached style sheets
-Minimal redraws
-
-Extending the Dashboard
+Accumulating Bar Data
+pythondef _on_chart_data_updated(self, data: dict):
+    """Accumulates bars, maintains 2000 bar limit"""
+    self.accumulated_data.extend(data['bars'])
+    if len(self.accumulated_data) > 2000:
+        self.accumulated_data = self.accumulated_data[-2000:]
+Clearing on Symbol Change
+pythondef _on_ticker_changed(self, ticker):
+    """Clears all data and resets displays"""
+    self.accumulated_data.clear()
+    # Clear all tables and calculations
+    # Resubscribe to new symbol
+Calculation Execution
+Main Calculation Method
+pythondef run_calculations(self):
+    """Orchestrates all calculations"""
+    # Requires minimum 100 bars
+    # Converts to DataFrame
+    # Runs EMA and zone calculations
+    # Updates all displays
+ATR Calculation
+pythondef calculate_m15_atr(self, df: pd.DataFrame, period: int = 14) -> float:
+    """Resamples to 15-min bars and calculates ATR"""
+    # Resample 1-min to 15-min
+    # Calculate True Range
+    # Return average of last 'period' bars
+Signal Updates
+Processing Entry Signals
+pythondef _on_entry_signal(self, signal_data):
+    """Adds entry signal to grid"""
+    self.point_call_entry.add_entry_signal(
+        time=signal_data.get('time'),
+        signal_type=signal_data.get('signal_type'),
+        price=signal_data.get('price'),
+        signal=signal_data.get('signal'),
+        strength=signal_data.get('strength'),
+        notes=signal_data.get('notes')
+    )
+Extension Guide
 Adding New Components
-python# Create new component
-class CustomIndicatorWidget(QWidget):
-    indicator_triggered = pyqtSignal(dict)
+
+Create Component Class:
+
+python# In components/new_component.py
+class NewComponent(QWidget):
+    # Define signals
+    component_event = pyqtSignal(dict)
     
     def __init__(self):
         super().__init__()
         self.init_ui()
-    
-    def update_indicator(self, data):
-        # Process and display
+        self.apply_styles()
+
+Add to UI:
+
+python# In ui_builder_segment.py
+self.new_component = NewComponent()
+layout.addWidget(self.new_component)
+
+Connect Signals:
+
+python# In main_dashboard.py
+self.new_component.component_event.connect(self._on_component_event)
+Adding New Calculations
+
+Create Calculator:
+
+python# In calculations/
+class NewCalculator:
+    def calculate(self, df: pd.DataFrame) -> CalculationResult:
+        # Implement calculation logic
         pass
 
-# Add to dashboard
-self.custom_indicator = CustomIndicatorWidget()
-left_layout.addWidget(self.custom_indicator)
-Custom Calculations
-pythonclass ExtendedDashboard(LiveMonitorDashboard):
-    def run_calculations(self):
-        # Call parent calculations
-        super().run_calculations()
-        
-        # Add custom calculations
-        if self.accumulated_data:
-            df = pd.DataFrame(self.accumulated_data)
-            custom_result = self.custom_analyzer.analyze(df)
-            self.update_custom_display(custom_result)
+Initialize in Dashboard:
+
+python# In main_dashboard.__init__()
+self.new_calculator = NewCalculator()
+
+Add to Calculation Flow:
+
+python# In calculations_segment.py
+def run_calculations(self):
+    # Existing calculations...
+    new_result = self.new_calculator.calculate(df)
+    self._process_new_result(new_result)
+Adding New Signals
+
+Define Signal Data Format:
+
+pythonsignal_data = {
+    'time': '10:30:15',
+    'type': 'NEW_SIGNAL',
+    'price': 150.25,
+    'confidence': 0.85,
+    'metadata': {...}
+}
+
+Create Display Method:
+
+pythondef display_new_signal(self, signal_data):
+    # Update appropriate UI component
+    pass
+
+Connect to Data Flow:
+
+python# Connect to appropriate signal source
+self.data_manager.new_signal.connect(self.display_new_signal)
+Technical Details
+Threading Model
+
+All UI updates occur on the main thread
+WebSocket runs on separate thread in PolygonDataManager
+Calculations triggered by QTimer on main thread
+
+Memory Management
+
+Bar data limited to 2000 entries
+Tables clear on symbol change
+Automatic garbage collection for old data
+
+Error Handling
+
+Try/except blocks in all calculation methods
+Error messages displayed in status bar
+Graceful degradation when data unavailable
+
+Performance Considerations
+
+30-second calculation interval prevents overload
+Batch table updates for efficiency
+Conditional widget updates based on data changes
+
+Dependencies
+
+PyQt6: UI framework
+pandas: Data manipulation
+numpy: Numerical calculations
+PolygonDataManager: WebSocket data source
+Calculation engines: Technical analysis
+
 Configuration
-Layout Proportions
-python# Horizontal split (25% left, 75% right)
-main_splitter.setSizes([400, 1200])
 
-# Vertical split (40% top, 60% bottom)
-vertical_splitter.setSizes([360, 540])
-Update Intervals
-python# Calculation timer (milliseconds)
-self.calculation_timer.start(30000)  # 30 seconds
+Window size: 1600x900 pixels
+Left column: 25% width
+Top section: 40% height
+Calculation interval: 30 seconds
+Data retention: 2000 bars
 
-# Data accumulation limits
-MAX_BARS = 2000
-Troubleshooting
-Common Issues
-
-No Data Display
-
-Check WebSocket connection
-Verify symbol is valid
-Ensure sufficient data accumulated
-
-
-Calculation Errors
-
-Check data integrity
-Verify DataFrame index
-Review calculation logs
-
-
-UI Freezing
-
-Check calculation complexity
-Verify timer intervals
-Monitor memory usage
-
-
-
-Debug Mode
-python# Enable detailed logging
-logging.basicConfig(level=logging.DEBUG)
-
-# Add debug outputs
-logger.debug(f"Accumulated bars: {len(self.accumulated_data)}")
-logger.debug(f"Current price: {current_price}")
 Best Practices
 
-Signal Handling: Always use Qt signals for component communication
-Data Validation: Validate data before display updates
-Error Recovery: Implement graceful error handling
-Memory Management: Clear old data regularly
-UI Responsiveness: Use timers for heavy calculations
+Always validate data before display
+Use signals for component communication
+Maintain separation of concerns (UI/Logic/Data)
+Clear old data when switching contexts
+Handle None/invalid values gracefully
+Log important events and errors
+Test with market closed/open scenarios
+Document new features and methods
 
 Future Enhancements
 
-Chart widget integration (matplotlib/plotly)
-Trade execution integration
-Performance analytics
+Chart widget integration
+Trade execution capabilities
 Multi-symbol monitoring
 Alert system
-Theme customization
+Performance analytics
+Historical backtesting
+Custom indicator framework
+Keyboard shortcuts
 Layout persistence
+Theme customization
 
 
-This comprehensive README provides complete documentation for the dashboard module, including architecture, component details, integration examples, and best practices for extending and maintaining the trading dashboard.
+This comprehensive README provides a complete technical reference for your Live Monitor Dashboard, covering all aspects of the system architecture, key classes, methods, data flow, and extension guidelines. It should give the OPUS model in another conversation everything needed to understand and continue building on this tool.

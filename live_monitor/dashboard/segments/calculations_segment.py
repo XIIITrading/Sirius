@@ -45,6 +45,9 @@ class CalculationsSegment:
             # Process EMA calculations
             self._process_ema_calculations(df)
             
+            # Process Statistical Trend calculations
+            self._process_statistical_trend(df)
+            
             # Process zone calculations
             self._process_zone_calculations(df, current_price, m15_atr)
             
@@ -104,6 +107,34 @@ class CalculationsSegment:
                 f"Original: {m15_ema_result.signal} "
                 f"Confidence: {standard_signal.confidence:.0%}"
             )
+
+    def _process_statistical_trend(self, df: pd.DataFrame):
+        """Process Statistical Trend calculations"""
+        # Statistical Trend (1-minute based with 10-bar lookback)
+        if len(df) >= 10:  # Need minimum bars for calculation
+            try:
+                stat_result = self.statistical_trend_calculator.analyze(
+                    self.current_symbol, 
+                    df, 
+                    df.index[-1]  # Use last bar timestamp as entry_time
+                )
+                if stat_result:
+                    standard_signal = self.signal_interpreter.process_statistical_trend(stat_result)
+                    self.update_signal_display(
+                        standard_signal.value,
+                        standard_signal.category.value,
+                        'STAT'
+                    )
+                    logger.info(
+                        f"Statistical Trend Signal: {standard_signal.value:+.1f} "
+                        f"({standard_signal.category.value}) "
+                        f"Vol-Adj Strength: {stat_result.volatility_adjusted_strength:.2f} "
+                        f"Confidence: {standard_signal.confidence:.0%}"
+                    )
+            except Exception as e:
+                logger.error(f"Error in statistical trend calculation: {e}")
+        else:
+            logger.debug(f"Insufficient data for statistical trend: {len(df)} bars < 10 required") 
     
     def _process_zone_calculations(self, df: pd.DataFrame, current_price: float, m15_atr: float):
         """Process HVN and Order Block calculations"""

@@ -15,8 +15,12 @@ class SignalDisplaySegment:
             label = self.m5_signal_label
         elif timeframe == 'M15':
             label = self.m15_signal_label
+        elif timeframe == 'STAT':  # Add this
+            label = self.stat_signal_label
         else:
             return
+    
+    # Rest of the method remains the same...
         
         # Format the signal display
         label.setText(f"{timeframe}: {category} ({signal_value:+.1f})")

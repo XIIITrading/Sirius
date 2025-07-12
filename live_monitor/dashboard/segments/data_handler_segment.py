@@ -38,6 +38,8 @@ class DataHandlerSegment:
             self.m5_signal_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
             self.m15_signal_label.setText("M15: --")
             self.m15_signal_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
+            self.stat_signal_label.setText("STAT: --")
+            self.stat_signal_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
             
             # Change symbol in data manager
             self.data_manager.change_symbol(ticker)

@@ -206,6 +206,10 @@ class UIBuilderSegment:
         self.m15_signal_label = QLabel("M15: --")
         self.m15_signal_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
         self.status_bar.addWidget(self.m15_signal_label)
+
+        self.stat_signal_label = QLabel("STAT: --")
+        self.stat_signal_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
+        self.status_bar.addWidget(self.stat_signal_label)
         
         # Last update time
         self.update_time_label = QLabel("Last Update: Never")

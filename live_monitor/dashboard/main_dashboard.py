@@ -23,6 +23,7 @@ from live_monitor.calculations.zones.supply_demand import OrderBlockAnalyzer
 from live_monitor.calculations.indicators.m1_ema import M1EMACalculator
 from live_monitor.calculations.indicators.m5_ema import M5EMACalculator
 from live_monitor.calculations.indicators.m15_ema import M15EMACalculator
+from live_monitor.calculations.trend.statistical_trend_1min import StatisticalTrend1MinSimplified
 
 # Import signal interpreter
 from live_monitor.signals.signal_interpreter import SignalInterpreter
@@ -61,6 +62,9 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
         self.m1_ema_calculator = M1EMACalculator()
         self.m5_ema_calculator = M5EMACalculator()
         self.m15_ema_calculator = M15EMACalculator()
+
+        # Initialize Statistical Trend
+        self.statistical_trend_calculator = StatisticalTrend1MinSimplified(lookback_periods=10)
         
         # Data storage
         self.accumulated_data = []

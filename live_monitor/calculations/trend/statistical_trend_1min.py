@@ -16,7 +16,7 @@ class StatisticalSignal:
     symbol: str
     timestamp: datetime
     price: float
-    signal: str  # 'STRONG BUY', 'BUY', 'WEAK BUY', 'NEUTRAL', 'WEAK SELL', 'SELL', 'STRONG SELL'
+    signal: str  # 'BUY', 'WEAK BUY', 'WEAK SELL', 'SELL'
     confidence: float  # 0-100
     trend_strength: float  # Magnitude of move
     volatility_adjusted_strength: float  # Trend strength relative to noise
@@ -38,9 +38,8 @@ class StatisticalTrend1MinSimplified:
         
         # Simplified thresholds based on volatility-adjusted strength
         self.strength_thresholds = {
-            'strong': 2.0,     # Trend > 2x volatility
-            'normal': 1.0,     # Trend > 1x volatility  
-            'weak': 0.5        # Trend > 0.5x volatility
+            'normal': 1.0,     # Trend >= 1x volatility for BUY/SELL
+            'weak': 0.25       # Trend >= 0.25x volatility for WEAK signals
         }
         
     def analyze(self, symbol: str, bars_df: pd.DataFrame, 
@@ -128,6 +127,7 @@ class StatisticalTrend1MinSimplified:
                         volume_confirmation: bool) -> tuple[str, float]:
         """
         Generate signal and confidence based on simplified metrics
+        Modified to use only 4 signal levels: BUY, WEAK BUY, WEAK SELL, SELL
         """
         # Base confidence on volatility-adjusted strength
         confidence = min(100, volatility_adjusted_strength * 25)
@@ -136,23 +136,21 @@ class StatisticalTrend1MinSimplified:
         if volume_confirmation:
             confidence = min(100, confidence * 1.2)
         
-        # Determine signal based on thresholds
+        # Determine signal based on simplified thresholds
         if trend_strength > 0:  # Bullish
-            if volatility_adjusted_strength >= self.strength_thresholds['strong']:
-                return 'STRONG BUY', confidence
-            elif volatility_adjusted_strength >= self.strength_thresholds['normal']:
+            if volatility_adjusted_strength >= self.strength_thresholds['normal']:
                 return 'BUY', confidence
             elif volatility_adjusted_strength >= self.strength_thresholds['weak']:
                 return 'WEAK BUY', confidence
             else:
-                return 'NEUTRAL', confidence * 0.5
+                # Very weak but still bullish - map to WEAK BUY with reduced confidence
+                return 'WEAK BUY', confidence * 0.5
                 
         else:  # Bearish
-            if volatility_adjusted_strength >= self.strength_thresholds['strong']:
-                return 'STRONG SELL', confidence
-            elif volatility_adjusted_strength >= self.strength_thresholds['normal']:
+            if volatility_adjusted_strength >= self.strength_thresholds['normal']:
                 return 'SELL', confidence
             elif volatility_adjusted_strength >= self.strength_thresholds['weak']:
                 return 'WEAK SELL', confidence
             else:
-                return 'NEUTRAL', confidence * 0.5
+                # Very weak but still bearish - map to WEAK SELL with reduced confidence
+                return 'WEAK SELL', confidence * 0.5

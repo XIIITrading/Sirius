@@ -2,6 +2,7 @@
 """
 Main Live Monitor Dashboard with Polygon Data Integration
 Updated to use three table widgets instead of charts
+Enhanced with Signal Interpreter for M1 EMA signals
 """
 
 import sys
@@ -26,6 +27,10 @@ from live_monitor.data import PolygonDataManager
 # Import calculation modules
 from live_monitor.calculations.volume.hvn_engine import HVNEngine
 from live_monitor.calculations.zones.supply_demand import OrderBlockAnalyzer
+from live_monitor.calculations.indicators.m1_ema import M1EMACalculator
+
+# Import signal interpreter
+from live_monitor.signals.signal_interpreter import SignalInterpreter
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -76,6 +81,9 @@ class LiveMonitorDashboard(QMainWindow):
         # Initialize data manager
         self.data_manager = PolygonDataManager()
         
+        # Initialize signal interpreter
+        self.signal_interpreter = SignalInterpreter()
+        
         # Initialize calculation engines
         self.hvn_engine = HVNEngine(
             levels=100,
@@ -89,6 +97,9 @@ class LiveMonitorDashboard(QMainWindow):
             show_bearish=3
         )
         
+        # Initialize M1 EMA calculator
+        self.m1_ema_calculator = M1EMACalculator()
+        
         # Data storage
         self.accumulated_data = []
         self.current_symbol = None
@@ -98,6 +109,7 @@ class LiveMonitorDashboard(QMainWindow):
         self.apply_styles()
         self.connect_signals()
         self.setup_data_connections()
+        self.setup_signal_connections()
         
         # Connect to Polygon server after UI is ready
         QTimer.singleShot(100, self.connect_to_polygon)
@@ -252,6 +264,11 @@ class LiveMonitorDashboard(QMainWindow):
         self.symbol_label = QLabel("Symbol: None")
         self.status_bar.addWidget(self.symbol_label)
         
+        # Signal status label
+        self.signal_label = QLabel("Signal: --")
+        self.signal_label.setStyleSheet("QLabel { font-weight: bold; }")
+        self.status_bar.addWidget(self.signal_label)
+        
         # Last update time
         self.update_time_label = QLabel("Last Update: Never")
         self.status_bar.addPermanentWidget(self.update_time_label)
@@ -287,6 +304,17 @@ class LiveMonitorDashboard(QMainWindow):
         # Connect status signals
         self.data_manager.connection_status_changed.connect(self._on_connection_status_changed)
         self.data_manager.error_occurred.connect(self._on_data_error)
+    
+    def setup_signal_connections(self):
+        """Setup connections for signal interpreter"""
+        # Connect interpreter signals to data manager signals
+        # This creates the signal flow: Interpreter → Data Manager → Dashboard
+        self.signal_interpreter.entry_signal_generated.connect(
+            self.data_manager.entry_signal_generated.emit
+        )
+        self.signal_interpreter.exit_signal_generated.connect(
+            self.data_manager.exit_signal_generated.emit
+        )
         
     def connect_to_polygon(self):
         """Connect to Polygon data server"""
@@ -312,6 +340,10 @@ class LiveMonitorDashboard(QMainWindow):
             self.hvn_table.clear_zones()
             self.supply_demand_table.clear_zones()
             self.order_blocks_table.clear_blocks()
+            
+            # Reset signal label
+            self.signal_label.setText("Signal: --")
+            self.signal_label.setStyleSheet("QLabel { font-weight: bold; }")
             
             # Change symbol in data manager
             self.data_manager.change_symbol(ticker)
@@ -382,8 +414,27 @@ class LiveMonitorDashboard(QMainWindow):
             logger.error(f"Error calculating M15 ATR: {e}")
             return 0.0
     
+    def update_signal_display(self, signal_value: float, category: str):
+        """Update the signal label with color coding"""
+        # Format the signal display
+        self.signal_label.setText(f"Signal: {category} ({signal_value:+.1f})")
+        
+        # Apply color based on category
+        if signal_value >= 25:
+            # Bullish - Green
+            self.signal_label.setStyleSheet("QLabel { color: #26a69a; font-weight: bold; }")
+        elif signal_value > 0:
+            # Weak Bullish - Light Green
+            self.signal_label.setStyleSheet("QLabel { color: #66bb6a; font-weight: bold; }")
+        elif signal_value > -25:
+            # Weak Bearish - Light Red
+            self.signal_label.setStyleSheet("QLabel { color: #ef5350; font-weight: bold; }")
+        else:
+            # Bearish - Red
+            self.signal_label.setStyleSheet("QLabel { color: #d32f2f; font-weight: bold; }")
+    
     def run_calculations(self):
-        """Run HVN and Order Block calculations"""
+        """Run HVN and Order Block calculations with M1 EMA signals"""
         if not self.current_symbol or len(self.accumulated_data) < 100:
             logger.warning(f"Not enough data for calculations: {len(self.accumulated_data)} bars")
             return
@@ -401,8 +452,35 @@ class LiveMonitorDashboard(QMainWindow):
             
             current_price = float(df['close'].iloc[-1])
             
+            # Update signal interpreter context
+            self.signal_interpreter.set_symbol_context(
+                self.current_symbol, 
+                current_price
+            )
+            
             # Calculate M15 ATR for the tables
             m15_atr = self.calculate_m15_atr(df)
+            
+            # Run M1 EMA calculation and signal generation
+            m1_ema_result = self.m1_ema_calculator.calculate(df)
+            if m1_ema_result:
+                # Process through signal interpreter
+                standard_signal = self.signal_interpreter.process_m1_ema(m1_ema_result)
+                
+                # Update signal display
+                self.update_signal_display(
+                    standard_signal.value,
+                    standard_signal.category.value
+                )
+                
+                # Log the signal
+                logger.info(
+                    f"M1 EMA Signal: {standard_signal.value:+.1f} "
+                    f"({standard_signal.category.value}) "
+                    f"Confidence: {standard_signal.confidence:.0%}"
+                )
+            else:
+                logger.warning("M1 EMA calculation returned None")
             
             # Run HVN calculation
             logger.info("Running HVN calculation...")

@@ -51,13 +51,7 @@ class StandardSignal:
     direction: str  # 'LONG' or 'SHORT'
     strength: str  # 'Strong', 'Medium', 'Weak'
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    @property
-    def should_generate_entry(self) -> bool:
-        """Determine if this signal should generate an entry"""
-        # Only generate entries for non-weak signals with good confidence
-        return (abs(self.value) >= 15 and self.confidence >= 0.5)
-    
+        
     @property
     def should_generate_exit(self) -> bool:
         """Determine if this signal should generate an exit"""
@@ -628,13 +622,8 @@ class SignalInterpreter(QObject):
             logger.debug(f"Entry generation disabled for {signal.source}")
             return
         
-        # Check for entry signal
-        if signal.should_generate_entry:
-            prev_signal = self.previous_signals.get(signal.source)
-            
-            # Only generate if this is a new signal or significant change
-            if not prev_signal or abs(prev_signal.value) < 15:
-                self._generate_entry_signal(signal)
+        # ALWAYS generate/update entry signal for active sources
+        self._generate_entry_signal(signal)
         
         # Check for exit signal
         if signal.should_generate_exit:

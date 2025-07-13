@@ -13,6 +13,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 
 from live_monitor.data.websocket_client import PolygonWebSocketClient
 from live_monitor.data.rest_client import PolygonRESTClient
+from live_monitor.data.hist_request import HistoricalFetchCoordinator
 from .models import (
     TradeData, QuoteData, AggregateData,
     MarketDataUpdate, TickerCalculationData,
@@ -38,9 +39,18 @@ class PolygonDataManager(QObject):
     entry_signal_generated = pyqtSignal(dict)   # For PointCallEntry
     exit_signal_generated = pyqtSignal(dict)    # For PointCallExit
     
+    # Historical data ready signals (forwarded from coordinator)
+    ema_data_ready = pyqtSignal(dict)           # {'M1': df, 'M5': df, 'M15': df}
+    structure_data_ready = pyqtSignal(dict)     # {'M1': df, 'M5': df, 'M15': df}
+    trend_data_ready = pyqtSignal(dict)         # {'M1': df, 'M5': df, 'M15': df}
+    zone_data_ready = pyqtSignal(dict)          # {'HVN': df, 'OrderBlocks': df}
+    
     # Connection Status
     connection_status_changed = pyqtSignal(bool)
     error_occurred = pyqtSignal(str)
+    
+    # Historical fetch progress
+    historical_fetch_progress = pyqtSignal(dict)  # Progress updates
     
     def __init__(self, server_url: Optional[str] = None):
         super().__init__()
@@ -56,6 +66,9 @@ class PolygonDataManager(QObject):
             base_url="http://localhost:8200"
         )
         
+        # Initialize historical fetch coordinator
+        self.hist_coordinator = HistoricalFetchCoordinator(self.rest_client)
+        
         # Connect WebSocket signals
         self.ws_client.connected.connect(self._on_connected)
         self.ws_client.disconnected.connect(self._on_disconnected)
@@ -65,6 +78,17 @@ class PolygonDataManager(QObject):
         
         # Connect REST client signals
         self.rest_client.error_occurred.connect(self.error_occurred.emit)
+        
+        # Connect historical coordinator signals
+        self.hist_coordinator.all_fetches_completed.connect(self._on_historical_ready)
+        self.hist_coordinator.fetch_progress.connect(self._on_fetch_progress)
+        self.hist_coordinator.fetch_error.connect(self._on_fetch_error)
+        
+        # Forward data ready signals
+        self.hist_coordinator.ema_data_ready.connect(self.ema_data_ready.emit)
+        self.hist_coordinator.structure_data_ready.connect(self.structure_data_ready.emit)
+        self.hist_coordinator.trend_data_ready.connect(self.trend_data_ready.emit)
+        self.hist_coordinator.zone_data_ready.connect(self.zone_data_ready.emit)
         
         # Current state
         self.current_symbol: Optional[str] = None
@@ -81,12 +105,15 @@ class PolygonDataManager(QObject):
         # Track if we've fetched initial historical data
         self.initial_data_fetched = {}
         
+        # Track historical data availability
+        self.historical_data_available = {}
+        
         # Create a timer to check data flow periodically
         self.heartbeat_timer = QTimer()
         self.heartbeat_timer.timeout.connect(self.check_data_flow)
         self.heartbeat_timer.start(5000)  # Check every 5 seconds
         
-        logger.info("PolygonDataManager initialized with REST and WebSocket clients")
+        logger.info("PolygonDataManager initialized with REST, WebSocket, and Historical coordinator")
     
     def connect(self):
         """Connect to Polygon WebSocket server"""
@@ -121,6 +148,7 @@ class PolygonDataManager(QObject):
             
             # Reset initial data fetch flag
             self.initial_data_fetched[symbol] = False
+            self.historical_data_available[symbol] = False
             
             # Update current symbol
             self.current_symbol = symbol
@@ -128,49 +156,117 @@ class PolygonDataManager(QObject):
             # Change WebSocket subscription (this will handle unsubscribe)
             self.ws_client.change_symbol(symbol)
             
-            # Fetch historical data after a short delay
-            QTimer.singleShot(1000, lambda: self.fetch_historical_bars(symbol))
+            # Trigger coordinated historical fetch instead of single fetch
+            # This will fetch data for all calculation types in parallel
+            QTimer.singleShot(1000, lambda: self._start_historical_fetch(symbol))
     
-    def fetch_historical_bars(self, symbol: str, bars_needed: int = 200):
-        """Fetch historical bars via REST API"""
+    def _start_historical_fetch(self, symbol: str):
+        """Start the coordinated historical fetch"""
         if symbol != self.current_symbol:
             logger.debug(f"Skipping historical fetch for {symbol}, current is {self.current_symbol}")
             return
-            
-        logger.info(f"Fetching historical bars for {symbol}")
         
-        bars = self.rest_client.fetch_bars(
-            symbol=symbol,
-            timespan='1min',
-            multiplier=1,
-            limit=bars_needed
-        )
+        logger.info(f"Starting coordinated historical fetch for {symbol}")
         
-        if bars:
-            # Clear existing bars for fresh start
-            self.accumulated_bars = bars
-            
-            # Mark that we've fetched initial data
-            self.initial_data_fetched[symbol] = True
-            
-            # Update last data time to prevent immediate refetch
-            self.last_data_time[symbol] = datetime.now(timezone.utc)
-            
-            # Emit chart data update
+        # Start the fetch - priority mode will fetch high priority first
+        self.hist_coordinator.fetch_all_for_symbol(symbol, priority_mode=True)
+    
+    def _on_fetch_progress(self, progress: dict):
+        """Handle fetch progress updates"""
+        logger.info(f"Historical fetch progress: {progress['completed']}/{progress['total']} "
+                   f"({progress['percentage']:.0f}%)")
+        
+        # Forward progress to UI
+        self.historical_fetch_progress.emit(progress)
+    
+    def _on_fetch_error(self, error_data: dict):
+        """Handle fetch errors"""
+        symbol = error_data.get('symbol')
+        errors = error_data.get('errors', [])
+        
+        if symbol == self.current_symbol:
+            error_msg = f"Historical fetch errors: {'; '.join(errors)}"
+            logger.error(error_msg)
+            self.error_occurred.emit(error_msg)
+    
+    def _on_historical_ready(self, symbol: str):
+        """Handle when all historical data is ready"""
+        if symbol != self.current_symbol:
+            logger.debug(f"Ignoring historical ready for {symbol}, current is {self.current_symbol}")
+            return
+        
+        logger.info(f"All historical data ready for {symbol}")
+        
+        # Mark that we have historical data
+        self.initial_data_fetched[symbol] = True
+        self.historical_data_available[symbol] = True
+        
+        # Update last data time to prevent immediate refetch
+        self.last_data_time[symbol] = datetime.now(timezone.utc)
+        
+        # Get M1 data from coordinator for accumulated bars
+        m1_data = self._get_m1_data_for_accumulation()
+        if m1_data is not None:
+            self._initialize_accumulated_bars(m1_data)
+        
+        # Emit a general chart update to notify UI
+        if self.accumulated_bars:
             self.chart_data_updated.emit({
                 'symbol': symbol,
-                'bars': bars,
-                'is_update': False  # Full refresh
+                'bars': self.accumulated_bars,
+                'is_update': False,  # Full refresh
+                'source': 'historical'
             })
             
             # Also update market data with latest bar
-            if bars:
-                latest_bar = bars[-1]
-                self._update_market_data_from_bar(symbol, latest_bar)
-            
-            logger.info(f"Historical data loaded: {len(bars)} bars")
-        else:
-            logger.warning(f"Failed to fetch historical bars for {symbol}")
+            latest_bar = self.accumulated_bars[-1]
+            self._update_market_data_from_bar(symbol, latest_bar)
+    
+    def _get_m1_data_for_accumulation(self):
+        """Get 1-minute data from coordinator for bar accumulation"""
+        # Try to get M1 data from any of the fetchers that use 1-minute data
+        fetcher_priority = ['M1_MarketStructure', 'HVN', 'OrderBlocks', 'M1_EMA']
+        
+        for fetcher_name in fetcher_priority:
+            fetcher = self.hist_coordinator.get_fetcher(fetcher_name)
+            if fetcher and fetcher.cache is not None:
+                logger.info(f"Using {fetcher_name} data for bar accumulation")
+                return fetcher.cache
+        
+        logger.warning("No 1-minute data available for bar accumulation")
+        return None
+    
+    def _initialize_accumulated_bars(self, df):
+        """Initialize accumulated bars from historical data DataFrame"""
+        # Convert DataFrame to list of bar dicts
+        bars = []
+        for timestamp, row in df.iterrows():
+            bar = {
+                'timestamp': timestamp,
+                'open': row['open'],
+                'high': row['high'],
+                'low': row['low'],
+                'close': row['close'],
+                'volume': row['volume'],
+                'vwap': row.get('vwap', 0),
+                'trades': row.get('trades', 0)
+            }
+            bars.append(bar)
+        
+        # Limit to max bars
+        if len(bars) > self.max_bars:
+            bars = bars[-self.max_bars:]
+        
+        self.accumulated_bars = bars
+        logger.info(f"Initialized {len(bars)} accumulated bars from historical data")
+    
+    def fetch_historical_bars(self, symbol: str, bars_needed: int = 200):
+        """
+        Legacy method - now just triggers the coordinator
+        Kept for backward compatibility
+        """
+        logger.info(f"Legacy fetch_historical_bars called for {symbol}")
+        self._start_historical_fetch(symbol)
     
     def _update_market_data_from_bar(self, symbol: str, bar: Dict):
         """Update market data display from a bar"""
@@ -217,16 +313,16 @@ class PolygonDataManager(QObject):
                     # Fetch historical data if we haven't already
                     if not self.initial_data_fetched.get(self.current_symbol, False):
                         logger.info("Fetching initial historical data...")
-                        self.fetch_historical_bars(self.current_symbol)
+                        self._start_historical_fetch(self.current_symbol)
                     elif elapsed > 300:  # Refresh every 5 minutes when market closed
                         logger.info("Refreshing historical data...")
-                        self.fetch_historical_bars(self.current_symbol, bars_needed=50)
+                        self._start_historical_fetch(self.current_symbol)
                         self.last_data_time[self.current_symbol] = current_time
         else:
             # No data received yet for this symbol
             logger.debug(f"No data received yet for {self.current_symbol}")
             if not self.initial_data_fetched.get(self.current_symbol, False):
-                self.fetch_historical_bars(self.current_symbol)
+                self._start_historical_fetch(self.current_symbol)
     
     def _on_connected(self):
         """Handle connection established"""
@@ -382,7 +478,8 @@ class PolygonDataManager(QObject):
                 'timeframe': '1m',
                 'bars': [bar_data],  # Send just the new bar
                 'is_update': True,
-                'latest_bar_complete': True
+                'latest_bar_complete': True,
+                'source': 'websocket'
             }
             
             self.chart_data_updated.emit(chart_update)
@@ -423,6 +520,14 @@ class PolygonDataManager(QObject):
     def get_accumulated_bars(self) -> List[Dict]:
         """Get all accumulated bars"""
         return self.accumulated_bars.copy()
+    
+    def is_historical_data_ready(self, symbol: str) -> bool:
+        """Check if historical data is available for a symbol"""
+        return self.historical_data_available.get(symbol, False)
+    
+    def get_historical_fetch_status(self) -> Dict:
+        """Get the current status of historical data fetching"""
+        return self.hist_coordinator.get_fetch_status()
     
     def test_chart_update(self):
         """Test the chart update pipeline with fake data"""

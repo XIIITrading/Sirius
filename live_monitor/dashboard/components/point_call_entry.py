@@ -79,9 +79,37 @@ class PointCallEntry(QWidget):
             self.add_entry_signal(*entry)
             
     def add_entry_signal(self, time, signal_type, price, signal, strength, notes):
-        """Add a new entry signal to the table"""
-        row = self.table.rowCount()
-        self.table.insertRow(row)
+        """Add or update an entry signal in the table"""
+        # Extract source identifier from signal description
+        # Examples: "M1 EMA LONG Signal" -> "M1_EMA"
+        #          "M5 EMA Bullish Crossover" -> "M5_EMA"
+        #          "Statistical Trend STRONG LONG" -> "STATISTICAL_TREND"
+        source_id = None
+        if "M1 EMA" in signal:
+            source_id = "M1_EMA"
+        elif "M5 EMA" in signal:
+            source_id = "M5_EMA"
+        elif "M15 EMA" in signal:
+            source_id = "M15_EMA"
+        elif "Statistical Trend" in signal:
+            source_id = "STATISTICAL_TREND"
+        
+        # Check if we already have a row for this source
+        existing_row = None
+        if source_id:
+            for row in range(self.table.rowCount()):
+                # Check the notes column for source identifier
+                notes_item = self.table.item(row, 5)
+                if notes_item and source_id in notes_item.text():
+                    existing_row = row
+                    break
+        
+        # If exists, update it; otherwise add new row
+        if existing_row is not None:
+            row = existing_row
+        else:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
         
         # Time
         time_item = QTableWidgetItem(time)
@@ -118,7 +146,9 @@ class PointCallEntry(QWidget):
             strength_item.setData(Qt.ItemDataRole.UserRole, "signal_weak")
         self.table.setItem(row, 4, strength_item)
         
-        # Notes
+        # Notes - Add source identifier to notes for tracking
+        if source_id and source_id not in notes:
+            notes = f"{notes} | {source_id}"
         notes_item = QTableWidgetItem(notes)
         self.table.setItem(row, 5, notes_item)
         

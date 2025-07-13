@@ -29,7 +29,7 @@ class CalculationsSegment:
                 df['timestamp'] = pd.to_datetime(df['timestamp'])
                 if df['timestamp'].dt.tz is None:
                     df['timestamp'] = df['timestamp'].dt.tz_localize('UTC')
-                df.set_index('timestamp', inplace=True)
+                # Keep timestamp as column for HVN engine
             
             current_price = float(df['close'].iloc[-1])
             
@@ -42,13 +42,17 @@ class CalculationsSegment:
             # Calculate M15 ATR for the tables
             m15_atr = self.calculate_m15_atr(df)
             
+            # Create a copy with timestamp as index for EMA and Statistical calculations
+            df_with_index = df.copy()
+            df_with_index.set_index('timestamp', inplace=True)
+            
             # Process EMA calculations
-            self._process_ema_calculations(df)
+            self._process_ema_calculations(df_with_index)
             
             # Process Statistical Trend calculations
-            self._process_statistical_trend(df)
+            self._process_statistical_trend(df_with_index)
             
-            # Process zone calculations
+            # Process zone calculations - pass df with timestamp as column
             self._process_zone_calculations(df, current_price, m15_atr)
             
             self.status_bar.showMessage(
@@ -61,55 +65,61 @@ class CalculationsSegment:
             self.status_bar.showMessage(f"Calculation error: {str(e)}", 5000)
     
     def _process_ema_calculations(self, df: pd.DataFrame):
-        """Process all EMA calculations"""
-        # M1 EMA
-        m1_ema_result = self.m1_ema_calculator.calculate(df)
-        if m1_ema_result:
-            standard_signal = self.signal_interpreter.process_m1_ema(m1_ema_result)
-            self.update_signal_display(
-                standard_signal.value,
-                standard_signal.category.value,
-                'M1'
-            )
-            logger.info(
-                f"M1 EMA Signal: {standard_signal.value:+.1f} "
-                f"({standard_signal.category.value}) "
-                f"Confidence: {standard_signal.confidence:.0%}"
-            )
+        """Process all EMA calculations - respects active_entry_sources"""
+        # M1 EMA - Always calculate for display, but check active status for entries
+        if self.m1_ema_calculator:
+            m1_ema_result = self.m1_ema_calculator.calculate(df)
+            if m1_ema_result:
+                standard_signal = self.signal_interpreter.process_m1_ema(m1_ema_result)
+                self.update_signal_display(
+                    standard_signal.value,
+                    standard_signal.category.value,
+                    'M1'
+                )
+                active_status = "ACTIVE" if self.active_entry_sources.get('M1_EMA', True) else "DISPLAY ONLY"
+                logger.info(
+                    f"M1 EMA Signal [{active_status}]: {standard_signal.value:+.1f} "
+                    f"({standard_signal.category.value}) "
+                    f"Confidence: {standard_signal.confidence:.0%}"
+                )
         
-        # M5 EMA
-        m5_ema_result = self.m5_ema_calculator.calculate(df)
-        if m5_ema_result:
-            standard_signal = self.signal_interpreter.process_m5_ema(m5_ema_result)
-            self.update_signal_display(
-                standard_signal.value,
-                standard_signal.category.value,
-                'M5'
-            )
-            logger.info(
-                f"M5 EMA Signal: {standard_signal.value:+.1f} "
-                f"({standard_signal.category.value}) "
-                f"Confidence: {standard_signal.confidence:.0%}"
-            )
+        # M5 EMA - Always calculate for display, but check active status for entries
+        if self.m5_ema_calculator:
+            m5_ema_result = self.m5_ema_calculator.calculate(df)
+            if m5_ema_result:
+                standard_signal = self.signal_interpreter.process_m5_ema(m5_ema_result)
+                self.update_signal_display(
+                    standard_signal.value,
+                    standard_signal.category.value,
+                    'M5'
+                )
+                active_status = "ACTIVE" if self.active_entry_sources.get('M5_EMA', True) else "DISPLAY ONLY"
+                logger.info(
+                    f"M5 EMA Signal [{active_status}]: {standard_signal.value:+.1f} "
+                    f"({standard_signal.category.value}) "
+                    f"Confidence: {standard_signal.confidence:.0%}"
+                )
         
-        # M15 EMA
-        m15_ema_result = self.m15_ema_calculator.calculate(df, timeframe='1min')
-        if m15_ema_result:
-            standard_signal = self.signal_interpreter.process_m15_ema(m15_ema_result)
-            self.update_signal_display(
-                standard_signal.value,
-                standard_signal.category.value,
-                'M15'
-            )
-            logger.info(
-                f"M15 EMA Signal: {standard_signal.value:+.1f} "
-                f"({standard_signal.category.value}) "
-                f"Original: {m15_ema_result.signal} "
-                f"Confidence: {standard_signal.confidence:.0%}"
-            )
+        # M15 EMA - Always calculate for display, but check active status for entries
+        if self.m15_ema_calculator:
+            m15_ema_result = self.m15_ema_calculator.calculate(df, timeframe='1min')
+            if m15_ema_result:
+                standard_signal = self.signal_interpreter.process_m15_ema(m15_ema_result)
+                self.update_signal_display(
+                    standard_signal.value,
+                    standard_signal.category.value,
+                    'M15'
+                )
+                active_status = "ACTIVE" if self.active_entry_sources.get('M15_EMA', True) else "DISPLAY ONLY"
+                logger.info(
+                    f"M15 EMA Signal [{active_status}]: {standard_signal.value:+.1f} "
+                    f"({standard_signal.category.value}) "
+                    f"Original: {m15_ema_result.signal} "
+                    f"Confidence: {standard_signal.confidence:.0%}"
+                )
 
     def _process_statistical_trend(self, df: pd.DataFrame):
-        """Process Statistical Trend calculations"""
+        """Process Statistical Trend calculations - respects active_entry_sources"""
         # Statistical Trend (1-minute based with 10-bar lookback)
         if len(df) >= 10:  # Need minimum bars for calculation
             try:
@@ -125,8 +135,9 @@ class CalculationsSegment:
                         standard_signal.category.value,
                         'STAT'
                     )
+                    active_status = "ACTIVE" if self.active_entry_sources.get('STATISTICAL_TREND', True) else "DISPLAY ONLY"
                     logger.info(
-                        f"Statistical Trend Signal: {standard_signal.value:+.1f} "
+                        f"Statistical Trend Signal [{active_status}]: {standard_signal.value:+.1f} "
                         f"({standard_signal.category.value}) "
                         f"Vol-Adj Strength: {stat_result.volatility_adjusted_strength:.2f} "
                         f"Confidence: {standard_signal.confidence:.0%}"
@@ -191,8 +202,15 @@ class CalculationsSegment:
     def calculate_m15_atr(self, df: pd.DataFrame, period: int = 14) -> float:
         """Calculate M15 ATR from 1-minute data"""
         try:
+            # Create a copy to avoid modifying original
+            df_copy = df.copy()
+            
+            # If timestamp is not the index, set it
+            if 'timestamp' in df_copy.columns:
+                df_copy.set_index('timestamp', inplace=True)
+            
             # Resample to 15-minute bars
-            df_15m = df.resample('15T').agg({
+            df_15m = df_copy.resample('15T').agg({
                 'open': 'first',
                 'high': 'max',
                 'low': 'min',

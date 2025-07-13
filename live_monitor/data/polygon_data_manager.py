@@ -1,15 +1,18 @@
 # live_monitor/data/polygon_data_manager.py
 """
 Main data manager for Polygon WebSocket integration
+All timestamps and operations in UTC
 """
 import json
 import logging
+import time
 from typing import Dict, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 
 from live_monitor.data.websocket_client import PolygonWebSocketClient
+from live_monitor.data.rest_client import PolygonRESTClient
 from .models import (
     TradeData, QuoteData, AggregateData,
     MarketDataUpdate, TickerCalculationData,
@@ -23,8 +26,9 @@ class PolygonDataManager(QObject):
     """
     Central manager for Polygon data flow
     
-    Handles WebSocket connection, data transformation, and signal emission
-    for the Live Monitor Dashboard.
+    Handles WebSocket connection, REST API calls, data transformation, 
+    and signal emission for the Live Monitor Dashboard.
+    All timestamps in UTC.
     """
     
     # UI Update Signals
@@ -47,12 +51,20 @@ class PolygonDataManager(QObject):
             client_id="live_monitor_dashboard"
         )
         
+        # Initialize REST client
+        self.rest_client = PolygonRESTClient(
+            base_url="http://localhost:8200"
+        )
+        
         # Connect WebSocket signals
         self.ws_client.connected.connect(self._on_connected)
         self.ws_client.disconnected.connect(self._on_disconnected)
         self.ws_client.data_received.connect(self._on_data_received)
         self.ws_client.error_occurred.connect(self.error_occurred.emit)
         self.ws_client.connection_status.connect(self.connection_status_changed.emit)
+        
+        # Connect REST client signals
+        self.rest_client.error_occurred.connect(self.error_occurred.emit)
         
         # Current state
         self.current_symbol: Optional[str] = None
@@ -66,12 +78,15 @@ class PolygonDataManager(QObject):
         self.last_data_time = {}  # Track last data time per symbol
         self.no_data_threshold = 30  # seconds
         
+        # Track if we've fetched initial historical data
+        self.initial_data_fetched = {}
+        
         # Create a timer to check data flow periodically
         self.heartbeat_timer = QTimer()
         self.heartbeat_timer.timeout.connect(self.check_data_flow)
         self.heartbeat_timer.start(5000)  # Check every 5 seconds
         
-        logger.info("PolygonDataManager initialized with heartbeat monitoring")
+        logger.info("PolygonDataManager initialized with REST and WebSocket clients")
     
     def connect(self):
         """Connect to Polygon WebSocket server"""
@@ -104,31 +119,114 @@ class PolygonDataManager(QObject):
             # Clear accumulated bars
             self.accumulated_bars.clear()
             
+            # Reset initial data fetch flag
+            self.initial_data_fetched[symbol] = False
+            
             # Update current symbol
             self.current_symbol = symbol
                 
             # Change WebSocket subscription (this will handle unsubscribe)
             self.ws_client.change_symbol(symbol)
+            
+            # Fetch historical data after a short delay
+            QTimer.singleShot(1000, lambda: self.fetch_historical_bars(symbol))
+    
+    def fetch_historical_bars(self, symbol: str, bars_needed: int = 200):
+        """Fetch historical bars via REST API"""
+        if symbol != self.current_symbol:
+            logger.debug(f"Skipping historical fetch for {symbol}, current is {self.current_symbol}")
+            return
+            
+        logger.info(f"Fetching historical bars for {symbol}")
+        
+        bars = self.rest_client.fetch_bars(
+            symbol=symbol,
+            timespan='1min',
+            multiplier=1,
+            limit=bars_needed
+        )
+        
+        if bars:
+            # Clear existing bars for fresh start
+            self.accumulated_bars = bars
+            
+            # Mark that we've fetched initial data
+            self.initial_data_fetched[symbol] = True
+            
+            # Update last data time to prevent immediate refetch
+            self.last_data_time[symbol] = datetime.now(timezone.utc)
+            
+            # Emit chart data update
+            self.chart_data_updated.emit({
+                'symbol': symbol,
+                'bars': bars,
+                'is_update': False  # Full refresh
+            })
+            
+            # Also update market data with latest bar
+            if bars:
+                latest_bar = bars[-1]
+                self._update_market_data_from_bar(symbol, latest_bar)
+            
+            logger.info(f"Historical data loaded: {len(bars)} bars")
+        else:
+            logger.warning(f"Failed to fetch historical bars for {symbol}")
+    
+    def _update_market_data_from_bar(self, symbol: str, bar: Dict):
+        """Update market data display from a bar"""
+        ticker_data: TickerCalculationData = {
+            'last_price': bar['close'],
+            'bid': bar['close'] - 0.01,  # Estimate
+            'ask': bar['close'] + 0.01,  # Estimate
+            'spread': 0.02,
+            'mid_price': bar['close'],
+            'volume': bar['volume'],
+            'change': None,
+            'change_percent': None,
+            'day_high': bar['high'],
+            'day_low': bar['low'],
+            'day_open': bar['open'],
+            'last_update': datetime.now(timezone.utc).strftime("%H:%M:%S UTC"),
+            'market_state': self.rest_client.get_market_session()
+        }
+        
+        self.market_data_updated.emit(ticker_data)
     
     def check_data_flow(self):
         """Check if we're receiving data for current symbol"""
         if not self.current_symbol:
             return
             
+        current_time = datetime.now(timezone.utc)
         last_time = self.last_data_time.get(self.current_symbol)
+        
         if last_time:
-            elapsed = (datetime.now() - last_time).total_seconds()
+            elapsed = (current_time - last_time).total_seconds()
+            
             if elapsed > self.no_data_threshold:
-                logger.warning(f"No data received for {self.current_symbol} in {elapsed:.1f} seconds")
-                # Emit a status update
-                self.market_data_updated.emit({
-                    'symbol': self.current_symbol,
-                    'last_update': f"No data for {int(elapsed)}s",
-                    'market_state': 'low_activity'
-                })
+                market_session = self.rest_client.get_market_session()
+                
+                if market_session == 'regular':
+                    # Market is open but no data
+                    logger.warning(f"No data received for {self.current_symbol} in {elapsed:.1f} seconds during market hours")
+                    self.error_occurred.emit(f"No data for {elapsed:.0f}s")
+                else:
+                    # Market closed or pre/after hours
+                    logger.info(f"Market session: {market_session}, no real-time data expected")
+                    
+                    # Fetch historical data if we haven't already
+                    if not self.initial_data_fetched.get(self.current_symbol, False):
+                        logger.info("Fetching initial historical data...")
+                        self.fetch_historical_bars(self.current_symbol)
+                    elif elapsed > 300:  # Refresh every 5 minutes when market closed
+                        logger.info("Refreshing historical data...")
+                        self.fetch_historical_bars(self.current_symbol, bars_needed=50)
+                        self.last_data_time[self.current_symbol] = current_time
         else:
             # No data received yet for this symbol
             logger.debug(f"No data received yet for {self.current_symbol}")
+            if not self.initial_data_fetched.get(self.current_symbol, False):
+                self.fetch_historical_bars(self.current_symbol)
     
     def _on_connected(self):
         """Handle connection established"""
@@ -156,7 +254,7 @@ class PolygonDataManager(QObject):
         if not symbol:
             symbol = data.get('sym')  # Polygon uses 'sym' for symbol
         
-        # Only process data for current symbol - add more explicit logging
+        # Only process data for current symbol
         if symbol != self.current_symbol:
             if symbol:  # Only log if we actually have a symbol
                 logger.debug(f"Ignoring data for {symbol}, current symbol is {self.current_symbol}")
@@ -164,9 +262,9 @@ class PolygonDataManager(QObject):
         
         # Update last data time for heartbeat
         if symbol == self.current_symbol:
-            self.last_data_time[symbol] = datetime.now()
+            self.last_data_time[symbol] = datetime.now(timezone.utc)
         
-        logger.info(f"Processing: event_type={event_type}, symbol={symbol}")
+        logger.debug(f"Processing: event_type={event_type}, symbol={symbol}")
         
         if not event_type or not symbol:
             logger.warning(f"Missing event_type or symbol in data: {data.keys()}")
@@ -179,7 +277,7 @@ class PolygonDataManager(QObject):
             elif event_type in ['quote', 'Q']:
                 self._process_quote(data)
             elif event_type in ['aggregate', 'A', 'AM']:  # Handle AM events!
-                logger.info(f"Processing aggregate data: {event_type}")
+                logger.debug(f"Processing aggregate data: {event_type}")
                 self._process_aggregate(data)
                 
         except Exception as e:
@@ -196,7 +294,7 @@ class PolygonDataManager(QObject):
         if symbol not in self.market_state:
             self.market_state[symbol] = {
                 'symbol': symbol,
-                'timestamp': datetime.now(),
+                'timestamp': datetime.now(timezone.utc),
                 'last_price': price,
                 'bid': 0.0,
                 'ask': 0.0,
@@ -208,7 +306,7 @@ class PolygonDataManager(QObject):
         else:
             self.market_state[symbol]['last_price'] = price
             self.market_state[symbol]['last_size'] = size
-            self.market_state[symbol]['timestamp'] = datetime.now()
+            self.market_state[symbol]['timestamp'] = datetime.now(timezone.utc)
         
         # Emit update
         self._emit_market_update(symbol)
@@ -226,7 +324,7 @@ class PolygonDataManager(QObject):
         if symbol not in self.market_state:
             self.market_state[symbol] = {
                 'symbol': symbol,
-                'timestamp': datetime.now(),
+                'timestamp': datetime.now(timezone.utc),
                 'last_price': 0.0,
                 'bid': bid_price,
                 'ask': ask_price,
@@ -244,7 +342,7 @@ class PolygonDataManager(QObject):
             state['mid_price'] = (bid_price + ask_price) / 2
             state['bid_size'] = bid_size
             state['ask_size'] = ask_size
-            state['timestamp'] = datetime.now()
+            state['timestamp'] = datetime.now(timezone.utc)
         
         # Emit update
         self._emit_market_update(symbol)
@@ -260,9 +358,9 @@ class PolygonDataManager(QObject):
             symbol = aggregate.get('symbol', aggregate.get('sym'))
             timestamp = aggregate.get('s', aggregate.get('timestamp', 0))
             
-            # Create bar data
+            # Create bar data with UTC timestamp
             bar_data = {
-                'timestamp': datetime.fromtimestamp(timestamp / 1000.0) if timestamp else datetime.now(),
+                'timestamp': datetime.fromtimestamp(timestamp / 1000.0, tz=timezone.utc),
                 'open': aggregate.get('o', aggregate.get('open', 0)),
                 'high': aggregate.get('h', aggregate.get('high', 0)),
                 'low': aggregate.get('l', aggregate.get('low', 0)),
@@ -288,7 +386,7 @@ class PolygonDataManager(QObject):
             }
             
             self.chart_data_updated.emit(chart_update)
-            logger.info(f"Emitted chart update for {symbol} with new bar")
+            logger.debug(f"Emitted chart update for {symbol} with new bar")
         
         # Update volume for market data
         symbol = aggregate.get('symbol', aggregate.get('sym'))
@@ -316,8 +414,8 @@ class PolygonDataManager(QObject):
                 'day_high': None,  # TODO: Track daily high
                 'day_low': None,   # TODO: Track daily low
                 'day_open': None,  # TODO: Get from morning data
-                'last_update': datetime.now().strftime("%H:%M:%S"),
-                'market_state': 'open'  # TODO: Determine from time
+                'last_update': datetime.now(timezone.utc).strftime("%H:%M:%S UTC"),
+                'market_state': self.rest_client.get_market_session()
             }
             
             self.market_data_updated.emit(ticker_data)
@@ -337,7 +435,7 @@ class PolygonDataManager(QObject):
             'ev': 'AM',
             'symbol': self.current_symbol,
             'sym': self.current_symbol,
-            's': int(datetime.now().timestamp() * 1000),  # start time in ms
+            's': int(datetime.now(timezone.utc).timestamp() * 1000),  # start time in ms
             'o': 150.0,  # open
             'h': 151.0,  # high
             'l': 149.0,  # low

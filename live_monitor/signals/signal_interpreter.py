@@ -15,6 +15,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from live_monitor.calculations.indicators.m1_ema import M1EMAResult
 from live_monitor.calculations.indicators.m5_ema import M5EMAResult
 from live_monitor.calculations.indicators.m15_ema import M15EMAResult
+from live_monitor.calculations.trend.statistical_trend_1min import StatisticalSignal
 from live_monitor.data.models.signals import EntrySignal, ExitSignal
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,19 @@ class SignalInterpreter(QObject):
         # Track active positions for exit generation
         self.active_positions: Dict[str, Dict[str, Any]] = {}
         
+        # Track which sources can generate entries
+        self.active_entry_sources = {
+            'M1_EMA': True,
+            'M5_EMA': True,
+            'M15_EMA': True,
+            'STATISTICAL_TREND': True
+        }
+    
+    def set_active_entry_sources(self, sources: Dict[str, bool]):
+        """Update which sources can generate entry signals"""
+        self.active_entry_sources.update(sources)
+        logger.info(f"Active entry sources updated: {self.active_entry_sources}")
+    
     def set_symbol_context(self, symbol: str, current_price: float):
         """Update current trading context"""
         if symbol != self.current_symbol:
@@ -375,6 +389,117 @@ class SignalInterpreter(QObject):
         
         return signal
     
+    def process_statistical_trend(self, result: StatisticalSignal) -> StandardSignal:
+        """
+        Convert Statistical Trend result to standard signal
+        
+        Scale mapping based on volatility-adjusted strength:
+        - BUY with high vol-adj strength (>2.0) → +40 to +50
+        - BUY with normal vol-adj strength (1.0-2.0) → +25 to +40
+        - WEAK BUY with good vol-adj strength (0.5-1.0) → +10 to +24
+        - WEAK BUY with low vol-adj strength (<0.5) → 0 to +10
+        - Same pattern for SELL signals (negative values)
+        """
+        vol_adj_strength = result.volatility_adjusted_strength
+        
+        # Determine base magnitude based on signal and volatility-adjusted strength
+        if result.signal == 'BUY':
+            if vol_adj_strength >= 2.0:
+                # Very strong trend relative to volatility
+                magnitude = 40 + min(10, (vol_adj_strength - 2.0) * 5)
+            elif vol_adj_strength >= 1.0:
+                # Trend equals or exceeds volatility
+                magnitude = 25 + (vol_adj_strength - 1.0) * 15
+            else:
+                # Should not happen for BUY signal, but handle gracefully
+                magnitude = 25
+                
+        elif result.signal == 'WEAK BUY':
+            if vol_adj_strength >= 0.5:
+                # Decent trend relative to volatility
+                magnitude = 10 + (vol_adj_strength - 0.5) * 28
+            else:
+                # Weak trend
+                magnitude = vol_adj_strength * 20
+                
+        elif result.signal == 'WEAK SELL':
+            if vol_adj_strength >= 0.5:
+                # Decent trend relative to volatility
+                magnitude = 10 + (vol_adj_strength - 0.5) * 28
+            else:
+                # Weak trend
+                magnitude = vol_adj_strength * 20
+                
+        elif result.signal == 'SELL':
+            if vol_adj_strength >= 2.0:
+                # Very strong trend relative to volatility
+                magnitude = 40 + min(10, (vol_adj_strength - 2.0) * 5)
+            elif vol_adj_strength >= 1.0:
+                # Trend equals or exceeds volatility
+                magnitude = 25 + (vol_adj_strength - 1.0) * 15
+            else:
+                # Should not happen for SELL signal, but handle gracefully
+                magnitude = 25
+        else:
+            # Unknown signal type
+            magnitude = 0
+        
+        # Apply direction
+        if result.signal in ['SELL', 'WEAK SELL']:
+            value = -magnitude
+        else:
+            value = magnitude
+        
+        # Apply volume confirmation boost
+        if result.volume_confirmation:
+            value = value * 1.1  # 10% boost for volume confirmation
+        
+        # Ensure value stays in range
+        value = max(-50, min(50, value))
+        
+        # Determine category
+        category = SignalCategory.from_value(value)
+        
+        # Determine strength for display
+        if abs(value) >= 25:
+            strength = 'Strong'
+        elif abs(value) >= 10:
+            strength = 'Medium'
+        else:
+            strength = 'Weak'
+        
+        # Convert confidence from 0-100 to 0-1
+        confidence = result.confidence / 100.0
+        
+        # Get previous value for comparison
+        prev_signal = self.previous_signals.get('STATISTICAL_TREND')
+        previous_value = prev_signal.value if prev_signal else 0
+        
+        signal = StandardSignal(
+            value=round(value, 1),
+            category=category,
+            source="STATISTICAL_TREND",
+            confidence=confidence,
+            direction='LONG' if value > 0 else 'SHORT',
+            strength=strength,
+            metadata={
+                'original_signal': result.signal,
+                'trend_strength': result.trend_strength,
+                'volatility_adjusted_strength': result.volatility_adjusted_strength,
+                'volume_confirmation': result.volume_confirmation,
+                'price': result.price,
+                'previous_value': previous_value
+            }
+        )
+        
+        # Store for next comparison
+        self.previous_signals['STATISTICAL_TREND'] = signal
+        
+        # Check if we should generate trading signals
+        self._check_and_generate_signals(signal)
+        
+        return signal
+    
     def _calculate_m1_ema_confidence(self, result: M1EMAResult, signal_value: float) -> float:
         """Calculate confidence level for M1 EMA signal"""
         confidence = 0.5  # Base confidence
@@ -497,6 +622,12 @@ class SignalInterpreter(QObject):
         if not self.current_symbol:
             return
         
+        # Check if this source is active for entries
+        source_key = signal.source
+        if not self.active_entry_sources.get(source_key, True):
+            logger.debug(f"Entry generation disabled for {signal.source}")
+            return
+        
         # Check for entry signal
         if signal.should_generate_entry:
             prev_signal = self.previous_signals.get(signal.source)
@@ -513,7 +644,7 @@ class SignalInterpreter(QObject):
     
     def _generate_entry_signal(self, signal: StandardSignal):
         """Generate entry signal for the grid"""
-        # Build signal description
+        # Build signal description based on source
         if signal.source == 'M1_EMA':
             if signal.metadata.get('is_crossover'):
                 signal_desc = f"M1 EMA {signal.metadata['crossover_type'].title()} Crossover"
@@ -531,12 +662,24 @@ class SignalInterpreter(QObject):
                 signal_desc = f"M15 EMA {signal.metadata['crossover_type'].title()} Crossover"
             else:
                 signal_desc = f"M15 EMA {signal.direction} Signal"
+        elif signal.source == 'STATISTICAL_TREND':
+            vol_adj = signal.metadata.get('volatility_adjusted_strength', 0)
+            if vol_adj >= 2.0:
+                signal_desc = f"Statistical Trend STRONG {signal.direction}"
+            elif vol_adj >= 1.0:
+                signal_desc = f"Statistical Trend {signal.direction}"
+            else:
+                signal_desc = f"Statistical Trend WEAK {signal.direction}"
+            if signal.metadata.get('volume_confirmation'):
+                signal_desc += " (Vol Confirm)"
         else:
             signal_desc = f"{signal.source} {signal.direction} Signal"
         
-        # Add spread info
-        if 'spread_pct' in signal.metadata:
+        # Add additional context
+        if signal.source in ['M1_EMA', 'M5_EMA', 'M15_EMA'] and 'spread_pct' in signal.metadata:
             signal_desc += f" (Spread: {abs(signal.metadata['spread_pct']):.2f}%)"
+        elif signal.source == 'STATISTICAL_TREND':
+            signal_desc += f" (Vol-Adj: {signal.metadata['volatility_adjusted_strength']:.2f})"
         
         entry_signal: EntrySignal = {
             'time': datetime.now().strftime("%H:%M:%S"),

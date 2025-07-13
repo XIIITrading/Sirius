@@ -39,11 +39,22 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
     def __init__(self):
         super().__init__()
         
+        # Configuration for active entry signal sources
+        # TOGGLE THESE TO ENABLE/DISABLE ENTRY SIGNAL GENERATION
+        self.active_entry_sources = {
+            'M1_EMA': True,          # Set to False to disable M1 EMA entry signals
+            'M5_EMA': True,          # Set to False to disable M5 EMA entry signals
+            'M15_EMA': True,         # Set to False to disable M15 EMA entry signals
+            'STATISTICAL_TREND': True # Set to False to disable Statistical Trend entry signals
+        }
+        
         # Initialize data manager
         self.data_manager = PolygonDataManager()
         
         # Initialize signal interpreter
         self.signal_interpreter = SignalInterpreter()
+        # Pass the active sources configuration
+        self.signal_interpreter.set_active_entry_sources(self.active_entry_sources)
         
         # Initialize calculation engines
         self.hvn_engine = HVNEngine(
@@ -128,6 +139,14 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
         logger.info("Connecting to Polygon data server...")
         self.status_bar.showMessage("Connecting to Polygon server...", 2000)
         self.data_manager.connect()
+    
+    def toggle_entry_source(self, source: str, enabled: bool):
+        """Toggle whether a calculation source generates entry signals"""
+        if source in self.active_entry_sources:
+            self.active_entry_sources[source] = enabled
+            # Update signal interpreter
+            self.signal_interpreter.set_active_entry_sources(self.active_entry_sources)
+            logger.info(f"Entry source {source} set to {enabled}")
     
     def closeEvent(self, event: QCloseEvent):
         """Handle window close event"""

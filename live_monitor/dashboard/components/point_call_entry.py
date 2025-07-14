@@ -19,6 +19,9 @@ class PointCallEntry(QWidget):
         self.init_ui()
         self.apply_styles()
         
+        # Track source to row mapping
+        self.source_to_row = {}
+        
     def init_ui(self):
         """Initialize the UI"""
         self.setObjectName("point_call_entry_container")
@@ -49,10 +52,10 @@ class PointCallEntry(QWidget):
         self.table.verticalHeader().setVisible(False)
         
         # Set column widths
-        self.table.setColumnWidth(0, 80)  # Time
+        self.table.setColumnWidth(0, 80)   # Time
         self.table.setColumnWidth(1, 60)   # Type
         self.table.setColumnWidth(2, 80)   # Price
-        self.table.setColumnWidth(3, 100)  # Signal
+        self.table.setColumnWidth(3, 150)  # Signal - increased width
         self.table.setColumnWidth(4, 80)   # Strength
         
         # Connect selection signal
@@ -81,37 +84,18 @@ class PointCallEntry(QWidget):
     def add_entry_signal(self, time, signal_type, price, signal, strength, notes):
         """Add or update an entry signal in the table"""
         # Extract source identifier from signal description
-        # Examples: "M1 EMA LONG Signal" -> "M1_EMA"
-        #          "M5 EMA Bullish Crossover" -> "M5_EMA"
-        #          "Statistical Trend STRONG LONG" -> "STATISTICAL_TREND"
-        source_id = None
-        if "M1 EMA" in signal:
-            source_id = "M1_EMA"
-        elif "M5 EMA" in signal:
-            source_id = "M5_EMA"
-        elif "M15 EMA" in signal:
-            source_id = "M15_EMA"
-        elif "Statistical Trend" in signal:
-            source_id = "STATISTICAL_TREND"
-        elif "M5 Trend" in signal or "M5 Statistical" in signal:
-            source_id = "STATISTICAL_TREND_5M"
+        source_id = self._identify_source(signal)
         
         # Check if we already have a row for this source
-        existing_row = None
-        if source_id:
-            for row in range(self.table.rowCount()):
-                # Check the notes column for source identifier
-                notes_item = self.table.item(row, 5)
-                if notes_item and source_id in notes_item.text():
-                    existing_row = row
-                    break
-        
-        # If exists, update it; otherwise add new row
-        if existing_row is not None:
-            row = existing_row
+        if source_id and source_id in self.source_to_row:
+            row = self.source_to_row[source_id]
         else:
+            # Create new row
             row = self.table.rowCount()
             self.table.insertRow(row)
+            # Track the source to row mapping
+            if source_id:
+                self.source_to_row[source_id] = row
         
         # Time
         time_item = QTableWidgetItem(time)
@@ -148,12 +132,37 @@ class PointCallEntry(QWidget):
             strength_item.setData(Qt.ItemDataRole.UserRole, "signal_weak")
         self.table.setItem(row, 4, strength_item)
         
-        # Notes - Add source identifier to notes for tracking
-        if source_id and source_id not in notes:
-            notes = f"{notes} | {source_id}"
+        # Notes - Store source ID in data role for tracking
         notes_item = QTableWidgetItem(notes)
+        if source_id:
+            notes_item.setData(Qt.ItemDataRole.UserRole + 1, source_id)
         self.table.setItem(row, 5, notes_item)
         
+    def _identify_source(self, signal: str) -> str:
+        """Identify the source from the signal description"""
+        # Check for EMA signals
+        if "M1 EMA" in signal:
+            return "M1_EMA"
+        elif "M5 EMA" in signal:
+            return "M5_EMA"
+        elif "M15 EMA" in signal:
+            return "M15_EMA"
+        
+        # Check for Statistical Trend signals
+        elif "M1 Trend" in signal:
+            return "STATISTICAL_TREND"
+        elif "M5 Trend" in signal:
+            return "STATISTICAL_TREND_5M"
+        elif "M15 Trend" in signal:
+            return "STATISTICAL_TREND_15M"
+        
+        # Default sources based on other patterns
+        elif "Statistical Trend" in signal:
+            if "M5" not in signal and "M15" not in signal:
+                return "STATISTICAL_TREND"
+        
+        return None
+            
     def _on_selection_changed(self):
         """Handle selection changes"""
         selected_items = self.table.selectedItems()
@@ -173,6 +182,7 @@ class PointCallEntry(QWidget):
     def clear_signals(self):
         """Clear all signals from the table"""
         self.table.setRowCount(0)
+        self.source_to_row.clear()
         
     def update_data(self, data):
         """Update table with new data"""

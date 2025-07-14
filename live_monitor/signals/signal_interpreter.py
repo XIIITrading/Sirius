@@ -16,7 +16,8 @@ from live_monitor.calculations.indicators.m1_ema import M1EMAResult
 from live_monitor.calculations.indicators.m5_ema import M5EMAResult
 from live_monitor.calculations.indicators.m15_ema import M15EMAResult
 from live_monitor.calculations.trend.statistical_trend_1min import StatisticalSignal
-from live_monitor.calculations.trend.statistical_trend_5min import PositionSignal5Min  # ADD THIS
+from live_monitor.calculations.trend.statistical_trend_5min import PositionSignal5Min
+from live_monitor.calculations.trend.statistical_trend_15min import MarketRegimeSignal
 from live_monitor.data.models.signals import EntrySignal, ExitSignal
 
 logger = logging.getLogger(__name__)
@@ -586,6 +587,72 @@ class SignalInterpreter(QObject):
         
         return signal
     
+    def process_m15_statistical_trend(self, result: MarketRegimeSignal) -> StandardSignal:
+        """Process 15-minute statistical trend market regime signal"""
+        try:
+            # Map 4-tier signal to numeric value
+            signal_map = {
+                'BUY': 40,          # Strong bullish
+                'WEAK BUY': 15,     # Weak bullish
+                'WEAK SELL': -15,   # Weak bearish
+                'SELL': -40         # Strong bearish
+            }
+            
+            signal_value = signal_map.get(result.signal, 0)
+            
+            # Determine category
+            category = SignalCategory.from_value(signal_value)
+            
+            # Determine strength
+            if abs(signal_value) >= 25:
+                strength = 'Strong'
+            elif abs(signal_value) >= 10:
+                strength = 'Medium'
+            else:
+                strength = 'Weak'
+            
+            # Create metadata combining regime and daily bias info
+            metadata = {
+                'regime': result.regime,
+                'daily_bias': result.daily_bias,
+                'trend_strength': round(result.trend_strength, 2),
+                'volatility_adjusted_strength': round(result.volatility_adjusted_strength, 2),
+                'volatility_state': result.volatility_state,
+                'volume_trend': result.volume_trend,
+                'confidence': round(result.confidence, 1),
+                'original_signal': result.signal
+            }
+            
+            # Get previous value for comparison
+            prev_signal = self.previous_signals.get('STATISTICAL_TREND_15M')
+            previous_value = prev_signal.value if prev_signal else 0
+            metadata['previous_value'] = previous_value
+            
+            # Create the StandardSignal
+            signal = StandardSignal(
+                value=round(signal_value, 1),
+                category=category,
+                source='STATISTICAL_TREND_15M',
+                confidence=result.confidence / 100.0,  # Convert to 0-1 scale
+                direction='LONG' if signal_value > 0 else 'SHORT',
+                strength=strength,
+                metadata=metadata
+            )
+            
+            # Store for next comparison
+            self.previous_signals['STATISTICAL_TREND_15M'] = signal
+            
+            # Check if we should generate trading signals
+            self._check_and_generate_signals(signal)
+            
+            logger.info(f"M15 Statistical Trend processed: {result.signal} -> {signal_value}")
+            
+            return signal
+            
+        except Exception as e:
+            logger.error(f"Error processing M15 statistical trend: {e}", exc_info=True)
+            raise
+    
     def _calculate_m1_ema_confidence(self, result: M1EMAResult, signal_value: float) -> float:
         """Calculate confidence level for M1 EMA signal"""
         confidence = 0.5  # Base confidence
@@ -763,14 +830,30 @@ class SignalInterpreter(QObject):
             
             if signal.metadata.get('volume_confirmation'):
                 signal_desc += " ✓Vol"
+        elif signal.source == 'STATISTICAL_TREND_15M':
+            # Create descriptive signal for M15 Statistical Trend
+            regime = signal.metadata.get('regime', '')
+            daily_bias = signal.metadata.get('daily_bias', '')
+            original_signal = signal.metadata.get('original_signal', '')
+            
+            signal_desc = f"M15 Trend: {original_signal}"
+            
+            # Add regime if it's a clear market state
+            if regime in ['BULL MARKET', 'BEAR MARKET']:
+                signal_desc += f" ({regime})"
+            
+            # Add daily bias if it's significant
+            if daily_bias in ['LONG ONLY', 'SHORT ONLY', 'STAY OUT']:
+                signal_desc += f" [{daily_bias}]"
         else:
             signal_desc = f"{signal.source} {signal.direction} Signal"
         
         # Add additional context
         if signal.source in ['M1_EMA', 'M5_EMA', 'M15_EMA'] and 'spread_pct' in signal.metadata:
             signal_desc += f" (Spread: {abs(signal.metadata['spread_pct']):.2f}%)"
-        elif signal.source == 'STATISTICAL_TREND':
-            signal_desc += f" (Vol-Adj: {signal.metadata['volatility_adjusted_strength']:.2f})"
+        elif signal.source in ['STATISTICAL_TREND', 'STATISTICAL_TREND_5M', 'STATISTICAL_TREND_15M']:
+            if 'volatility_adjusted_strength' in signal.metadata:
+                signal_desc += f" (Vol-Adj: {signal.metadata['volatility_adjusted_strength']:.2f})"
         
         entry_signal: EntrySignal = {
             'time': datetime.now().strftime("%H:%M:%S"),

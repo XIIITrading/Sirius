@@ -1,4 +1,4 @@
-# modules/calculations/trend/statistical_trend_15min_simplified.py
+# modules/calculations/trend/statistical_trend_15min.py
 """
 Simplified Statistical Trend Analyzer for 15-minute bars
 Single timeframe analysis for market regime detection
@@ -19,6 +19,7 @@ class MarketRegimeSignal:
     price: float
     regime: str  # 'BULL MARKET', 'BEAR MARKET', 'RANGE BOUND'
     daily_bias: str  # 'LONG ONLY', 'SHORT ONLY', 'BOTH WAYS', 'STAY OUT'
+    signal: str  # 'BUY', 'WEAK BUY', 'SELL', 'WEAK SELL' - Added for integration
     confidence: float  # 0-100
     trend_strength: float  # Magnitude of move
     volatility_adjusted_strength: float  # Trend strength relative to noise
@@ -26,7 +27,7 @@ class MarketRegimeSignal:
     volume_trend: str  # 'INCREASING', 'DECREASING', 'STABLE'
 
 
-class StatisticalTrend15MinSimplified:
+class StatisticalTrend15Min:
     """
     Simplified 15-minute trend analyzer for market regime
     
@@ -84,12 +85,18 @@ class StatisticalTrend15MinSimplified:
             volume_trend
         )
         
+        # Generate 4-tier signal for integration
+        signal = self._generate_4tier_signal(
+            regime, daily_bias, trend_strength, volatility_adjusted_strength
+        )
+        
         return MarketRegimeSignal(
             symbol=symbol,
             timestamp=entry_time,
             price=current_price,
             regime=regime,
             daily_bias=daily_bias,
+            signal=signal,
             confidence=confidence,
             trend_strength=abs(trend_strength),
             volatility_adjusted_strength=volatility_adjusted_strength,
@@ -214,3 +221,26 @@ class StatisticalTrend15MinSimplified:
             confidence *= 0.5
         
         return regime, daily_bias, confidence
+    
+    def _generate_4tier_signal(self, regime: str, daily_bias: str, 
+                              trend_strength: float, volatility_adjusted_strength: float) -> str:
+        """
+        Map regime and daily bias to 4-tier signal system
+        """
+        # Strong signals for clear regimes
+        if regime == 'BULL MARKET' and daily_bias == 'LONG ONLY':
+            return 'BUY'
+        elif regime == 'BEAR MARKET' and daily_bias == 'SHORT ONLY':
+            return 'SELL'
+        
+        # Weak signals for biases
+        elif daily_bias in ['LONG BIAS', 'LONG ONLY']:
+            return 'WEAK BUY'
+        elif daily_bias in ['SHORT BIAS', 'SHORT ONLY']:
+            return 'WEAK SELL'
+        
+        # Range bound or neutral - use trend direction with weak signal
+        elif trend_strength > 0:
+            return 'WEAK BUY'
+        else:
+            return 'WEAK SELL'

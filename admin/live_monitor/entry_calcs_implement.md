@@ -1,3 +1,96 @@
+Core System Files (Required)
+1. Signal Processing Core
+live_monitor/signals/signal_interpreter.py
+
+Shows the 4-tier signal mapping system
+Contains all process_X methods patterns
+Defines StandardSignal dataclass
+
+2. Dashboard Orchestration
+live_monitor/dashboard/main_dashboard.py
+
+Shows calculator initialization patterns
+Active entry sources configuration
+Signal connections setup
+
+3. Calculation Execution
+live_monitor/dashboard/segments/calculations_segment.py
+
+Contains all _process_X method patterns
+Shows data preparation (resampling, etc.)
+Historical data handling
+
+4. UI Components
+live_monitor/dashboard/segments/ui_builder_segment.py
+live_monitor/dashboard/components/point_call_entry.py
+
+Status bar label setup
+Entry signal display logic
+
+5. Data Models
+live_monitor/data/models/signals.py
+
+EntrySignal and ExitSignal type definitions
+
+Example Implementation Files (M5 Statistical Trend)
+Include these files to show a complete integration example:
+1. The Calculation Module
+live_monitor/calculations/trend/statistical_trend_5min.py
+
+Shows PositionSignal5Min dataclass
+Demonstrates analyze() method pattern
+4-tier signal generation
+
+2. Historical Data Fetcher (if applicable)
+live_monitor/data/hist_request/trend_fetchers.py
+
+Shows data fetching configuration
+Bar requirements
+
+3. Integration Points
+Show the specific sections in:
+
+signal_interpreter.py - the process_m5_statistical_trend method
+calculations_segment.py - the _process_m5_statistical_trend method
+main_dashboard.py - initialization of statistical_trend_5min
+ui_builder_segment.py - the M5 TREND label addition
+
+Optional but Helpful Files
+For Understanding Data Flow:
+live_monitor/data/polygon_data_manager.py
+live_monitor/dashboard/segments/data_handler_segment.py
+For Understanding Styling:
+live_monitor/styles/base_styles.py
+Initial GitHub Message Template
+markdown# New Calculation Integration Request
+
+I need to integrate a new calculation into the Live Monitor Dashboard. Here are the relevant system files:
+
+## Core System Files:
+- [signal_interpreter.py](link) - Signal processing and standardization
+- [main_dashboard.py](link) - Main dashboard initialization
+- [calculations_segment.py](link) - Calculation execution patterns
+- [ui_builder_segment.py](link) - UI component setup
+- [point_call_entry.py](link) - Entry signal display
+- [signals.py](link) - Data models
+
+## Example Implementation (M5 Statistical Trend):
+- [statistical_trend_5min.py](link) - The calculation module
+- Integration in signal_interpreter.py: lines 497-579 (process_m5_statistical_trend)
+- Integration in calculations_segment.py: lines 418-454 (_process_m5_statistical_trend)
+- Dashboard initialization: main_dashboard.py lines 65, 127
+
+## New Calculation to Integrate:
+- [my_new_calculation.py](link) - The calculation I want to integrate
+
+The calculation currently produces [describe current outputs]. 
+I would like it to display as "[desired display name]" in the dashboard.
+
+Please review and provide the complete integration following the 3-step process.
+This gives the AI everything needed to understand the system architecture and provide a proper integration while maintaining consistency with existing patterns.
+
+----
+
 Comprehensive Integration Guide for Live Monitor Dashboard Calculations
 System Architecture Overview (~1,500 tokens)
 The Live Monitor Dashboard is a sophisticated real-time trading analysis system built on PyQt6 that integrates multiple technical analysis calculations into a unified signal framework. The system follows a strict architectural pattern designed for modularity, maintainability, and consistent signal generation.

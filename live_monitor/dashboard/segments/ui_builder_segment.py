@@ -211,10 +211,14 @@ class UIBuilderSegment:
         self.stat_signal_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
         self.status_bar.addWidget(self.stat_signal_label)
         
-        # ADD THE M5 TREND LABEL HERE:
         self.m5_trend_label = QLabel("M5 TREND: --")
         self.m5_trend_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
         self.status_bar.addWidget(self.m5_trend_label)
+
+        # FIX: Correct the M15 trend label
+        self.m15_trend_label = QLabel("M15 TREND: --")
+        self.m15_trend_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
+        self.status_bar.addWidget(self.m15_trend_label)
         
         # Last update time
         self.update_time_label = QLabel("Last Update: Never")

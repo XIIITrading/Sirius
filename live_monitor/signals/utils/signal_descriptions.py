@@ -41,7 +41,7 @@ def generate_trend_description(source: str, original_signal: str, vol_adj: float
         desc += f" (Vol-Adj: {vol_adj:.2f})"
         
         if volume_confirmation:
-            desc += " ✓Vol"
+            desc += " +Vol"  # Changed from "✓Vol" to "+Vol"
             
     elif source == 'STATISTICAL_TREND_15M':
         # M15 Trend
@@ -57,6 +57,20 @@ def generate_trend_description(source: str, original_signal: str, vol_adj: float
     
     return desc
 
+def generate_market_structure_description(source: str, original_signal: str, 
+                                        structure_type: str, direction: str) -> str:
+    """Generate market structure signal description"""
+    if source == 'M1_MARKET_STRUCTURE':
+        desc = f"M1 MS: {structure_type}"
+        if structure_type == 'CHoCH':
+            desc += f" {direction} Reversal"
+        else:  # BOS
+            desc += f" {direction} Continuation"
+        desc += f" ({original_signal})"
+    else:
+        desc = f"{source} {original_signal}"
+    
+    return desc
 
 def get_source_identifier(signal: str) -> Optional[str]:
     """Identify the source from the signal description"""
@@ -75,5 +89,9 @@ def get_source_identifier(signal: str) -> Optional[str]:
         return "STATISTICAL_TREND_5M"
     elif "M15 Trend" in signal:
         return "STATISTICAL_TREND_15M"
+    
+    # Check for Market Structure signals
+    elif "M1 MS:" in signal:
+        return "M1_MARKET_STRUCTURE"
     
     return None

@@ -11,9 +11,11 @@ Module 1: Data Entry
 Location: market_review\pre_market\daily_playbook\data
 - Data will be entered into Excel in the below format
 - Mornign images of the zones will be provided in .png format and saved into a Dropbox with the Excel
-- Python tool will need to be created called playbook_save.py in location market_review\pre_market\daily_playbook\database.
+- Python tool will need to be created called playbook_save.py
+    - Location: market_review\pre_market\daily_playbook\database\playbook_save
     - This playbook save will run the workflow to ingest into Supabase, and should request the Dropbox file path location that will be copied and pasted into the terminal.
     - The file names will be the same each and every day so that a PDF repost can be generated to provide to my students
+        - Location: market_review\pre_market\daily_playbook\database\playbook_report
     - That PDF file will be saved in the same Dropbox location documenting my morning playbook.
 
 # Trading Plays Example Data

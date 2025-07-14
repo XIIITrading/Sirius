@@ -3,7 +3,7 @@
 Module: Fractal-Based Market Structure Analysis
 Purpose: Detect market structure changes using fractals to identify swing points
 Features: Real-time and historical data processing, BOS/CHoCH detection
-Output: BULL/BEAR signals based on market structure breaks
+Output: 4-tier signals (BUY/WEAK BUY/WEAK SELL/SELL) based on market structure breaks
 Time Handling: All timestamps in UTC
 """
 
@@ -72,14 +72,15 @@ class MarketStructureMetrics:
 
 @dataclass
 class MarketStructureSignal:
-    """Market structure signal output"""
+    """Market structure signal output with 4-tier system"""
     symbol: str
     timestamp: datetime
-    signal: str  # 'BULL' or 'BEAR'
+    signal: str  # 'BUY', 'WEAK BUY', 'WEAK SELL', 'SELL'
     structure_type: str  # 'BOS' or 'CHoCH'
     strength: float  # 0-100
     metrics: Dict  # Detailed metrics
     reason: str  # Human-readable explanation
+    direction: str = None  # 'BULL' or 'BEAR' for reference
 
 
 class MarketStructureAnalyzer:
@@ -92,7 +93,9 @@ class MarketStructureAnalyzer:
                  fractal_length: int = 5,      # Bars on each side for fractal
                  buffer_size: int = 200,       # Number of candles to maintain
                  min_candles_required: int = 21,  # Minimum for valid signal
-                 bars_needed: int = 200):      # Number of bars to request
+                 bars_needed: int = 200,       # Number of bars to request
+                 choch_strong_threshold: int = 80,  # Strength threshold for strong CHoCH
+                 bos_strong_threshold: int = 70):   # Strength threshold for strong BOS
         """
         Initialize market structure analyzer
         
@@ -101,11 +104,17 @@ class MarketStructureAnalyzer:
             buffer_size: Number of recent candles to maintain
             min_candles_required: Minimum candles needed for analysis
             bars_needed: Number of bars to request from data source
+            choch_strong_threshold: Strength threshold for strong CHoCH signals
+            bos_strong_threshold: Strength threshold for strong BOS signals
         """
         self.fractal_length = fractal_length
         self.buffer_size = buffer_size
         self.min_candles_required = max(min_candles_required, fractal_length * 2 + 1)
         self.bars_needed = max(bars_needed, self.min_candles_required * 2)
+        
+        # Signal strength thresholds
+        self.choch_strong_threshold = choch_strong_threshold
+        self.bos_strong_threshold = bos_strong_threshold
         
         # Data storage
         self.candles: Dict[str, Deque[Candle]] = {}
@@ -122,6 +131,7 @@ class MarketStructureAnalyzer:
         logger.info(f"Market Structure Analyzer initialized at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         logger.info(f"Settings: fractal_length={fractal_length}, buffer={buffer_size}, "
                    f"min_candles={min_candles_required}, bars_needed={bars_needed}")
+        logger.info(f"Signal thresholds: CHoCH={choch_strong_threshold}, BOS={bos_strong_threshold}")
     
     def get_required_bars(self) -> int:
         """Get the number of bars required for analysis"""
@@ -439,7 +449,7 @@ class MarketStructureAnalyzer:
     
     def _generate_signal(self, symbol: str, direction: str, structure_type: str,
                         broken_fractal: Fractal, current_candle: Candle) -> MarketStructureSignal:
-        """Generate market structure signal"""
+        """Generate market structure signal with 4-tier output"""
         # Calculate strength based on break magnitude
         break_distance = abs(current_candle.close - broken_fractal.price)
         break_pct = (break_distance / broken_fractal.price) * 100
@@ -450,23 +460,43 @@ class MarketStructureAnalyzer:
         # Add strength based on break magnitude (up to 30 points)
         strength = min(100, base_strength + min(30, break_pct * 10))
         
+        # HYBRID APPROACH: Convert to 4-tier signal based on structure type and strength
+        if structure_type == 'CHoCH':
+            # Trend reversals - lower threshold for strong signal
+            if strength >= self.choch_strong_threshold:
+                signal = 'BUY' if direction == 'BULL' else 'SELL'
+            else:
+                signal = 'WEAK BUY' if direction == 'BULL' else 'WEAK SELL'
+        else:  # BOS
+            # Trend continuations - higher threshold for strong signal
+            if strength >= self.bos_strong_threshold:
+                signal = 'BUY' if direction == 'BULL' else 'SELL'
+            else:
+                signal = 'WEAK BUY' if direction == 'BULL' else 'WEAK SELL'
+        
         # Build metrics
         metrics = self._calculate_metrics(symbol)
         
-        # Build reason
+        # Build reason with 4-tier signal context
         fractal_type = 'high' if direction == 'BULL' else 'low'
         action = 'above' if direction == 'BULL' else 'below'
         
         reason_parts = [
             f"{structure_type}: Close {action} {fractal_type} fractal",
             f"at {broken_fractal.price:.2f}",
-            f"(break: {break_pct:.1f}%)"
+            f"(break: {break_pct:.1f}%, strength: {strength:.0f})"
         ]
         
         if structure_type == 'CHoCH':
             reason_parts.append("- Trend reversal")
         else:
             reason_parts.append("- Trend continuation")
+        
+        # Add signal strength to reason
+        if signal in ['BUY', 'SELL']:
+            reason_parts.append("- STRONG signal")
+        else:
+            reason_parts.append("- WEAK signal")
         
         reason = " ".join(reason_parts)
         
@@ -475,11 +505,12 @@ class MarketStructureAnalyzer:
         return MarketStructureSignal(
             symbol=symbol,
             timestamp=datetime.now(timezone.utc),
-            signal=direction,
+            signal=signal,  # Now 4-tier: BUY/WEAK BUY/WEAK SELL/SELL
             structure_type=structure_type,
             strength=strength,
             metrics=metrics.__dict__,
-            reason=reason
+            reason=reason,
+            direction=direction  # Store original BULL/BEAR for reference
         )
     
     def _calculate_metrics(self, symbol: str) -> MarketStructureMetrics:
@@ -529,15 +560,27 @@ class MarketStructureAnalyzer:
         
         metrics = self._calculate_metrics(symbol)
         
+        # Determine current signal based on trend and last break
+        current_trend = self.current_trend[symbol]
+        
+        # Default to weak signal for status checks
+        if current_trend == 'BULL':
+            signal = 'WEAK BUY'
+        elif current_trend == 'BEAR':
+            signal = 'WEAK SELL'
+        else:  # NEUTRAL
+            signal = 'WEAK BUY'  # Default to weak bullish
+        
         # Return current state as a signal
         return MarketStructureSignal(
             symbol=symbol,
             timestamp=datetime.now(timezone.utc),
-            signal=self.current_trend[symbol],
+            signal=signal,  # 4-tier signal
             structure_type=metrics.last_break_type or 'NONE',
             strength=50,  # Neutral strength for status check
             metrics=metrics.__dict__,
-            reason=f"Current trend: {self.current_trend[symbol]}"
+            reason=f"Current trend: {current_trend}",
+            direction=current_trend if current_trend != 'NEUTRAL' else 'BULL'
         )
     
     def get_statistics(self) -> Dict:

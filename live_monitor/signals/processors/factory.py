@@ -7,7 +7,7 @@ from typing import Dict, Type
 from .base_processor import BaseSignalProcessor
 from .ema import M1EMAProcessor, M5EMAProcessor, M15EMAProcessor
 from .trend import M1TrendProcessor, M5TrendProcessor, M15TrendProcessor
-
+from .market_structure import M1MarketStructureProcessor
 
 class ProcessorFactory:
     """Factory for creating signal processors"""
@@ -19,6 +19,7 @@ class ProcessorFactory:
         'STATISTICAL_TREND': M1TrendProcessor,
         'STATISTICAL_TREND_5M': M5TrendProcessor,
         'STATISTICAL_TREND_15M': M15TrendProcessor,
+        'M1_MARKET_STRUCTURE': M1MarketStructureProcessor,  # ADD THIS LINE
     }
     
     @classmethod

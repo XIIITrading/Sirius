@@ -15,6 +15,7 @@ from .processors.factory import ProcessorFactory
 from .processors.base_processor import BaseSignalProcessor
 from .utils import generate_ema_description, generate_trend_description
 from live_monitor.data.models.signals import EntrySignal, ExitSignal
+from .utils import generate_ema_description, generate_trend_description, generate_market_structure_description
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,10 @@ class SignalInterpreter(QObject):
         """Process M15 Statistical Trend signal"""
         return self.process_signal('STATISTICAL_TREND_15M', result)
     
+    def process_m1_market_structure(self, result):
+        """Process M1 Market Structure signal"""
+        return self.process_signal('M1_MARKET_STRUCTURE', result)
+    
     def process_combined_signals(self, signals: List[StandardSignal]) -> StandardSignal:
         """
         Combine multiple signals into a composite signal
@@ -222,6 +227,15 @@ class SignalInterpreter(QObject):
                 signal.metadata.get('regime'),
                 signal.metadata.get('daily_bias')
             )
+
+        elif signal.source == 'M1_MARKET_STRUCTURE':  # ADD THIS BLOCK
+            signal_desc = generate_market_structure_description(
+                signal.source,
+                signal.metadata.get('original_signal', signal.direction),
+                signal.metadata.get('structure_type', 'Unknown'),
+                signal.metadata.get('direction', signal.direction)
+            )
+
         else:
             signal_desc = f"{signal.source} {signal.direction} Signal"
         

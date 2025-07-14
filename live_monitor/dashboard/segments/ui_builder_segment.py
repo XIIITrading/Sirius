@@ -211,6 +211,10 @@ class UIBuilderSegment:
         self.stat_signal_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
         self.status_bar.addWidget(self.stat_signal_label)
         
+        self.m1_mstruct_label = QLabel("M1 MSTRUCT: --")  # ADD THIS LINE
+        self.m1_mstruct_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")  # ADD THIS LINE
+        self.status_bar.addWidget(self.m1_mstruct_label)  # ADD THIS LINE
+        
         self.m5_trend_label = QLabel("M5 TREND: --")
         self.m5_trend_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
         self.status_bar.addWidget(self.m5_trend_label)

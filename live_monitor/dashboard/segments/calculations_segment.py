@@ -295,6 +295,9 @@ class CalculationsSegment:
             
             # Process M15 Statistical Trend
             self._process_m15_statistical_trend()
+
+            # Process M1 Market Structure - ADD THIS LINE
+            self._process_m1_market_structure(df)
             
             # Process zone calculations - pass df with timestamp as column
             self._process_zone_calculations(df, current_price, m15_atr)
@@ -394,7 +397,7 @@ class CalculationsSegment:
         """Process M5 Statistical Trend analysis"""
         try:
             # Resample to 5-minute bars
-            df_5min = df.resample('5T').agg({
+            df_5min = df.resample('5min').agg({  # Changed from '5T' to '5min'
                 'open': 'first',
                 'high': 'max',
                 'low': 'min',
@@ -460,7 +463,7 @@ class CalculationsSegment:
                 df.set_index('timestamp', inplace=True)
             
             # Resample to 15-minute bars
-            m15_data = df.resample('15T').agg({
+            m15_data = df.resample('15min').agg({  # Changed from '15T' to '15min'
                 'open': 'first',
                 'high': 'max',
                 'low': 'min',
@@ -506,6 +509,46 @@ class CalculationsSegment:
             
         except Exception as e:
             logger.error(f"Error in M15 statistical trend: {e}", exc_info=True)
+
+    def _process_m1_market_structure(self, df: pd.DataFrame):
+        """Process M1 Market Structure analysis"""
+        if not hasattr(self, 'm1_market_structure_analyzer'):
+            logger.warning("M1 Market Structure analyzer not initialized")
+            return
+            
+        try:
+            # The analyzer needs timestamp as a column
+            df_copy = df.copy()
+            if 'timestamp' not in df_copy.columns:
+                df_copy.reset_index(inplace=True)
+            
+            # Process through market structure analyzer
+            result = self.m1_market_structure_analyzer.process_bars_dataframe(
+                self.current_symbol,
+                df_copy
+            )
+            
+            if result:
+                # Process through signal interpreter
+                standard_signal = self.signal_interpreter.process_m1_market_structure(result)
+                
+                # Update signal display
+                self.update_signal_display(
+                    standard_signal.value,
+                    standard_signal.category.value,
+                    'M1 MSTRUCT'
+                )
+                
+                # Log the signal
+                active_status = "ACTIVE" if self.active_entry_sources.get('M1_MARKET_STRUCTURE', True) else "DISPLAY ONLY"
+                logger.info(
+                    f"M1 Market Structure [{active_status}]: {result.signal} "
+                    f"({result.structure_type}) "
+                    f"Signal Value: {standard_signal.value:+.1f} "
+                    f"Confidence: {standard_signal.confidence:.0%}"
+                )
+        except Exception as e:
+            logger.error(f"Error in M1 market structure calculation: {e}", exc_info=True)
     
     def _process_zone_calculations(self, df: pd.DataFrame, current_price: float, m15_atr: float):
         """Process HVN and Order Block calculations"""
@@ -570,13 +613,14 @@ class CalculationsSegment:
                 df_copy.set_index('timestamp', inplace=True)
             
             # Resample to 15-minute bars
-            df_15m = df_copy.resample('15T').agg({
+            df_15m = df_copy.resample('15min').agg({  # Changed from '15T' to '15min'
                 'open': 'first',
                 'high': 'max',
                 'low': 'min',
                 'close': 'last',
                 'volume': 'sum'
             }).dropna()
+
             
             if len(df_15m) < period:
                 return 0.0

@@ -29,6 +29,7 @@ from live_monitor.calculations.indicators.m15_ema import M15EMACalculator
 from live_monitor.calculations.trend.statistical_trend_1min import StatisticalTrend1MinSimplified
 from live_monitor.calculations.trend.statistical_trend_5min import StatisticalTrend5Min
 from live_monitor.calculations.trend.statistical_trend_15min import StatisticalTrend15Min
+from live_monitor.calculations.market_structure.m1_market_structure import MarketStructureAnalyzer
 
 
 # Import signal interpreter
@@ -54,6 +55,7 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
             'STATISTICAL_TREND_1M': True, # Set to False to disable Statistical Trend entry signals
             'STATISTICAL_TREND_5M': True, # Set to False to disable Statistical Trend entry signals
             'STATISTICAL_TREND_15M': True, # Set to False to disable Statistical Trend entry signals
+            'M1_MARKET_STRUCTURE': True,  # ADD THIS LINE - Set to False to disable M1 Market Structure entry signals
         }
         
         # Initialize data manager
@@ -89,7 +91,15 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
         self.statistical_trend_calculator_1min = StatisticalTrend1MinSimplified(lookback_periods=10)
         self.statistical_trend_5min = StatisticalTrend5Min(lookback_periods=10)
         self.statistical_trend_15min = StatisticalTrend15Min(lookback_periods=10)
-        
+
+        # Initialize Market Structure Analyzer
+        self.m1_market_structure_analyzer = MarketStructureAnalyzer(
+            fractal_length=5,
+            buffer_size=200,
+            min_candles_required=21,
+            bars_needed=200
+        )
+
         # Data storage
         self.accumulated_data = []
         self.current_symbol = None
@@ -329,6 +339,8 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
             self.m15_signal_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
             self.stat_signal_label.setText("STAT: --")
             self.stat_signal_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
+            self.m1_mstruct_label.setText("M1 MSTRUCT: --")
+            self.m1_mstruct_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
             
             # Change symbol in data manager
             self.data_manager.change_symbol(ticker)
@@ -337,7 +349,6 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
             self.fetch_coordinator.fetch_all_for_symbol(ticker)
             
             # Don't run calculations immediately - wait for historical data
-            # QTimer.singleShot(5000, self.run_calculations)  # REMOVED
     
     def closeEvent(self, event: QCloseEvent):
         """Handle window close event"""

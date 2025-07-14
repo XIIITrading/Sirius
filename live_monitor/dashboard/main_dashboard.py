@@ -27,6 +27,7 @@ from live_monitor.calculations.indicators.m1_ema import M1EMACalculator
 from live_monitor.calculations.indicators.m5_ema import M5EMACalculator
 from live_monitor.calculations.indicators.m15_ema import M15EMACalculator
 from live_monitor.calculations.trend.statistical_trend_1min import StatisticalTrend1MinSimplified
+from live_monitor.calculations.trend.statistical_trend_5min import StatisticalTrend5Min
 
 # Import signal interpreter
 from live_monitor.signals.signal_interpreter import SignalInterpreter
@@ -48,7 +49,8 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
             'M1_EMA': True,          # Set to False to disable M1 EMA entry signals
             'M5_EMA': True,          # Set to False to disable M5 EMA entry signals
             'M15_EMA': True,         # Set to False to disable M15 EMA entry signals
-            'STATISTICAL_TREND': True # Set to False to disable Statistical Trend entry signals
+            'STATISTICAL_TREND_1M': True, # Set to False to disable Statistical Trend entry signals
+            'STATISTICAL_TREND_5M': True # Set to False to disable Statistical Trend entry signals
         }
         
         # Initialize data manager
@@ -81,7 +83,8 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
         self.m15_ema_calculator = M15EMACalculator()
 
         # Initialize Statistical Trend
-        self.statistical_trend_calculator = StatisticalTrend1MinSimplified(lookback_periods=10)
+        self.statistical_trend_calculator_1min = StatisticalTrend1MinSimplified(lookback_periods=10)
+        self.statistical_trend_5min = StatisticalTrend5Min(lookback_periods=10)
         
         # Data storage
         self.accumulated_data = []

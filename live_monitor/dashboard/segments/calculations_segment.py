@@ -137,6 +137,24 @@ class CalculationsSegment:
                             f"Statistical Trend Historical: {signal.value:+.1f} "
                             f"({signal.category.value}) Vol-Adj: {result.volatility_adjusted_strength:.2f}"
                         )
+            # M5 Statistical Trend
+            if 'M5' in data and self.statistical_trend_5min:
+                df = data['M5']
+                logger.info(f"Processing M5 Statistical Trend (Historical) with {len(df)} bars")
+                
+                if len(df) >= 10:  # Need minimum bars
+                    result = self.statistical_trend_5min.analyze(
+                        self.current_symbol, 
+                        df, 
+                        df.index[-1]
+                    )
+                    if result and self.signal_interpreter:
+                        signal = self.signal_interpreter.process_m5_statistical_trend(result)
+                        self.update_signal_display(signal.value, signal.category.value, 'M5 TREND')
+                        logger.info(
+                            f"M5 Statistical Trend Historical: {result.signal} "
+                            f"Value: {signal.value:+.1f} ({signal.category.value})"
+                        )
                         
         except Exception as e:
             logger.error(f"Error processing historical trend data: {e}", exc_info=True)
@@ -273,6 +291,7 @@ class CalculationsSegment:
             
             # Process Statistical Trend calculations
             self._process_statistical_trend(df_with_index)
+            self._process_m5_statistical_trend(df_with_index)
             
             # Process zone calculations - pass df with timestamp as column
             self._process_zone_calculations(df, current_price, m15_atr)
@@ -341,14 +360,13 @@ class CalculationsSegment:
                 )
 
     def _process_statistical_trend(self, df: pd.DataFrame):
-        """Process Statistical Trend calculations - respects active_entry_sources"""
-        # Statistical Trend (1-minute based with 10-bar lookback)
-        if len(df) >= 10:  # Need minimum bars for calculation
+        """Process 1-minute Statistical Trend calculations"""
+        if len(df) >= 10:
             try:
-                stat_result = self.statistical_trend_calculator.analyze(
+                stat_result = self.statistical_trend_calculator_1min.analyze(  # <- Fix name
                     self.current_symbol, 
                     df, 
-                    df.index[-1]  # Use last bar timestamp as entry_time
+                    df.index[-1]
                 )
                 if stat_result:
                     standard_signal = self.signal_interpreter.process_statistical_trend(stat_result)
@@ -357,7 +375,7 @@ class CalculationsSegment:
                         standard_signal.category.value,
                         'STAT'
                     )
-                    active_status = "ACTIVE" if self.active_entry_sources.get('STATISTICAL_TREND', True) else "DISPLAY ONLY"
+                    active_status = "ACTIVE" if self.active_entry_sources.get('STATISTICAL_TREND_1M', True) else "DISPLAY ONLY"
                     logger.info(
                         f"Statistical Trend Signal [{active_status}]: {standard_signal.value:+.1f} "
                         f"({standard_signal.category.value}) "
@@ -368,6 +386,52 @@ class CalculationsSegment:
                 logger.error(f"Error in statistical trend calculation: {e}")
         else:
             logger.debug(f"Insufficient data for statistical trend: {len(df)} bars < 10 required") 
+    
+    def _process_m5_statistical_trend(self, df: pd.DataFrame):
+        """Process M5 Statistical Trend analysis"""
+        try:
+            # Resample to 5-minute bars
+            df_5min = df.resample('5T').agg({
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            }).dropna()
+            
+            # Need at least 10 5-minute bars
+            if len(df_5min) < 10:
+                self.logger.warning("Insufficient 5-minute bars for M5 statistical trend")
+                return
+            
+            # Run analysis
+            result = self.statistical_trend_5min.analyze(
+                symbol=self.current_symbol,
+                bars_df=df_5min,
+                entry_time=df_5min.index[-1]
+            )
+            
+            # Process through signal interpreter
+            standard_signal = self.signal_interpreter.process_m5_statistical_trend(result)
+            
+            # Update signal display
+            self.update_signal_display(
+                standard_signal.value,
+                standard_signal.category.value,
+                'M5 TREND'
+            )
+            
+            # Log the signal
+            active_status = "ACTIVE" if self.active_entry_sources.get('STATISTICAL_TREND_5M', True) else "DISPLAY ONLY"
+            self.logger.info(
+                f"M5 Statistical Trend [{active_status}]: {result.signal} "
+                f"Signal Value: {standard_signal.value:+.1f} ({standard_signal.category.value}) "
+                f"Vol-Adj: {result.volatility_adjusted_strength:.2f} "
+                f"Confidence: {standard_signal.confidence:.0%}"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error in M5 statistical trend calculation: {e}", exc_info=True)
     
     def _process_zone_calculations(self, df: pd.DataFrame, current_price: float, m15_atr: float):
         """Process HVN and Order Block calculations"""

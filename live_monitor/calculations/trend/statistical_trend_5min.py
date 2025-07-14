@@ -1,4 +1,4 @@
-# modules/calculations/trend/statistical_trend_5min_simplified.py
+# modules/calculations/trend/statistical_trend_5min.py
 """
 Simplified Statistical Trend Analyzer for 5-minute bars
 Single timeframe analysis for position management
@@ -17,8 +17,8 @@ class PositionSignal5Min:
     symbol: str
     timestamp: datetime
     price: float
-    signal: str  # 'STRONG TREND UP', 'TREND UP', 'RANGING', 'TREND DOWN', 'STRONG TREND DOWN'
-    bias: str  # 'BULLISH', 'BEARISH', 'NEUTRAL'
+    signal: str  # 'BUY', 'WEAK BUY', 'SELL', 'WEAK SELL'
+    bias: str  # 'BULLISH', 'BEARISH'
     confidence: float  # 0-100
     trend_strength: float  # Magnitude of move
     volatility_adjusted_strength: float  # Trend strength relative to noise
@@ -33,7 +33,7 @@ class StatisticalTrend5Min:
     1. Single 5-minute timeframe (no multi-timeframe)
     2. Focus on trend strength relative to volatility
     3. Simple volume confirmation
-    4. Direct signal mapping
+    4. Direct signal mapping to 4-tier system
     """
     
     def __init__(self, lookback_periods: int = 10):
@@ -43,11 +43,12 @@ class StatisticalTrend5Min:
         """
         self.lookback_periods = lookback_periods
         
-        # Thresholds for 5-minute trading
+        # Modified thresholds for 4-tier system
+        # These determine Buy vs Weak Buy and Sell vs Weak Sell
         self.strength_thresholds = {
-            'strong': 1.5,     # Trend > 1.5x volatility
-            'normal': 0.75,    # Trend > 0.75x volatility  
-            'weak': 0.3        # Trend > 0.3x volatility
+            'strong': 1.0,     # Trend > 1.0x volatility for Buy/Sell
+            'weak': 0.4        # Trend > 0.4x volatility for Weak Buy/Sell
+            # Below 0.4x volatility, we assign based on direction only
         }
         
     def analyze(self, symbol: str, bars_df: pd.DataFrame, 
@@ -64,13 +65,13 @@ class StatisticalTrend5Min:
         volumes = recent_bars['volume'].values
         current_price = prices[-1]
         
-        # Core calculations
+        # Core calculations (unchanged)
         trend_strength = self._calculate_trend_strength(prices)
         volatility = self._calculate_volatility(prices)
         volatility_adjusted_strength = abs(trend_strength) / (volatility + 0.0001)
         volume_confirmation = self._check_volume_confirmation(prices, volumes)
         
-        # Generate signal
+        # Generate 4-tier signal
         signal, bias, confidence = self._generate_signal(
             trend_strength, 
             volatility_adjusted_strength,
@@ -138,36 +139,40 @@ class StatisticalTrend5Min:
                         volatility_adjusted_strength: float,
                         volume_confirmation: bool) -> tuple[str, str, float]:
         """
-        Generate position signal based on 5-minute analysis
+        Generate 4-tier position signal based on 5-minute analysis
+        Returns: (signal, bias, confidence)
         """
-        # Base confidence on volatility-adjusted strength
-        confidence = min(100, volatility_adjusted_strength * 30)
+        # Base confidence calculation
+        # Scale volatility_adjusted_strength to 0-100 range
+        # Strong trends (>1.0) map to 70-100
+        # Weak trends (0.4-1.0) map to 40-70
+        # Very weak trends (<0.4) map to 20-40
+        if volatility_adjusted_strength >= self.strength_thresholds['strong']:
+            base_confidence = 70 + min(30, (volatility_adjusted_strength - 1.0) * 30)
+        elif volatility_adjusted_strength >= self.strength_thresholds['weak']:
+            base_confidence = 40 + ((volatility_adjusted_strength - 0.4) / 0.6) * 30
+        else:
+            base_confidence = 20 + (volatility_adjusted_strength / 0.4) * 20
         
-        # Volume confirmation bonus
+        # Volume confirmation bonus (up to 15% boost)
         if volume_confirmation:
-            confidence = min(100, confidence * 1.15)
+            confidence = min(100, base_confidence * 1.15)
+        else:
+            confidence = base_confidence
         
-        # Determine signal and bias
-        if trend_strength > 0:  # Bullish
+        # Determine signal based on direction and strength
+        if trend_strength > 0:  # Bullish direction
             bias = 'BULLISH'
             if volatility_adjusted_strength >= self.strength_thresholds['strong']:
-                signal = 'STRONG TREND UP'
-            elif volatility_adjusted_strength >= self.strength_thresholds['normal']:
-                signal = 'TREND UP'
-            else:
-                signal = 'RANGING'
-                bias = 'NEUTRAL'
-                confidence *= 0.6
+                signal = 'BUY'
+            else:  # Anything below strong threshold but positive
+                signal = 'WEAK BUY'
                 
-        else:  # Bearish
+        else:  # Bearish direction
             bias = 'BEARISH'
             if volatility_adjusted_strength >= self.strength_thresholds['strong']:
-                signal = 'STRONG TREND DOWN'
-            elif volatility_adjusted_strength >= self.strength_thresholds['normal']:
-                signal = 'TREND DOWN'
-            else:
-                signal = 'RANGING'
-                bias = 'NEUTRAL'
-                confidence *= 0.6
+                signal = 'SELL'
+            else:  # Anything below strong threshold but negative
+                signal = 'WEAK SELL'
         
         return signal, bias, confidence

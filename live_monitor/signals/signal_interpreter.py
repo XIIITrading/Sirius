@@ -16,6 +16,7 @@ from live_monitor.calculations.indicators.m1_ema import M1EMAResult
 from live_monitor.calculations.indicators.m5_ema import M5EMAResult
 from live_monitor.calculations.indicators.m15_ema import M15EMAResult
 from live_monitor.calculations.trend.statistical_trend_1min import StatisticalSignal
+from live_monitor.calculations.trend.statistical_trend_5min import PositionSignal5Min  # ADD THIS
 from live_monitor.data.models.signals import EntrySignal, ExitSignal
 
 logger = logging.getLogger(__name__)
@@ -494,6 +495,97 @@ class SignalInterpreter(QObject):
         
         return signal
     
+    def process_m5_statistical_trend(self, result: PositionSignal5Min) -> StandardSignal:
+        """
+        Convert M5 Statistical Trend result to standard signal
+        Uses the same logic as M1 but with M5 timeframe context
+        """
+        # Use the same processing logic as the 1-minute version
+        vol_adj_strength = result.volatility_adjusted_strength
+        
+        # Determine base magnitude based on signal and volatility-adjusted strength
+        if result.signal == 'BUY':
+            if vol_adj_strength >= 2.0:
+                magnitude = 40 + min(10, (vol_adj_strength - 2.0) * 5)
+            elif vol_adj_strength >= 1.0:
+                magnitude = 25 + (vol_adj_strength - 1.0) * 15
+            else:
+                magnitude = 25
+        elif result.signal == 'WEAK BUY':
+            if vol_adj_strength >= 0.5:
+                magnitude = 10 + (vol_adj_strength - 0.5) * 28
+            else:
+                magnitude = vol_adj_strength * 20
+        elif result.signal == 'WEAK SELL':
+            if vol_adj_strength >= 0.5:
+                magnitude = 10 + (vol_adj_strength - 0.5) * 28
+            else:
+                magnitude = vol_adj_strength * 20
+        elif result.signal == 'SELL':
+            if vol_adj_strength >= 2.0:
+                magnitude = 40 + min(10, (vol_adj_strength - 2.0) * 5)
+            elif vol_adj_strength >= 1.0:
+                magnitude = 25 + (vol_adj_strength - 1.0) * 15
+            else:
+                magnitude = 25
+        else:
+            magnitude = 0
+        
+        # Apply direction
+        if result.signal in ['SELL', 'WEAK SELL']:
+            value = -magnitude
+        else:
+            value = magnitude
+        
+        # Apply volume confirmation boost
+        if result.volume_confirmation:
+            value = value * 1.1
+        
+        # Ensure value stays in range
+        value = max(-50, min(50, value))
+        
+        # Determine category
+        category = SignalCategory.from_value(value)
+        
+        # Determine strength for display
+        if abs(value) >= 25:
+            strength = 'Strong'
+        elif abs(value) >= 10:
+            strength = 'Medium'
+        else:
+            strength = 'Weak'
+        
+        # Get previous value for comparison
+        prev_signal = self.previous_signals.get('STATISTICAL_TREND_5M')
+        previous_value = prev_signal.value if prev_signal else 0
+        
+        signal = StandardSignal(
+            value=round(value, 1),
+            category=category,
+            source="STATISTICAL_TREND_5M",
+            confidence=result.confidence / 100.0,
+            direction='LONG' if value > 0 else 'SHORT',
+            strength=strength,
+            metadata={
+                'original_signal': result.signal,
+                'bias': result.bias,
+                'trend_strength': result.trend_strength,
+                'volatility_adjusted_strength': result.volatility_adjusted_strength,
+                'volume_confirmation': result.volume_confirmation,
+                'price': result.price,
+                'previous_value': previous_value,
+                'timeframe': '5min'
+            }
+        )
+        
+        # Store for next comparison
+        self.previous_signals['STATISTICAL_TREND_5M'] = signal
+        
+        # Check if we should generate trading signals
+        self._check_and_generate_signals(signal)
+        
+        return signal
+    
     def _calculate_m1_ema_confidence(self, result: M1EMAResult, signal_value: float) -> float:
         """Calculate confidence level for M1 EMA signal"""
         confidence = 0.5  # Base confidence
@@ -654,13 +746,23 @@ class SignalInterpreter(QObject):
         elif signal.source == 'STATISTICAL_TREND':
             vol_adj = signal.metadata.get('volatility_adjusted_strength', 0)
             if vol_adj >= 2.0:
-                signal_desc = f"Statistical Trend STRONG {signal.direction}"
+                signal_desc = f"M1 Trend STRONG {signal.direction}"
             elif vol_adj >= 1.0:
-                signal_desc = f"Statistical Trend {signal.direction}"
+                signal_desc = f"M1 Trend {signal.direction}"
             else:
-                signal_desc = f"Statistical Trend WEAK {signal.direction}"
+                signal_desc = f"M1 Trend WEAK {signal.direction}"
             if signal.metadata.get('volume_confirmation'):
                 signal_desc += " (Vol Confirm)"
+        elif signal.source == 'STATISTICAL_TREND_5M':
+            vol_adj = signal.metadata.get('volatility_adjusted_strength', 0)
+            original_signal = signal.metadata.get('original_signal', '')
+            
+            # Create descriptive signal
+            signal_desc = f"M5 Trend: {original_signal}"
+            signal_desc += f" (Vol-Adj: {vol_adj:.2f})"
+            
+            if signal.metadata.get('volume_confirmation'):
+                signal_desc += " ✓Vol"
         else:
             signal_desc = f"{signal.source} {signal.direction} Signal"
         

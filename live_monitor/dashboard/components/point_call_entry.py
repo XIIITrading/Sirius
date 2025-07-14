@@ -93,6 +93,8 @@ class PointCallEntry(QWidget):
             source_id = "M15_EMA"
         elif "Statistical Trend" in signal:
             source_id = "STATISTICAL_TREND"
+        elif "M5 Trend" in signal or "M5 Statistical" in signal:
+            source_id = "STATISTICAL_TREND_5M"
         
         # Check if we already have a row for this source
         existing_row = None

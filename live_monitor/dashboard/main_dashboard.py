@@ -30,6 +30,8 @@ from live_monitor.calculations.trend.statistical_trend_1min import StatisticalTr
 from live_monitor.calculations.trend.statistical_trend_5min import StatisticalTrend5Min
 from live_monitor.calculations.trend.statistical_trend_15min import StatisticalTrend15Min
 from live_monitor.calculations.market_structure.m1_market_structure import MarketStructureAnalyzer
+from live_monitor.calculations.market_structure.m5_market_structure import M5MarketStructureAnalyzer
+from live_monitor.calculations.market_structure.m15_market_structure import M15MarketStructureAnalyzer
 
 
 # Import signal interpreter
@@ -55,7 +57,9 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
             'STATISTICAL_TREND_1M': True, # Set to False to disable Statistical Trend entry signals
             'STATISTICAL_TREND_5M': True, # Set to False to disable Statistical Trend entry signals
             'STATISTICAL_TREND_15M': True, # Set to False to disable Statistical Trend entry signals
-            'M1_MARKET_STRUCTURE': True,  # ADD THIS LINE - Set to False to disable M1 Market Structure entry signals
+            'M1_MARKET_STRUCTURE': True,  # Set to False to disable M1 Market Structure entry signals
+            'M5_MARKET_STRUCTURE': True,    
+            'M15_MARKET_STRUCTURE': True,
         }
         
         # Initialize data manager
@@ -98,6 +102,20 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
             buffer_size=200,
             min_candles_required=21,
             bars_needed=200
+        )
+
+        self.m5_market_structure_analyzer = M5MarketStructureAnalyzer(
+            fractal_length=3,
+            buffer_size=100,
+            min_candles_required=15,
+            bars_needed=100
+        )
+
+        self.m15_market_structure_analyzer = M15MarketStructureAnalyzer(
+            fractal_length=2,
+            buffer_size=60,
+            min_candles_required=10,
+            bars_needed=60
         )
 
         # Data storage
@@ -341,6 +359,10 @@ class LiveMonitorDashboard(QMainWindow, UIBuilderSegment, DataHandlerSegment,
             self.stat_signal_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
             self.m1_mstruct_label.setText("M1 MSTRUCT: --")
             self.m1_mstruct_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
+            self.m5_mstruct_label.setText("M5 MSTRUCT: --")  # Fixed indentation
+            self.m5_mstruct_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
+            self.m15_mstruct_label.setText("M15 MSTRUCT: --")
+            self.m15_mstruct_label.setStyleSheet("QLabel { font-weight: bold; margin-left: 10px; }")
             
             # Change symbol in data manager
             self.data_manager.change_symbol(ticker)

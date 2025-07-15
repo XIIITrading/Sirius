@@ -1,11 +1,10 @@
-# live_monitor/signals/processors/trend/m5_trend_processor.py
 """
 M5 Statistical Trend Signal Processor
 """
 
 from typing import Dict, Any
 from ..base_processor import BaseSignalProcessor
-from ...models.signal_types import StandardSignal  # ADD THIS IMPORT
+from ...models.signal_types import StandardSignal
 from ...models.constants import *
 from live_monitor.calculations.trend.statistical_trend_5min import PositionSignal5Min
 
@@ -75,7 +74,6 @@ class M5TrendProcessor(BaseSignalProcessor):
         """Build metadata dictionary"""
         return {
             'original_signal': result.signal,
-            'bias': result.bias,
             'trend_strength': result.trend_strength,
             'volatility_adjusted_strength': result.volatility_adjusted_strength,
             'volume_confirmation': result.volume_confirmation,

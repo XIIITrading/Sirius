@@ -55,8 +55,9 @@ class CalculationsSegment:
                 result = self.m1_ema_calculator.calculate(df)
                 if result and self.signal_interpreter:
                     signal = self.signal_interpreter.process_m1_ema(result)
-                    self.update_signal_display(signal.value, signal.category.value, 'M1')
-                    logger.info(f"M1 EMA Historical: {signal.value:+.1f} ({signal.category.value})")
+                    if signal:
+                        self.update_signal_display(signal.value, signal.category.value, 'M1')
+                        logger.info(f"M1 EMA Historical: {signal.value:+.1f} ({signal.category.value})")
             
             # M5 EMA
             if 'M5' in data and self.m5_ema_calculator:
@@ -65,8 +66,9 @@ class CalculationsSegment:
                 result = self.m5_ema_calculator.calculate(df)
                 if result and self.signal_interpreter:
                     signal = self.signal_interpreter.process_m5_ema(result)
-                    self.update_signal_display(signal.value, signal.category.value, 'M5')
-                    logger.info(f"M5 EMA Historical: {signal.value:+.1f} ({signal.category.value})")
+                    if signal:
+                        self.update_signal_display(signal.value, signal.category.value, 'M5')
+                        logger.info(f"M5 EMA Historical: {signal.value:+.1f} ({signal.category.value})")
             
             # M15 EMA
             if 'M15' in data and self.m15_ema_calculator:
@@ -75,8 +77,9 @@ class CalculationsSegment:
                 result = self.m15_ema_calculator.calculate(df, timeframe='15min')  # Native 15min bars
                 if result and self.signal_interpreter:
                     signal = self.signal_interpreter.process_m15_ema(result)
-                    self.update_signal_display(signal.value, signal.category.value, 'M15')
-                    logger.info(f"M15 EMA Historical: {signal.value:+.1f} ({signal.category.value})")
+                    if signal:
+                        self.update_signal_display(signal.value, signal.category.value, 'M15')
+                        logger.info(f"M15 EMA Historical: {signal.value:+.1f} ({signal.category.value})")
                     
         except Exception as e:
             logger.error(f"Error processing historical EMA data: {e}", exc_info=True)
@@ -87,22 +90,63 @@ class CalculationsSegment:
         
         try:
             # M1 Market Structure
-            if 'M1' in data and hasattr(self, 'm1_market_structure'):
+            if 'M1' in data and hasattr(self, 'm1_market_structure_analyzer'):
                 df = data['M1']
                 logger.info(f"Processing M1 Market Structure with {len(df)} bars")
-                # Process with market structure analyzer if available
-                # Note: You'll need to add market structure analyzers to your dashboard
-                
+                result = self.m1_market_structure_analyzer.process_bars_dataframe(
+                    self.current_symbol,
+                    df
+                )
+                if result:
+                    standard_signal = self.signal_interpreter.process_m1_market_structure(result)
+                    if standard_signal:
+                        self.update_signal_display(
+                            standard_signal.value,
+                            standard_signal.category.value,
+                            'M1 MSTRUCT'
+                        )
+                        logger.info(f"M1 Market Structure Historical: {result.signal} ({result.structure_type})")
+            
             # M5 Market Structure
-            if 'M5' in data and hasattr(self, 'm5_market_structure'):
+            if 'M5' in data and hasattr(self, 'm5_market_structure_analyzer'):
                 df = data['M5']
-                logger.info(f"Processing M5 Market Structure with {len(df)} bars")
+                logger.info(f"Processing M5 Market Structure (Historical) with {len(df)} bars")
                 
+                result = self.m5_market_structure_analyzer.process_bars_dataframe(
+                    self.current_symbol,
+                    df
+                )
+                
+                if result:
+                    standard_signal = self.signal_interpreter.process_m5_market_structure(result)
+                    if standard_signal:
+                        self.update_signal_display(
+                            standard_signal.value,
+                            standard_signal.category.value,
+                            'M5 MSTRUCT'
+                        )
+                        logger.info(f"M5 Market Structure Historical: {result.signal} ({result.structure_type})")
+            
             # M15 Market Structure
-            if 'M15' in data and hasattr(self, 'm15_market_structure'):
+            if 'M15' in data and hasattr(self, 'm15_market_structure_analyzer'):
                 df = data['M15']
-                logger.info(f"Processing M15 Market Structure with {len(df)} bars")
+                logger.info(f"Processing M15 Market Structure (Historical) with {len(df)} bars")
                 
+                result = self.m15_market_structure_analyzer.process_bars_dataframe(
+                    self.current_symbol,
+                    df
+                )
+                
+                if result:
+                    standard_signal = self.signal_interpreter.process_m15_market_structure(result)
+                    if standard_signal:
+                        self.update_signal_display(
+                            standard_signal.value,
+                            standard_signal.category.value,
+                            'M15 MSTRUCT'
+                        )
+                        logger.info(f"M15 Market Structure Historical: {result.signal} ({result.structure_type})")
+                    
         except Exception as e:
             logger.error(f"Error processing historical structure data: {e}", exc_info=True)
     
@@ -119,7 +163,7 @@ class CalculationsSegment:
                     current_price
                 )
             
-            # M1 Statistical Trend (we primarily use this one)
+            # M1 Statistical Trend
             if 'M1' in data and self.statistical_trend_calculator_1min:
                 df = data['M1']
                 logger.info(f"Processing Statistical Trend with {len(df)} bars")
@@ -132,11 +176,13 @@ class CalculationsSegment:
                     )
                     if result and self.signal_interpreter:
                         signal = self.signal_interpreter.process_statistical_trend(result)
-                        self.update_signal_display(signal.value, signal.category.value, 'STAT')
-                        logger.info(
-                            f"Statistical Trend Historical: {signal.value:+.1f} "
-                            f"({signal.category.value}) Vol-Adj: {result.volatility_adjusted_strength:.2f}"
-                        )
+                        if signal:
+                            self.update_signal_display(signal.value, signal.category.value, 'STAT')
+                            logger.info(
+                                f"Statistical Trend Historical: {signal.value:+.1f} "
+                                f"({signal.category.value}) Vol-Adj: {result.volatility_adjusted_strength:.2f}"
+                            )
+            
             # M5 Statistical Trend
             if 'M5' in data and self.statistical_trend_5min:
                 df = data['M5']
@@ -150,11 +196,32 @@ class CalculationsSegment:
                     )
                     if result and self.signal_interpreter:
                         signal = self.signal_interpreter.process_m5_statistical_trend(result)
-                        self.update_signal_display(signal.value, signal.category.value, 'M5 TREND')
-                        logger.info(
-                            f"M5 Statistical Trend Historical: {result.signal} "
-                            f"Value: {signal.value:+.1f} ({signal.category.value})"
-                        )
+                        if signal:
+                            self.update_signal_display(signal.value, signal.category.value, 'M5 TREND')
+                            logger.info(
+                                f"M5 Statistical Trend Historical: {result.signal} "
+                                f"Value: {signal.value:+.1f} ({signal.category.value})"
+                            )
+            
+            # M15 Statistical Trend
+            if 'M15' in data and self.statistical_trend_15min:
+                df = data['M15']
+                logger.info(f"Processing M15 Statistical Trend (Historical) with {len(df)} bars")
+                
+                if len(df) >= 10:  # Need minimum bars
+                    result = self.statistical_trend_15min.analyze(
+                        self.current_symbol, 
+                        df, 
+                        df.index[-1]
+                    )
+                    if result and self.signal_interpreter:
+                        signal = self.signal_interpreter.process_m15_statistical_trend(result)
+                        if signal:
+                            self.update_signal_display(signal.value, signal.category.value, 'M15 TREND')
+                            logger.info(
+                                f"M15 Statistical Trend Historical: {result.regime} "
+                                f"Bias: {result.daily_bias} Value: {signal.value:+.1f}"
+                            )
                         
         except Exception as e:
             logger.error(f"Error processing historical trend data: {e}", exc_info=True)
@@ -255,7 +322,7 @@ class CalculationsSegment:
         return None
     
     def run_calculations(self):
-        """Run HVN and Order Block calculations with M1, M5, and M15 EMA signals"""
+        """Run HVN and Order Block calculations with all signals"""
         if not self.current_symbol or len(self.accumulated_data) < 100:
             logger.warning(f"Not enough data for calculations: {len(self.accumulated_data)} bars")
             return
@@ -292,12 +359,12 @@ class CalculationsSegment:
             # Process Statistical Trend calculations
             self._process_statistical_trend(df_with_index)
             self._process_m5_statistical_trend(df_with_index)
-            
-            # Process M15 Statistical Trend
             self._process_m15_statistical_trend()
 
-            # Process M1 Market Structure - ADD THIS LINE
+            # Process Market Structure calculations
             self._process_m1_market_structure(df)
+            self._process_m5_market_structure(df_with_index)
+            self._process_m15_market_structure(df_with_index)
             
             # Process zone calculations - pass df with timestamp as column
             self._process_zone_calculations(df, current_price, m15_atr)
@@ -313,57 +380,60 @@ class CalculationsSegment:
     
     def _process_ema_calculations(self, df: pd.DataFrame):
         """Process all EMA calculations - respects active_entry_sources"""
-        # M1 EMA - Always calculate for display, but check active status for entries
+        # M1 EMA
         if self.m1_ema_calculator:
             m1_ema_result = self.m1_ema_calculator.calculate(df)
             if m1_ema_result:
                 standard_signal = self.signal_interpreter.process_m1_ema(m1_ema_result)
-                self.update_signal_display(
-                    standard_signal.value,
-                    standard_signal.category.value,
-                    'M1'
-                )
-                active_status = "ACTIVE" if self.active_entry_sources.get('M1_EMA', True) else "DISPLAY ONLY"
-                logger.info(
-                    f"M1 EMA Signal [{active_status}]: {standard_signal.value:+.1f} "
-                    f"({standard_signal.category.value}) "
-                    f"Confidence: {standard_signal.confidence:.0%}"
-                )
+                if standard_signal:
+                    self.update_signal_display(
+                        standard_signal.value,
+                        standard_signal.category.value,
+                        'M1'
+                    )
+                    active_status = "ACTIVE" if self.active_entry_sources.get('M1_EMA', True) else "DISPLAY ONLY"
+                    logger.info(
+                        f"M1 EMA Signal [{active_status}]: {standard_signal.value:+.1f} "
+                        f"({standard_signal.category.value}) "
+                        f"Confidence: {standard_signal.confidence:.0%}"
+                    )
         
-        # M5 EMA - Always calculate for display, but check active status for entries
+        # M5 EMA
         if self.m5_ema_calculator:
             m5_ema_result = self.m5_ema_calculator.calculate(df)
             if m5_ema_result:
                 standard_signal = self.signal_interpreter.process_m5_ema(m5_ema_result)
-                self.update_signal_display(
-                    standard_signal.value,
-                    standard_signal.category.value,
-                    'M5'
-                )
-                active_status = "ACTIVE" if self.active_entry_sources.get('M5_EMA', True) else "DISPLAY ONLY"
-                logger.info(
-                    f"M5 EMA Signal [{active_status}]: {standard_signal.value:+.1f} "
-                    f"({standard_signal.category.value}) "
-                    f"Confidence: {standard_signal.confidence:.0%}"
-                )
+                if standard_signal:
+                    self.update_signal_display(
+                        standard_signal.value,
+                        standard_signal.category.value,
+                        'M5'
+                    )
+                    active_status = "ACTIVE" if self.active_entry_sources.get('M5_EMA', True) else "DISPLAY ONLY"
+                    logger.info(
+                        f"M5 EMA Signal [{active_status}]: {standard_signal.value:+.1f} "
+                        f"({standard_signal.category.value}) "
+                        f"Confidence: {standard_signal.confidence:.0%}"
+                    )
         
-        # M15 EMA - Always calculate for display, but check active status for entries
+        # M15 EMA
         if self.m15_ema_calculator:
             m15_ema_result = self.m15_ema_calculator.calculate(df, timeframe='1min')
             if m15_ema_result:
                 standard_signal = self.signal_interpreter.process_m15_ema(m15_ema_result)
-                self.update_signal_display(
-                    standard_signal.value,
-                    standard_signal.category.value,
-                    'M15'
-                )
-                active_status = "ACTIVE" if self.active_entry_sources.get('M15_EMA', True) else "DISPLAY ONLY"
-                logger.info(
-                    f"M15 EMA Signal [{active_status}]: {standard_signal.value:+.1f} "
-                    f"({standard_signal.category.value}) "
-                    f"Original: {m15_ema_result.signal} "
-                    f"Confidence: {standard_signal.confidence:.0%}"
-                )
+                if standard_signal:
+                    self.update_signal_display(
+                        standard_signal.value,
+                        standard_signal.category.value,
+                        'M15'
+                    )
+                    active_status = "ACTIVE" if self.active_entry_sources.get('M15_EMA', True) else "DISPLAY ONLY"
+                    logger.info(
+                        f"M15 EMA Signal [{active_status}]: {standard_signal.value:+.1f} "
+                        f"({standard_signal.category.value}) "
+                        f"Original: {m15_ema_result.signal} "
+                        f"Confidence: {standard_signal.confidence:.0%}"
+                    )
 
     def _process_statistical_trend(self, df: pd.DataFrame):
         """Process 1-minute Statistical Trend calculations"""
@@ -376,18 +446,19 @@ class CalculationsSegment:
                 )
                 if stat_result:
                     standard_signal = self.signal_interpreter.process_statistical_trend(stat_result)
-                    self.update_signal_display(
-                        standard_signal.value,
-                        standard_signal.category.value,
-                        'STAT'
-                    )
-                    active_status = "ACTIVE" if self.active_entry_sources.get('STATISTICAL_TREND_1M', True) else "DISPLAY ONLY"
-                    logger.info(
-                        f"Statistical Trend Signal [{active_status}]: {standard_signal.value:+.1f} "
-                        f"({standard_signal.category.value}) "
-                        f"Vol-Adj Strength: {stat_result.volatility_adjusted_strength:.2f} "
-                        f"Confidence: {standard_signal.confidence:.0%}"
-                    )
+                    if standard_signal:
+                        self.update_signal_display(
+                            standard_signal.value,
+                            standard_signal.category.value,
+                            'STAT'
+                        )
+                        active_status = "ACTIVE" if self.active_entry_sources.get('STATISTICAL_TREND_1M', True) else "DISPLAY ONLY"
+                        logger.info(
+                            f"Statistical Trend Signal [{active_status}]: {standard_signal.value:+.1f} "
+                            f"({standard_signal.category.value}) "
+                            f"Vol-Adj Strength: {stat_result.volatility_adjusted_strength:.2f} "
+                            f"Confidence: {standard_signal.confidence:.0%}"
+                        )
             except Exception as e:
                 logger.error(f"Error in statistical trend calculation: {e}")
         else:
@@ -397,7 +468,7 @@ class CalculationsSegment:
         """Process M5 Statistical Trend analysis"""
         try:
             # Resample to 5-minute bars
-            df_5min = df.resample('5min').agg({  # Changed from '5T' to '5min'
+            df_5min = df.resample('5min').agg({
                 'open': 'first',
                 'high': 'max',
                 'low': 'min',
@@ -407,8 +478,10 @@ class CalculationsSegment:
             
             # Need at least 10 5-minute bars
             if len(df_5min) < 10:
-                logger.warning("Insufficient 5-minute bars for M5 statistical trend")
+                logger.warning(f"Insufficient 5-minute bars for M5 statistical trend: {len(df_5min)} bars")
                 return
+            
+            logger.debug(f"M5 statistical trend: Processing {len(df_5min)} 5-minute bars")
             
             # Run analysis
             result = self.statistical_trend_5min.analyze(
@@ -417,8 +490,35 @@ class CalculationsSegment:
                 entry_time=df_5min.index[-1]
             )
             
+            # Check if result is valid
+            if not result:
+                logger.warning("M5 statistical trend analysis returned None")
+                return
+            
+            # Add debug logging
+            logger.debug(f"M5 trend result type: {type(result)}, signal: {getattr(result, 'signal', 'NO SIGNAL ATTR')}")
+            
             # Process through signal interpreter
             standard_signal = self.signal_interpreter.process_m5_statistical_trend(result)
+            
+            # Enhanced null check with debug info
+            if standard_signal is None:
+                logger.warning("M5 statistical trend signal interpreter returned None")
+                return
+            
+            # Additional safety check for the value attribute
+            if not hasattr(standard_signal, 'value'):
+                logger.error(f"M5 standard_signal missing 'value' attribute. Type: {type(standard_signal)}, attrs: {dir(standard_signal)}")
+                return
+            
+            if standard_signal.value is None:
+                logger.error("M5 standard_signal.value is None")
+                return
+            
+            # Check category attribute
+            if not hasattr(standard_signal, 'category') or not hasattr(standard_signal.category, 'value'):
+                logger.error(f"M5 standard_signal missing category or category.value. Category: {getattr(standard_signal, 'category', 'NO CATEGORY')}")
+                return
             
             # Update signal display
             self.update_signal_display(
@@ -436,6 +536,8 @@ class CalculationsSegment:
                 f"Confidence: {standard_signal.confidence:.0%}"
             )
             
+        except AttributeError as ae:
+            logger.error(f"AttributeError in M5 statistical trend calculation: {ae}", exc_info=True)
         except Exception as e:
             logger.error(f"Error in M5 statistical trend calculation: {e}", exc_info=True)
 
@@ -447,7 +549,7 @@ class CalculationsSegment:
                 logger.warning("No symbol set for M15 statistical trend")
                 return
                 
-            logger.info(f"Processing M15 statistical trend for {symbol}")
+            logger.debug(f"Processing M15 statistical trend for {symbol}")
             
             # Prepare 15-minute data from accumulated data
             if not self.accumulated_data:
@@ -463,7 +565,7 @@ class CalculationsSegment:
                 df.set_index('timestamp', inplace=True)
             
             # Resample to 15-minute bars
-            m15_data = df.resample('15min').agg({  # Changed from '15T' to '15min'
+            m15_data = df.resample('15min').agg({
                 'open': 'first',
                 'high': 'max',
                 'low': 'min',
@@ -474,6 +576,9 @@ class CalculationsSegment:
             if m15_data.empty:
                 logger.warning("No M15 data after resampling")
                 return
+            
+            # Log the data we have
+            logger.debug(f"M15 data after resampling: {len(m15_data)} bars")
             
             # Ensure we have enough bars (default 10 bars required)
             if len(m15_data) < 10:
@@ -487,8 +592,22 @@ class CalculationsSegment:
                 entry_time=datetime.now(timezone.utc)
             )
             
+            # Check if result is valid
+            if not result:
+                logger.warning("M15 statistical trend analysis returned None")
+                return
+            
+            logger.debug(f"M15 trend result: signal={result.signal}, regime={result.regime}, bias={result.daily_bias}")
+            
             # Process through signal interpreter
             signal = self.signal_interpreter.process_m15_statistical_trend(result)
+            
+            # Check if signal is valid
+            if not signal:
+                logger.warning("M15 statistical trend signal interpreter returned None")
+                return
+                
+            logger.debug(f"M15 signal processed: value={signal.value}, category={signal.category}")
             
             # Update display
             self.update_signal_display(
@@ -532,23 +651,140 @@ class CalculationsSegment:
                 # Process through signal interpreter
                 standard_signal = self.signal_interpreter.process_m1_market_structure(result)
                 
+                if standard_signal:
+                    # Update signal display
+                    self.update_signal_display(
+                        standard_signal.value,
+                        standard_signal.category.value,
+                        'M1 MSTRUCT'
+                    )
+                    
+                    # Log the signal
+                    active_status = "ACTIVE" if self.active_entry_sources.get('M1_MARKET_STRUCTURE', True) else "DISPLAY ONLY"
+                    logger.info(
+                        f"M1 Market Structure [{active_status}]: {result.signal} "
+                        f"({result.structure_type}) "
+                        f"Signal Value: {standard_signal.value:+.1f} "
+                        f"Confidence: {standard_signal.confidence:.0%}"
+                    )
+        except Exception as e:
+            logger.error(f"Error in M1 market structure calculation: {e}", exc_info=True)
+    
+    def _process_m5_market_structure(self, df: pd.DataFrame):
+        """Process M5 Market Structure analysis"""
+        if not hasattr(self, 'm5_market_structure_analyzer'):
+            logger.warning("M5 Market Structure analyzer not initialized")
+            return
+            
+        try:
+            # Resample to 5-minute bars
+            df_5min = df.resample('5min').agg({
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            }).dropna()
+            
+            # Need minimum bars
+            if len(df_5min) < self.m5_market_structure_analyzer.min_candles_required:
+                logger.warning(f"Insufficient 5-min data for market structure: {len(df_5min)} bars")
+                return
+            
+            logger.debug(f"M5 market structure: Processing {len(df_5min)} 5-minute bars")
+            
+            # The analyzer needs timestamp as index, not column
+            result = self.m5_market_structure_analyzer.process_bars_dataframe(
+                self.current_symbol,
+                df_5min
+            )
+            
+            if result:
+                logger.debug(f"M5 market structure result: {result.signal} ({result.structure_type})")
+                
+                # Process through signal interpreter
+                standard_signal = self.signal_interpreter.process_m5_market_structure(result)
+                
+                # Check if signal is valid
+                if not standard_signal:
+                    logger.warning("M5 market structure signal interpreter returned None")
+                    return
+                
                 # Update signal display
                 self.update_signal_display(
                     standard_signal.value,
                     standard_signal.category.value,
-                    'M1 MSTRUCT'
+                    'M5 MSTRUCT'
                 )
                 
                 # Log the signal
-                active_status = "ACTIVE" if self.active_entry_sources.get('M1_MARKET_STRUCTURE', True) else "DISPLAY ONLY"
+                active_status = "ACTIVE" if self.active_entry_sources.get('M5_MARKET_STRUCTURE', True) else "DISPLAY ONLY"
                 logger.info(
-                    f"M1 Market Structure [{active_status}]: {result.signal} "
+                    f"M5 Market Structure [{active_status}]: {result.signal} "
                     f"({result.structure_type}) "
                     f"Signal Value: {standard_signal.value:+.1f} "
                     f"Confidence: {standard_signal.confidence:.0%}"
                 )
         except Exception as e:
-            logger.error(f"Error in M1 market structure calculation: {e}", exc_info=True)
+            logger.error(f"Error in M5 market structure calculation: {e}", exc_info=True)
+
+    def _process_m15_market_structure(self, df: pd.DataFrame):
+        """Process M15 Market Structure analysis"""
+        if not hasattr(self, 'm15_market_structure_analyzer'):
+            logger.warning("M15 Market Structure analyzer not initialized")
+            return
+            
+        try:
+            # Resample to 15-minute bars
+            df_15min = df.resample('15min').agg({
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            }).dropna()
+            
+            # Need minimum bars
+            if len(df_15min) < self.m15_market_structure_analyzer.min_candles_required:
+                logger.warning(f"Insufficient 15-min data for market structure: {len(df_15min)} bars")
+                return
+            
+            logger.debug(f"M15 market structure: Processing {len(df_15min)} 15-minute bars")
+            
+            # The analyzer needs timestamp as index, not column
+            result = self.m15_market_structure_analyzer.process_bars_dataframe(
+                self.current_symbol,
+                df_15min
+            )
+            
+            if result:
+                logger.debug(f"M15 market structure result: {result.signal} ({result.structure_type})")
+                
+                # Process through signal interpreter
+                standard_signal = self.signal_interpreter.process_m15_market_structure(result)
+                
+                # Check if signal is valid
+                if not standard_signal:
+                    logger.warning("M15 market structure signal interpreter returned None")
+                    return
+                
+                # Update signal display
+                self.update_signal_display(
+                    standard_signal.value,
+                    standard_signal.category.value,
+                    'M15 MSTRUCT'
+                )
+                
+                # Log the signal
+                active_status = "ACTIVE" if self.active_entry_sources.get('M15_MARKET_STRUCTURE', True) else "DISPLAY ONLY"
+                logger.info(
+                    f"M15 Market Structure [{active_status}]: {result.signal} "
+                    f"({result.structure_type}) "
+                    f"Signal Value: {standard_signal.value:+.1f} "
+                    f"Confidence: {standard_signal.confidence:.0%}"
+                )
+        except Exception as e:
+            logger.error(f"Error in M15 market structure calculation: {e}", exc_info=True)
     
     def _process_zone_calculations(self, df: pd.DataFrame, current_price: float, m15_atr: float):
         """Process HVN and Order Block calculations"""
@@ -613,14 +849,13 @@ class CalculationsSegment:
                 df_copy.set_index('timestamp', inplace=True)
             
             # Resample to 15-minute bars
-            df_15m = df_copy.resample('15min').agg({  # Changed from '15T' to '15min'
+            df_15m = df_copy.resample('15min').agg({
                 'open': 'first',
                 'high': 'max',
                 'low': 'min',
                 'close': 'last',
                 'volume': 'sum'
             }).dropna()
-
             
             if len(df_15m) < period:
                 return 0.0

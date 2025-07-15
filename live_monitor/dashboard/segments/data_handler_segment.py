@@ -80,14 +80,9 @@ class DataHandlerSegment:
     def _on_entry_signal(self, signal_data):
         """Handle new entry signal"""
         logger.info(f"Entry signal received: {signal_data}")
-        self.point_call_entry.add_entry_signal(
-            time=signal_data.get('time', ''),
-            signal_type=signal_data.get('signal_type', 'LONG'),
-            price=signal_data.get('price', ''),
-            signal=signal_data.get('signal', ''),
-            strength=signal_data.get('strength', 'Medium'),
-            notes=signal_data.get('notes', '')
-        )
+        
+        # Use the new add_or_update_signal method that handles duplicates
+        self.point_call_entry.add_or_update_signal(signal_data)
     
     def _on_exit_signal(self, signal_data):
         """Handle new exit signal"""

@@ -1,4 +1,3 @@
-# live_monitor/signals/signal_interpreter.py
 """
 Signal Interpreter Module - Main orchestrator
 Converts various indicator outputs to standardized trading signals
@@ -13,9 +12,8 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from .models.signal_types import StandardSignal
 from .processors.factory import ProcessorFactory
 from .processors.base_processor import BaseSignalProcessor
-from .utils import generate_ema_description, generate_trend_description
-from live_monitor.data.models.signals import EntrySignal, ExitSignal
 from .utils import generate_ema_description, generate_trend_description, generate_market_structure_description
+from live_monitor.data.models.signals import EntrySignal, ExitSignal
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +48,9 @@ class SignalInterpreter(QObject):
             'STATISTICAL_TREND': True,
             'STATISTICAL_TREND_5M': True,
             'STATISTICAL_TREND_15M': True,
+            'M1_MARKET_STRUCTURE': True,
+            'M5_MARKET_STRUCTURE': True,
+            'M15_MARKET_STRUCTURE': True,
         }
     
     def _initialize_processors(self):
@@ -136,6 +137,14 @@ class SignalInterpreter(QObject):
     def process_m1_market_structure(self, result):
         """Process M1 Market Structure signal"""
         return self.process_signal('M1_MARKET_STRUCTURE', result)
+    
+    def process_m5_market_structure(self, result):
+        """Process M5 Market Structure signal"""
+        return self.process_signal('M5_MARKET_STRUCTURE', result)
+
+    def process_m15_market_structure(self, result):
+        """Process M15 Market Structure signal"""
+        return self.process_signal('M15_MARKET_STRUCTURE', result)
     
     def process_combined_signals(self, signals: List[StandardSignal]) -> StandardSignal:
         """
@@ -228,14 +237,13 @@ class SignalInterpreter(QObject):
                 signal.metadata.get('daily_bias')
             )
 
-        elif signal.source == 'M1_MARKET_STRUCTURE':  # ADD THIS BLOCK
+        elif signal.source in ['M1_MARKET_STRUCTURE', 'M5_MARKET_STRUCTURE', 'M15_MARKET_STRUCTURE']:
             signal_desc = generate_market_structure_description(
                 signal.source,
                 signal.metadata.get('original_signal', signal.direction),
                 signal.metadata.get('structure_type', 'Unknown'),
                 signal.metadata.get('direction', signal.direction)
             )
-
         else:
             signal_desc = f"{signal.source} {signal.direction} Signal"
         

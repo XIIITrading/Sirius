@@ -67,6 +67,20 @@ def generate_market_structure_description(source: str, original_signal: str,
         else:  # BOS
             desc += f" {direction} Continuation"
         desc += f" ({original_signal})"
+    elif source == 'M5_MARKET_STRUCTURE':  # ADD THIS
+        desc = f"M5 MS: {structure_type}"
+        if structure_type == 'CHoCH':
+            desc += f" {direction} Reversal (5m)"
+        else:  # BOS
+            desc += f" {direction} Continuation (5m)"
+        desc += f" ({original_signal})"
+    elif source == 'M15_MARKET_STRUCTURE':  # ADD THIS
+        desc = f"M15 MS: {structure_type}"
+        if structure_type == 'CHoCH':
+            desc += f" MAJOR {direction} Reversal"
+        else:  # BOS
+            desc += f" Strong {direction} Continuation"
+        desc += f" ({original_signal})"
     else:
         desc = f"{source} {original_signal}"
     
@@ -93,5 +107,9 @@ def get_source_identifier(signal: str) -> Optional[str]:
     # Check for Market Structure signals
     elif "M1 MS:" in signal:
         return "M1_MARKET_STRUCTURE"
+    elif "M5 MS:" in signal:
+        return "M5_MARKET_STRUCTURE"
+    elif "M15 MS:" in signal:
+        return "M15_MARKET_STRUCTURE"
     
     return None

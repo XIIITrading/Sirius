@@ -30,6 +30,12 @@ class SignalDisplaySegment:
         elif source == 'M1 MSTRUCT':
             label = self.m1_mstruct_label
             prefix = 'M1 MSTRUCT'
+        elif source == 'M5 MSTRUCT':
+            label = self.m5_mstruct_label
+            prefix = 'M5 MSTRUCT'
+        elif source == 'M15 MSTRUCT':
+            label = self.m15_mstruct_label
+            prefix = 'M15 MSTRUCT'
         elif source == 'M5 TREND':
             label = self.m5_trend_label
             prefix = 'M5 TREND'

@@ -10,7 +10,7 @@ import time
 load_dotenv()
 
 class NotionToSupabasePush:
-    """Push data from Notion to Supabase - Notion is source of truth"""
+    """Push data from Notion to Supabase - ONE-WAY OVERWRITE"""
     
     def __init__(self):
         self.supabase = create_client(
@@ -77,10 +77,10 @@ class NotionToSupabasePush:
             }
     
     def push_database(self, config):
-        """Push data from Notion to Supabase for one database"""
+        """Push data from Notion to Supabase - OVERWRITES SUPABASE DATA"""
         print(f"\n{'='*50}")
         print(f"📤 Pushing: {config['name']}")
-        print(f"   Notion → Supabase")
+        print(f"   Notion → Supabase (ONE-WAY OVERWRITE)")
         
         try:
             field_mapping = self.get_field_mapping(config)
@@ -101,7 +101,7 @@ class NotionToSupabasePush:
             # Track which Supabase IDs we've seen in Notion
             seen_supabase_ids = set()
             
-            # Process each Notion item
+            # Process each Notion item - ALWAYS OVERWRITES SUPABASE
             for notion_item in notion_items.values():
                 supabase_id = notion_item.get('supabase_id')
                 data = notion_item['data']
@@ -110,7 +110,7 @@ class NotionToSupabasePush:
                     seen_supabase_ids.add(supabase_id)
                     
                     if supabase_id in supabase_items:
-                        # Update existing
+                        # Update existing - ALWAYS OVERWRITE
                         self.update_in_supabase(config['supabase_table_name'], supabase_id, data)
                         updated += 1
                     else:
@@ -133,7 +133,7 @@ class NotionToSupabasePush:
             
             print(f"\n   ✅ Push Complete:")
             print(f"      Created: {created}")
-            print(f"      Updated: {updated}")
+            print(f"      Updated (Overwritten): {updated}")
             print(f"      Deleted: {deleted}")
             
             # Update sync status
@@ -258,13 +258,13 @@ class NotionToSupabasePush:
             print(f"      ✗ Error recreating ID {supabase_id}: {e}")
     
     def update_in_supabase(self, table_name, supabase_id, data):
-        """Update existing item in Supabase"""
+        """Update existing item in Supabase - ALWAYS OVERWRITES"""
         clean_data = {k: v for k, v in data.items() if v is not None}
-        clean_data['updated_at'] = datetime.now().isoformat()
+        # Remove the automatic updated_at - let Supabase handle it if the column exists
         
         try:
             self.supabase.table(table_name).update(clean_data).eq('id', supabase_id).execute()
-            print(f"      ↻ Updated: ID {supabase_id}")
+            print(f"      ↻ Overwritten: ID {supabase_id}")
         except Exception as e:
             print(f"      ✗ Error updating ID {supabase_id}: {e}")
     
@@ -306,9 +306,10 @@ class NotionToSupabasePush:
             pass
     
     def push_all(self):
-        """Push all configured databases"""
-        print("\n🚀 Starting Push to Supabase...")
+        """Push all configured databases - ONE-WAY OVERWRITE"""
+        print("\n🚀 Starting Push to Supabase (ONE-WAY OVERWRITE)...")
         print(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("⚠️  This will OVERWRITE all data in Supabase with Notion data!")
         
         configs = self.get_sync_configurations()
         

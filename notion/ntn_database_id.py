@@ -6,7 +6,7 @@ load_dotenv()
 notion = Client(auth=os.getenv('NOTION_TOKEN'))
 
 # Search for your database
-response = notion.search(query="Premarket Scans", filter={"property": "object", "value": "database"})
+response = notion.search(query="Pre Market Levels", filter={"property": "object", "value": "database"})
 
 for db in response['results']:
     if db['object'] == 'database':

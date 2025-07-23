@@ -27,14 +27,14 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FilterCriteria:
     """Configurable filter criteria with defaults."""
-    min_price: float = 5.0
-    max_price: float = 500.0
-    min_avg_volume: float = 500_000
-    min_premarket_volume: float = 300_000
-    min_premarket_volume_ratio: float = 0.10  # 10% of avg daily volume
-    min_dollar_volume: float = 5_000_000
-    min_atr: float = 2.0
-    min_atr_percent: float = 10.0  # 10% of price
+    min_price=5.0
+    max_price=500.0
+    min_avg_volume=500_000
+    min_premarket_volume=300_000       
+    min_premarket_volume_ratio=0.002
+    min_dollar_volume=1_000_000          
+    min_atr=2.0                    
+    min_atr_percent=0.5 
     
     def to_dict(self) -> Dict:
         """Convert criteria to dictionary for logging/display."""
@@ -478,11 +478,11 @@ def example_usage():
         min_price=5.0,
         max_price=500.0,
         min_avg_volume=500_000,
-        min_premarket_volume=300_000,         # Add minimum PM volume requirement
-        min_premarket_volume_ratio=0.001,      # 0.1% - very relaxed for testing
-        min_dollar_volume=1_000_000,           # $1M instead of $5M
-        min_atr=0.5,                           # $0.50 instead of $2
-        min_atr_percent=0.5                    # 0.5% instead of 10%
+        min_premarket_volume=300_000,         
+        min_premarket_volume_ratio=0.0015, 
+        min_dollar_volume=1_000_000,           
+        min_atr=0.5,                           
+        min_atr_percent=0.5                    
     )
 
     # Initialize bridge with relaxed criteria

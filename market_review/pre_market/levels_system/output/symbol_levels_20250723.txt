@@ -1,0 +1,33 @@
+// ==================== SYMBOL LEVELS ====================
+// Generated: 2025-07-23
+// Symbols: AAPL, SPY
+
+    // AAPL levels - Generated 2025-07-23
+    if current_symbol == "AAPL"
+        ds_a1 := 196.00
+        ds_a2 := 199.50
+        ds_b1 := 191.50
+        ds_b2 := 188.00
+        hvn_a1 := 195.50
+        hvn_a2 := 198.25
+        hvn_b1 := 192.00
+        hvn_b2 := 189.75
+        ob_a1 := 194.75
+        ob_a2 := 197.00
+        ob_b1 := 192.50
+        ob_b2 := 190.25
+
+    // SPY levels - Generated 2025-07-23
+    else if current_symbol == "SPY"
+        ds_a1 := 0.0
+        ds_a2 := 0.0
+        ds_b1 := 0.0
+        ds_b2 := 0.0
+        hvn_a1 := 450.50
+        hvn_a2 := 0.0
+        hvn_b1 := 445.00
+        hvn_b2 := 0.0
+        ob_a1 := 0.0
+        ob_a2 := 0.0
+        ob_b1 := 0.0
+        ob_b2 := 0.0

@@ -1,0 +1,88 @@
+{
+  "timestamp": "2025-07-23T21:40:32.354912",
+  "total_configs": 1,
+  "configs_with_errors": 1,
+  "configs_with_warnings": 1,
+  "results": [
+    {
+      "name": "Premarket Levels",
+      "active": true,
+      "errors": [
+        "Could not retrieve Supabase schema for table 'premarket_levels'"
+      ],
+      "warnings": [
+        "Supabase field 'date' in mapping does not exist in table",
+        "Supabase field 'ticker' in mapping does not exist in table",
+        "Supabase field 'level_type' in mapping does not exist in table",
+        "Supabase field 'price' in mapping does not exist in table",
+        "Supabase field 'notes' in mapping does not exist in table",
+        "Supabase field 'active' in mapping does not exist in table"
+      ],
+      "info": [],
+      "supabase_columns": {},
+      "notion_properties": {
+        "Level Type": {
+          "type": "select",
+          "id": "%40qI%60",
+          "options": [
+            "HVN",
+            "H1 OB",
+            "Daily MS"
+          ]
+        },
+        "Price": {
+          "type": "number",
+          "id": "I~_%7D"
+        },
+        "Date": {
+          "type": "date",
+          "id": "Kt%5D%40"
+        },
+        "supabase_id": {
+          "type": "rich_text",
+          "id": "X%3BYL"
+        },
+        "Notes": {
+          "type": "rich_text",
+          "id": "mOm%7D"
+        },
+        "Active": {
+          "type": "checkbox",
+          "id": "yjxx"
+        },
+        "Ticker": {
+          "type": "title",
+          "id": "title"
+        }
+      },
+      "mapping_fields": {
+        "notion_to_supabase": {
+          "Date": "date",
+          "Ticker": "ticker",
+          "Level Type": "level_type",
+          "Price": "price",
+          "Notes": "notes",
+          "Active": "active"
+        },
+        "supabase_to_notion": {
+          "date": "Date",
+          "ticker": "Ticker",
+          "level_type": "Level Type",
+          "price": "Price",
+          "notes": "Notes",
+          "active": "Active",
+          "created_at": "Created At",
+          "id": "supabase_id"
+        },
+        "id_field": "supabase_id",
+        "field_types": {
+          "Ticker": "title"
+        }
+      },
+      "missing_in_notion": [],
+      "missing_in_supabase": [],
+      "missing_in_mapping": [],
+      "type_mismatches": []
+    }
+  ]
+}

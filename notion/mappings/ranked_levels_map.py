@@ -1,14 +1,14 @@
 # mappings/ranked_levels_map.py
 
+# mappings/ranked_levels_map.py
+
 FIELD_MAPPING = {
     'notion_to_supabase': {
         'Pre-Market Level ID': 'premarket_level_id',
         'Date': 'date',
         'Ticker': 'ticker',
         'Level Type': 'level_type',
-        'Position': 'position',
         'Price': 'price',
-        'Strength Score': 'strength_score',
         'Notes': 'notes',
         'Active': 'active',
         'Rank': 'rank',
@@ -23,12 +23,6 @@ FIELD_MAPPING = {
         'premarket_level_id': 'Pre-Market Level ID',
         'date': 'Date',
         'ticker': 'Ticker',
-        'level_type': 'Level Type',
-        'position': 'Position',
-        'price': 'Price',
-        'strength_score': 'Strength Score',
-        'notes': 'Notes',
-        'active': 'Active',
         'rank': 'Rank',
         'confluence_score': 'Confluence Score',
         'zone_high': 'Zone High',

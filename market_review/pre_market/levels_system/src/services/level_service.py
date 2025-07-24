@@ -36,7 +36,7 @@ class LevelService:
                 .eq('date', target_date.isoformat())\
                 .eq('active', True)\
                 .order('level_type', desc=False)\
-                .order('position', desc=False)\
+                .order('price', desc=True)\
                 .execute()
             
             levels = []
@@ -46,9 +46,7 @@ class LevelService:
                     date=date.fromisoformat(row['date']),
                     ticker=row['ticker'],
                     level_type=row['level_type'],
-                    position=row['position'],
                     price=float(row['price']),
-                    strength_score=row['strength_score'],
                     notes=row.get('notes'),
                     active=row['active'],
                     created_at=datetime.fromisoformat(row['created_at'].replace('Z', '+00:00'))
@@ -56,11 +54,6 @@ class LevelService:
                 levels.append(level)
             
             print(f"📊 Retrieved {len(levels)} premarket levels for {ticker} on {target_date}")
-            
-            # Validate we have the expected number of levels
-            expected = 12  # 3 types × 4 positions
-            if len(levels) != expected:
-                print(f"⚠️  Warning: Expected {expected} levels but found {len(levels)}")
             
             return levels
             
@@ -96,6 +89,13 @@ class LevelService:
         except Exception as e:
             print(f"❌ Error retrieving tickers: {e}")
             return []
+    
+    def get_unique_tickers_with_levels(self, target_date: date) -> List[str]:
+        """
+        Get all unique tickers that have levels for a specific date.
+        Alias for get_all_tickers_for_date for compatibility.
+        """
+        return self.get_all_tickers_for_date(target_date)
     
     # ========== Write Operations (For Analyzer Output) ==========
     
@@ -243,9 +243,7 @@ class LevelService:
                         date=date.fromisoformat(premarket_row['date']),
                         ticker=premarket_row['ticker'],
                         level_type=premarket_row['level_type'],
-                        position=premarket_row['position'],
                         price=float(premarket_row['price']),
-                        strength_score=premarket_row['strength_score'],
                         notes=premarket_row.get('notes'),
                         active=premarket_row['active'],
                         created_at=datetime.fromisoformat(premarket_row['created_at'].replace('Z', '+00:00'))

@@ -1,9 +1,8 @@
 # market_review/calculations/volume/hvn_engine.py
 """
-Module: HVN (High Volume Node) Calculation Engine
-Purpose: Core HVN calculations including ranking, clustering, and proximity detection
-Dependencies: volume_profile.py for base calculations
-Performance Target: Complete 14-day analysis in <2 seconds
+Module: HVN (High Volume Node) Peak Detection Engine
+Purpose: Identify volume peaks in price profiles across multiple timeframes
+Performance Target: Complete multi-timeframe analysis in <3 seconds
 """
 
 # Standard library imports
@@ -16,6 +15,7 @@ from typing import Dict, List, Tuple, Optional
 # Third-party imports
 import numpy as np
 import pandas as pd
+from scipy.signal import find_peaks
 
 # Local application imports
 from market_review.calculations.volume.volume_profile import VolumeProfile, PriceLevel
@@ -42,26 +42,52 @@ class HVNResult:
     ranked_levels: List[PriceLevel]  # All levels with rank
     filtered_levels: List[PriceLevel]  # Levels above threshold
 
+
+@dataclass
+class VolumePeak:
+    """Single volume peak information"""
+    price: float
+    rank: int  # 1 = highest volume peak within timeframe
+    volume_percent: float
+    level_index: int  # Original level index in volume profile
+
+
+@dataclass
+class TimeframeResult:
+    """HVN analysis result for a single timeframe"""
+    timeframe_days: int
+    price_range: Tuple[float, float]  # High/Low of timeframe
+    total_levels: int
+    peaks: List[VolumePeak]  # Sorted by rank (volume)
+    data_points: int  # Number of bars analyzed
+
+
 class HVNEngine:
     """
-    Main HVN calculation engine.
-    Processes volume profile data to identify high volume nodes and clusters.
+    HVN Peak Detection Engine.
+    Identifies absolute peaks in volume profiles across multiple timeframes.
     """
     
     def __init__(self, 
                  levels: int = 100,
                  percentile_threshold: float = 80.0,
+                 prominence_threshold: float = 0.5,
+                 min_peak_distance: int = 3,
                  proximity_atr_minutes: int = 30):
         """
         Initialize HVN Engine.
         
         Args:
             levels: Number of price levels for volume profile
-            percentile_threshold: Percentile threshold (80 = top 20% of levels)
+            percentile_threshold: Percentile threshold for HVN identification
+            prominence_threshold: Minimum prominence as % of max volume
+            min_peak_distance: Minimum distance between peaks (in levels)
             proximity_atr_minutes: ATR in minutes for proximity alerts
         """
         self.levels = levels
         self.percentile_threshold = percentile_threshold
+        self.prominence_threshold = prominence_threshold
+        self.min_peak_distance = min_peak_distance
         self.proximity_atr_minutes = proximity_atr_minutes
         self.volume_profile = VolumeProfile(levels=levels)
         
@@ -328,198 +354,197 @@ class HVNEngine:
             ranked_levels=ranked_levels,
             filtered_levels=filtered_levels
         )
-
-
-# ============= LIVE DATA TESTING WITH POLYGON BRIDGE =============
-if __name__ == "__main__":
-    print("=== Testing HVN Engine with Polygon Bridge Integration ===\n")
     
-    # ========== CONFIGURATION ==========
-    # Modify these settings for different test scenarios
-    TEST_CONFIG = {
-        'symbol': 'TSLA',              # Stock symbol to analyze
-        'lookback_days': 14,           # Days of historical data
-        'timeframe': '15min',           # Data resolution (1min, 5min, 15min, etc.)
-        'hvn_levels': 100,             # Number of price levels
-        'percentile_threshold': 70.0,  # Top X% of levels (80 = top 20%)
-        'proximity_atr_minutes': 30,   # ATR minutes for proximity detection
-        'include_premarket': True,     # Include pre-market data
-        'include_postmarket': True,    # Include post-market data
-    }
-    # ===================================
-    
-    try:
-        # Fix the import path - we're in volume subdirectory
-        current_file = os.path.abspath(__file__)
-        volume_dir = os.path.dirname(current_file)  # .../volume/
-        calculations_dir = os.path.dirname(volume_dir)  # .../calculations/
-        modules_dir = os.path.dirname(calculations_dir)  # .../modules/
-        vega_root = os.path.dirname(modules_dir)  # .../Vega/
+    def identify_volume_peaks(self, 
+                            levels: List[PriceLevel], 
+                            percentile_filter: float = 70.0) -> List[PriceLevel]:
+        """
+        Identify local peaks in the volume profile.
         
-        # Add Vega root to Python path
-        if vega_root not in sys.path:
-            sys.path.insert(0, vega_root)
-        
-        print(f"✓ Current file: {current_file}")
-        print(f"✓ Vega root: {vega_root}")
-        print(f"✓ Added to Python path")
-        
-        # Import the bridge - use try/except to handle missing file
-        try:
-            from market_review_dir.data.polygon_bridge import PolygonHVNBridge
-            print(f"✓ Successfully imported PolygonHVNBridge")
-        except ImportError:
-            # If polygon_bridge doesn't exist, let's test with direct Polygon import
-            print("⚠️  polygon_bridge.py not found, testing with direct Polygon API...")
+        Args:
+            levels: All price levels from volume profile
+            percentile_filter: Only consider levels above this percentile
             
-            # Import Polygon directly
-            from polygon import DataFetcher
-            
-            # Create a simple wrapper class
-            class PolygonHVNBridge:
-                def __init__(self, hvn_levels, hvn_percentile, lookback_days):
-                    self.fetcher = DataFetcher()
-                    self.hvn_engine = HVNEngine(hvn_levels, hvn_percentile)
-                    self.lookback_days = lookback_days
-                
-                def calculate_hvn(self, symbol, timeframe='5min'):
-                    end_date = datetime.now()
-                    start_date = end_date - timedelta(days=self.lookback_days)
-                    
-                    # Fetch data
-                    df = self.fetcher.fetch_data(
-                        symbol=symbol,
-                        timeframe=timeframe,
-                        start_date=start_date,
-                        end_date=end_date,
-                        use_cache=True,
-                        validate=True
-                    )
-                    
-                    # Prepare data
-                    df['timestamp'] = df.index
-                    
-                    # Run HVN analysis
-                    hvn_result = self.hvn_engine.analyze(df)
-                    
-                    # Create a simple state object
-                    from types import SimpleNamespace
-                    state = SimpleNamespace(
-                        symbol=symbol,
-                        recent_bars=df,
-                        current_price=df['close'].iloc[-1],
-                        hvn_result=hvn_result,
-                        last_calculation=datetime.now()
-                    )
-                    
-                    return state
-                
-                def get_hvn_levels_near_price(self, symbol, price_range_percent):
-                    # Simple implementation
-                    return []
-            
-            print("✓ Created temporary bridge for testing")
+        Returns:
+            List of PriceLevel objects that are peaks
+        """
+        if not levels:
+            return []
         
-        print(f"\nTesting Polygon API connection...")
+        # Sort levels by price
+        sorted_levels = sorted(levels, key=lambda x: x.center)
+        volumes = np.array([level.percent_of_total for level in sorted_levels])
         
-        # Test 1: Initialize the bridge
-        print("\n[TEST 1] Initializing Polygon HVN Bridge...")
-        bridge = PolygonHVNBridge(
-            hvn_levels=TEST_CONFIG['hvn_levels'],
-            hvn_percentile=TEST_CONFIG['percentile_threshold'],
-            lookback_days=TEST_CONFIG['lookback_days']
-        )
-        print("✓ Bridge initialized successfully")
+        # Calculate thresholds
+        max_volume = np.max(volumes)
+        min_prominence = max_volume * self.prominence_threshold / 100
+        height_threshold = np.percentile(volumes, percentile_filter)
         
-        # Test 2: Fetch live data and calculate HVN
-        print(f"\n[TEST 2] Fetching live {TEST_CONFIG['symbol']} data...")
-        print(f"  - Timeframe: {TEST_CONFIG['timeframe']}")
-        print(f"  - Lookback: {TEST_CONFIG['lookback_days']} days")
-        
-        state = bridge.calculate_hvn(
-            TEST_CONFIG['symbol'],
-            timeframe=TEST_CONFIG['timeframe']
+        # Find peaks
+        peak_indices, properties = find_peaks(
+            volumes,
+            prominence=min_prominence,
+            distance=self.min_peak_distance,
+            height=height_threshold
         )
         
-        print(f"✓ Data fetched and HVN calculated successfully")
-        print(f"✓ Received {len(state.recent_bars)} bars of data")
+        # Extract peak levels
+        peak_levels = [sorted_levels[i] for i in peak_indices]
         
-        # Test 3: Validate the results
-        print(f"\n[TEST 3] Validating HVN Results...")
-        result = state.hvn_result
-        
-        # Basic validation
-        assert result.hvn_unit > 0, "HVN unit should be positive"
-        assert len(result.ranked_levels) > 0, "Should have ranked levels"
-        assert result.price_range[1] > result.price_range[0], "Price range should be valid"
-        print("✓ All validations passed")
-        
-        # Display detailed results
-        print(f"\n{'='*70}")
-        print(f"POLYGON CONNECTION VALIDATED - HVN ANALYSIS RESULTS")
-        print(f"{'='*70}")
-        
-        print(f"\n📊 Data Summary:")
-        print(f"  Symbol: {TEST_CONFIG['symbol']}")
-        print(f"  Date Range: {state.recent_bars.index[0]} to {state.recent_bars.index[-1]}")
-        print(f"  Total Bars: {len(state.recent_bars)}")
-        print(f"  Price Range: ${result.price_range[0]:.2f} - ${result.price_range[1]:.2f}")
-        print(f"  Current Price: ${state.current_price:.2f}")
-        
-        print(f"\n📈 Volume Profile Analysis:")
-        print(f"  Total Levels: {len(result.ranked_levels)}")
-        print(f"  HVN Levels (top {100-TEST_CONFIG['percentile_threshold']:.0f}%): {len(result.filtered_levels)}")
-        print(f"  Contiguous Clusters: {len(result.clusters)}")
-        
-        # Display top HVN levels
-        print(f"\n🎯 Top 5 HVN Levels:")
-        print(f"  {'Rank':<6} {'Price':<10} {'Volume %':<10} {'Distance from Current':<20}")
-        print(f"  {'-'*6} {'-'*10} {'-'*10} {'-'*20}")
-        
-        for level in result.filtered_levels[:5]:
-            distance = abs(level.center - state.current_price)
-            print(f"  {level.rank:<6} ${level.center:<9.2f} {level.percent_of_total:<9.2f}% ${distance:<19.2f}")
-        
-        # Display clusters
-        print(f"\n📍 HVN Clusters:")
-        for i, cluster in enumerate(result.clusters[:10]):  # Show top 10 clusters
-            print(f"\n  Cluster {i+1}:")
-            print(f"    Range: ${cluster.cluster_low:.2f} - ${cluster.cluster_high:.2f}")
-            print(f"    Center: ${cluster.center_price:.2f}")
-            print(f"    Volume: {cluster.total_percent:.2f}% of total")
-            print(f"    Levels: {len(cluster.levels)}")
-            
-            # Proximity check
-            if cluster.cluster_low <= state.current_price <= cluster.cluster_high:
-                print(f"    Status: 🎯 PRICE INSIDE CLUSTER")
-            else:
-                distance = min(
-                    abs(state.current_price - cluster.cluster_high),
-                    abs(state.current_price - cluster.cluster_low)
-                )
-                print(f"    Status: ${distance:.2f} away")
-        
-        # Connection summary
-        print(f"\n{'='*70}")
-        print("✅ POLYGON CONNECTION SUCCESSFUL - ALL TESTS PASSED")
-        print(f"{'='*70}")
-        
-        print("\nNext steps:")
-        print("1. Save polygon_bridge.py to modules/data/ for full functionality")
-        print("2. Use this validated connection in your trading systems")
-        print("3. Set up real-time monitoring with WebSocket feeds")
-        
-    except Exception as e:
-        print(f"❌ Error: {type(e).__name__}: {str(e)}")
-        print("\nTroubleshooting:")
-        print("1. Check your POLYGON_API_KEY in .env file")
-        print("2. Verify internet connection")
-        print("3. Ensure you're in the Vega project directory")
-        print("4. Check that polygon package is installed")
-        
-        # More detailed error info
-        import traceback
-        print("\nDetailed error trace:")
-        traceback.print_exc()
+        return peak_levels
     
-    print("\n=== Polygon Bridge Integration Test Complete ===")
+    def analyze_timeframe(self, 
+                         data: pd.DataFrame,
+                         timeframe_days: int,
+                         include_pre: bool = True,
+                         include_post: bool = True) -> TimeframeResult:
+        """
+        Run HVN peak analysis for a single timeframe.
+        
+        Args:
+            data: Complete OHLCV DataFrame
+            timeframe_days: Number of days to analyze
+            include_pre: Include pre-market data
+            include_post: Include post-market data
+            
+        Returns:
+            TimeframeResult with detected peaks
+        """
+        # Filter data for timeframe
+        current_date = data.index[-1]
+        start_date = current_date - timedelta(days=timeframe_days)
+        timeframe_data = data[data.index >= start_date].copy()
+        
+        # Build volume profile
+        profile_levels = self.volume_profile.build_volume_profile(
+            timeframe_data, include_pre, include_post
+        )
+        
+        if not profile_levels:
+            return TimeframeResult(
+                timeframe_days=timeframe_days,
+                price_range=(0, 0),
+                total_levels=0,
+                peaks=[],
+                data_points=len(timeframe_data)
+            )
+        
+        # Identify peaks
+        peak_levels = self.identify_volume_peaks(profile_levels)
+        
+        # Sort peaks by volume and create VolumePeak objects
+        sorted_peaks = sorted(peak_levels, key=lambda x: x.percent_of_total, reverse=True)
+        volume_peaks = [
+            VolumePeak(
+                price=peak.center,
+                rank=idx + 1,
+                volume_percent=peak.percent_of_total,
+                level_index=peak.index
+            )
+            for idx, peak in enumerate(sorted_peaks)
+        ]
+        
+        return TimeframeResult(
+            timeframe_days=timeframe_days,
+            price_range=self.volume_profile.price_range,
+            total_levels=len(profile_levels),
+            peaks=volume_peaks,
+            data_points=len(timeframe_data)
+        )
+    
+    def analyze_multi_timeframe(self, 
+                               data: pd.DataFrame,
+                               timeframes: List[int] = [120, 60, 15],
+                               include_pre: bool = True,
+                               include_post: bool = True) -> Dict[int, TimeframeResult]:
+        """
+        Run HVN analysis for multiple timeframes.
+        
+        Args:
+            data: Complete OHLCV DataFrame
+            timeframes: List of lookback days
+            include_pre: Include pre-market data
+            include_post: Include post-market data
+            
+        Returns:
+            Dictionary mapping timeframe to TimeframeResult
+        """
+        results = {}
+        
+        for days in timeframes:
+            results[days] = self.analyze_timeframe(
+                data, days, include_pre, include_post
+            )
+        
+        return results
+    
+    def get_all_peaks_dataframe(self, results: Dict[int, TimeframeResult]) -> pd.DataFrame:
+        """
+        Convert results to a clean DataFrame for easy access.
+        
+        Returns DataFrame with columns:
+            - timeframe: 120, 60, or 15
+            - price: Peak price
+            - rank: Rank within timeframe
+            - volume_pct: Volume percentage
+        """
+        rows = []
+        
+        for days, result in results.items():
+            for peak in result.peaks:
+                rows.append({
+                    'timeframe': days,
+                    'price': peak.price,
+                    'rank': peak.rank,
+                    'volume_pct': peak.volume_percent
+                })
+        
+        return pd.DataFrame(rows)
+    
+    def get_peaks_summary(self, results: Dict[int, TimeframeResult]) -> Dict:
+        """
+        Get a clean summary of peaks grouped by timeframe.
+        
+        Returns:
+            {
+                120: [{'price': 456.25, 'rank': 1, 'volume_pct': 8.5}, ...],
+                60: [{'price': 465.50, 'rank': 1, 'volume_pct': 9.2}, ...],
+                15: [{'price': 464.25, 'rank': 1, 'volume_pct': 11.5}, ...]
+            }
+        """
+        summary = {}
+        
+        for days, result in results.items():
+            summary[days] = [
+                {
+                    'price': peak.price,
+                    'rank': peak.rank,
+                    'volume_pct': round(peak.volume_percent, 2)
+                }
+                for peak in result.peaks
+            ]
+        
+        return summary
+    
+    def print_results(self, results: Dict[int, TimeframeResult], symbol: str = ""):
+        """
+        Pretty print the results to console.
+        """
+        print(f"\n{'='*60}")
+        print(f"HVN PEAK ANALYSIS{f' - {symbol}' if symbol else ''}")
+        print(f"{'='*60}")
+        
+        for days in sorted(results.keys(), reverse=True):
+            result = results[days]
+            print(f"\n📊 {days}-Day Timeframe")
+            print(f"   Price Range: ${result.price_range[0]:.2f} - ${result.price_range[1]:.2f}")
+            print(f"   Data Points: {result.data_points:,} bars")
+            print(f"   Total Peaks: {len(result.peaks)}")
+            
+            if result.peaks:
+                print(f"\n   Top Volume Peaks:")
+                print(f"   {'Rank':<6} {'Price':<10} {'Volume %'}")
+                print(f"   {'-'*6} {'-'*10} {'-'*10}")
+                
+                for peak in result.peaks[:5]:  # Show top 5
+                    print(f"   #{peak.rank:<5} ${peak.price:<9.2f} {peak.volume_percent:.2f}%")

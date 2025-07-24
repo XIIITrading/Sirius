@@ -23,7 +23,7 @@ import numpy as np
 
 # Local imports
 from market_review.calculations.volume.hvn_engine import HVNEngine
-from market_review.calculations.levels.lvl_camarilla_engine import CamarillaCalculator
+from market_review.calculations.levels.camarilla_engine import CamarillaCalculator
 from market_review.calculations.zones.supply_demand import analyze_supply_demand_zones
 from market_review.data.polygon_bridge import PolygonHVNBridge
 from market_review.dashboards.components.zone_aggregator import ZoneAggregator, UnifiedZone

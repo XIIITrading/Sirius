@@ -1,7 +1,5 @@
 # mappings/ranked_levels_map.py
 
-# mappings/ranked_levels_map.py
-
 FIELD_MAPPING = {
     'notion_to_supabase': {
         'Pre-Market Level ID': 'premarket_level_id',
@@ -17,7 +15,8 @@ FIELD_MAPPING = {
         'Zone Low': 'zone_low',
         'TV Variable': 'tv_variable',
         'Current Price': 'current_price',
-        'ATR Value': 'atr_value'
+        'ATR Value': 'atr_value',
+        'Strength Score': 'strength_score'
     },
     'supabase_to_notion': {
         'premarket_level_id': 'Pre-Market Level ID',
@@ -30,11 +29,12 @@ FIELD_MAPPING = {
         'tv_variable': 'TV Variable',
         'current_price': 'Current Price',
         'atr_value': 'ATR Value',
-        'created_at': 'Created At',
-        'id': 'supabase_id'  # Maps the Supabase ID to your tracking field
+        'strength_score': 'Strength Score',
+        'id': 'Supabase ID'
     },
-    'id_field': 'supabase_id',
+    'id_field': 'Supabase ID',
     'field_types': {
-        'Ticker': 'title'  # This ensures Ticker is treated as the title field
+        'Ticker': 'title',
+        'Supabase ID': 'number'
     }
 }

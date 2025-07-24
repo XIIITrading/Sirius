@@ -17,10 +17,11 @@ FIELD_MAPPING = {
         'notes': 'Notes',
         'active': 'Active',
         'created_at': 'Created At',
-        'id': 'supabase_id'  # Maps the Supabase ID to your tracking field
+        'id': 'Supabase ID'  # Maps the Supabase ID to your tracking field
     },
-    'id_field': 'supabase_id',
+    'id_field': 'Supabase ID',
     'field_types': {
-        'Ticker': 'title'  # This ensures Ticker is treated as the title field
+        'Ticker': 'title',  # This ensures Ticker is treated as the title field
+        'Supabase ID': 'number'
     }
 }

@@ -6,6 +6,7 @@ from supabase import create_client, Client
 from notion_client import Client as NotionClient
 import traceback
 import time
+import sys
 
 load_dotenv()
 
@@ -122,7 +123,7 @@ class NotionToSupabasePush:
                     new_id = self.create_in_supabase(config['supabase_table_name'], data)
                     if new_id:
                         # Update Notion with the new ID
-                        self.update_notion_id_field(notion_item['notion_id'], new_id, id_field)
+                        self.update_notion_id_field(notion_item['notion_id'], new_id, id_field, field_mapping)
                         created += 1
             
             # Delete items that exist in Supabase but not in Notion
@@ -148,6 +149,7 @@ class NotionToSupabasePush:
         """Get all items from Notion database"""
         items = {}
         id_field = field_mapping.get('id_field', 'supabase_id')
+        field_types = field_mapping.get('field_types', {})
         
         try:
             has_more = True
@@ -165,10 +167,13 @@ class NotionToSupabasePush:
                 for page in response['results']:
                     props = page['properties']
                     
-                    # Get Supabase ID if exists
+                    # Get Supabase ID if exists - check field type
                     supabase_id = None
-                    if props.get(id_field, {}).get('rich_text'):
-                        supabase_id = props[id_field]['rich_text'][0]['plain_text']
+                    if id_field in props:
+                        if field_types.get(id_field) == 'number' and props[id_field].get('number') is not None:
+                            supabase_id = str(int(props[id_field]['number']))
+                        elif props[id_field].get('rich_text') and props[id_field]['rich_text']:
+                            supabase_id = props[id_field]['rich_text'][0]['plain_text']
                     
                     # Extract data based on field mappings
                     data = {}
@@ -240,7 +245,7 @@ class NotionToSupabasePush:
         try:
             response = self.supabase.table(table_name).insert(clean_data).execute()
             new_id = str(response.data[0]['id'])
-            print(f"      + Created: ID {new_id}")
+            print(f"      + Created: {data.get('ticker', data.get('symbol', f'ID {new_id}'))}")
             return new_id
         except Exception as e:
             print(f"      ✗ Error creating: {e}")
@@ -253,18 +258,17 @@ class NotionToSupabasePush:
         
         try:
             response = self.supabase.table(table_name).insert(clean_data).execute()
-            print(f"      + Recreated: ID {supabase_id}")
+            print(f"      + Recreated: {data.get('ticker', data.get('symbol', f'ID {supabase_id}'))}")
         except Exception as e:
             print(f"      ✗ Error recreating ID {supabase_id}: {e}")
     
     def update_in_supabase(self, table_name, supabase_id, data):
         """Update existing item in Supabase - ALWAYS OVERWRITES"""
         clean_data = {k: v for k, v in data.items() if v is not None}
-        # Remove the automatic updated_at - let Supabase handle it if the column exists
         
         try:
             self.supabase.table(table_name).update(clean_data).eq('id', supabase_id).execute()
-            print(f"      ↻ Overwritten: ID {supabase_id}")
+            print(f"      ↻ Overwritten: {data.get('ticker', data.get('symbol', f'ID {supabase_id}'))}")
         except Exception as e:
             print(f"      ✗ Error updating ID {supabase_id}: {e}")
     
@@ -276,15 +280,21 @@ class NotionToSupabasePush:
         except Exception as e:
             print(f"      ✗ Error deleting ID {supabase_id}: {e}")
     
-    def update_notion_id_field(self, notion_id, supabase_id, id_field):
+    def update_notion_id_field(self, notion_id, supabase_id, id_field, field_mapping):
         """Update Supabase ID in Notion"""
+        field_types = field_mapping.get('field_types', {})
+        
         try:
-            self.notion.pages.update(
-                notion_id,
-                properties={
+            if field_types.get(id_field) == 'number':
+                properties = {
+                    id_field: {'number': int(supabase_id)}
+                }
+            else:
+                properties = {
                     id_field: {'rich_text': [{'text': {'content': str(supabase_id)}}]}
                 }
-            )
+            
+            self.notion.pages.update(notion_id, properties=properties)
         except Exception as e:
             print(f"      ✗ Error updating Notion ID field: {e}")
     
@@ -304,6 +314,44 @@ class NotionToSupabasePush:
             self.notion.pages.update(config_page_id, properties=properties)
         except:
             pass
+    
+    def push_single(self, table_name):
+        """Push a specific database by name (supports partial matching)"""
+        print(f"\n🚀 Starting Push for '{table_name}'...")
+        print(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("⚠️  This will OVERWRITE data in Supabase with Notion data!")
+        
+        configs = self.get_sync_configurations()
+        
+        # Find matching configurations (case-insensitive partial match)
+        matching_configs = []
+        for config in configs:
+            if table_name.lower() in config['name'].lower():
+                matching_configs.append(config)
+        
+        if not matching_configs:
+            print(f"\n❌ No configuration found matching '{table_name}'")
+            print("\nAvailable configurations:")
+            for config in configs:
+                print(f"  - {config['name']}")
+            return
+        
+        if len(matching_configs) > 1:
+            print(f"\n⚠️  Multiple configurations match '{table_name}':")
+            for config in matching_configs:
+                print(f"  - {config['name']}")
+            print("\nPlease be more specific.")
+            return
+        
+        # Push the single matching configuration
+        matching_config = matching_configs[0]
+        print(f"\n📋 Found configuration: {matching_config['name']}")
+        
+        try:
+            self.push_database(matching_config)
+            print(f"\n📊 Push Complete for '{matching_config['name']}'!")
+        except Exception as e:
+            print(f"\n❌ Failed to push {matching_config['name']}: {e}")
     
     def push_all(self):
         """Push all configured databases - ONE-WAY OVERWRITE"""
@@ -338,4 +386,11 @@ class NotionToSupabasePush:
 
 if __name__ == "__main__":
     pusher = NotionToSupabasePush()
-    pusher.push_all()
+    
+    if len(sys.argv) > 1:
+        # Push specific table
+        table_name = sys.argv[1]
+        pusher.push_single(table_name)
+    else:
+        # Push all tables
+        pusher.push_all()

@@ -17,7 +17,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 
 # Local imports
-from market_review.calculations.levels.camarilla_calculator import CamarillaCalculator, CamarillaResult
+from market_review.calculations.levels.lvl_camarilla_engine import CamarillaCalculator, CamarillaResult
 from market_review.data.polygon_bridge import PolygonHVNBridge
 
 # Configure logging

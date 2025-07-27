@@ -24,6 +24,7 @@ from market_review.calculations.volume.hvn_engine import TimeframeResult
 from market_review.calculations.confluence.hvn_confluence import (
     HVNConfluenceCalculator, ConfluenceAnalysis, ConfluenceZone
 )
+from market_review.calculations.zones.m15_atr_zones import ATRZoneEnhancer, ATRZoneAnalysis
 
 
 class HVNCalculationThread(QThread):
@@ -43,6 +44,12 @@ class HVNCalculationThread(QThread):
             hvn_percentile=80.0,
             lookback_days=120,
             update_interval_minutes=5,
+            cache_enabled=True
+        )
+        # Initialize ATR zone enhancer
+        self.atr_enhancer = ATRZoneEnhancer(
+            periods=14,
+            lookback_bars=100,
             cache_enabled=True
         )
         
@@ -68,7 +75,39 @@ class HVNCalculationThread(QThread):
                 timeframes=[120, 60, 15]
             )
             
-            self.finished.emit(results)
+            self.progress.emit("Calculating confluence zones...")
+            
+            # Calculate confluence zones using the imported module
+            confluence_calculator = HVNConfluenceCalculator(
+                confluence_threshold_percent=0.5,
+                min_peaks_for_zone=2,
+                max_peaks_per_timeframe=10
+            )
+            
+            confluence_analysis = confluence_calculator.calculate(
+                results=results,
+                current_price=state.current_price,
+                max_zones=5
+            )
+            
+            # NEW: Calculate ATR zones
+            self.progress.emit("Calculating 15-minute ATR zones...")
+            
+            atr_zone_analysis = self.atr_enhancer.enhance_confluence_zones(
+                confluence_analysis,
+                self.symbol,
+                self.end_datetime
+            )
+            
+            # Emit enhanced results
+            enhanced_results = {
+                'timeframe_results': results,
+                'confluence_analysis': confluence_analysis,
+                'atr_zone_analysis': atr_zone_analysis,
+                'current_price': state.current_price
+            }
+            
+            self.finished.emit(enhanced_results)
             
         except Exception as e:
             self.error.emit(f"Error: {str(e)}\n{traceback.format_exc()}")
@@ -210,11 +249,12 @@ class TimeframeTable(QWidget):
 
 
 class ConfluenceSection(QWidget):
-    """Widget for displaying confluence zones analysis"""
+    """Widget for displaying confluence zones analysis with ATR enhancements"""
     
     def __init__(self):
         super().__init__()
         self.current_price = 0.0
+        self.atr_zone_analysis = None  # Store ATR analysis
         self.confluence_calculator = HVNConfluenceCalculator(
             confluence_threshold_percent=0.5,
             min_peaks_for_zone=2,
@@ -284,10 +324,13 @@ class ConfluenceSection(QWidget):
         
         layout.addWidget(group)
         self.setLayout(layout)
-        
-    def update_analysis(self, results: Dict[int, TimeframeResult], current_price: float):
+    
+    def update_analysis(self, results: Dict[int, TimeframeResult], 
+                       current_price: float,
+                       atr_zone_analysis: Optional[ATRZoneAnalysis] = None):
         """Update confluence analysis using the calculator"""
         self.current_price = current_price
+        self.atr_zone_analysis = atr_zone_analysis  # Store ATR analysis
         self.price_label.setText(f"Current Price: ${current_price:.2f}")
         
         # Calculate confluence using the imported module
@@ -297,29 +340,54 @@ class ConfluenceSection(QWidget):
             max_zones=5
         )
         
-        # Display the analysis
+        # Display the analysis with ATR zones
         self.display_analysis(analysis)
         
     def display_analysis(self, analysis: ConfluenceAnalysis):
-        """Display the confluence analysis results"""
+        """Display the confluence analysis results with ATR zones"""
         if not analysis.zones:
             self.results_text.setHtml("<p style='color: #888888;'>No confluence zones found</p>")
             return
             
         html = ""
         
-        # Add summary if price is in a zone
-        if analysis.price_in_zone:
+        # Add ATR value in header if available
+        if self.atr_zone_analysis:
+            atr_value = self.atr_zone_analysis.atr_result.atr_value
+            atr_pct = self.atr_zone_analysis.atr_result.atr_percentage
             html += f"""
-            <div style='margin-bottom: 15px; padding: 10px; background-color: #4a3a6a; border-radius: 5px;'>
-                <p style='color: #50C878; margin: 0;'>
-                    ⚡ Current price is INSIDE Zone #{analysis.price_in_zone.zone_id}
+            <div style='margin-bottom: 10px; padding: 8px; background-color: #3a3a5a; border-radius: 5px;'>
+                <p style='color: #9370DB; margin: 0; font-size: 14px;'>
+                    📊 15-Min ATR: ${atr_value:.2f} ({atr_pct:.2f}% of price)
                 </p>
             </div>
             """
         
-        # Display each zone
+        # Add summary if price is in a zone
+        if analysis.price_in_zone:
+            # Check if also in ATR zone
+            atr_zone_msg = ""
+            if self.atr_zone_analysis:
+                atr_zone = self.atr_zone_analysis.get_zone_by_id(analysis.price_in_zone.zone_id)
+                if atr_zone and atr_zone.contains_price(self.current_price):
+                    position = atr_zone.get_price_position(self.current_price)
+                    atr_zone_msg = f" | {position['atr_percentage']:.1f}% of ATR from center"
+            
+            html += f"""
+            <div style='margin-bottom: 15px; padding: 10px; background-color: #4a3a6a; border-radius: 5px;'>
+                <p style='color: #50C878; margin: 0;'>
+                    ⚡ Current price is INSIDE Zone #{analysis.price_in_zone.zone_id}{atr_zone_msg}
+                </p>
+            </div>
+            """
+        
+        # Display each zone with ATR enhancement
         for zone in analysis.zones[:5]:
+            # Get corresponding ATR zone if available
+            atr_zone = None
+            if self.atr_zone_analysis:
+                atr_zone = self.atr_zone_analysis.get_zone_by_id(zone.zone_id)
+            
             # Determine strength emoji and color
             strength_display = {
                 'Strong': ('🟢', '#50C878'),
@@ -338,32 +406,100 @@ class ConfluenceSection(QWidget):
                     Zone #{zone.zone_id} - {emoji} {zone.strength} 
                     <span style='font-size: 12px; color: #888888;'>(Score: {zone.strength_score:.1f})</span>
                 </h3>
-                <table style='width: 100%; color: #ffffff;'>
-                    <tr>
-                        <td style='padding: 3px;'><b>Zone Center:</b></td>
-                        <td style='color: #7B68EE;'>${zone.center_price:.2f}</td>
-                        <td style='padding: 3px;'><b>Distance:</b></td>
-                        <td style='color: {'#50C878' if zone.distance_percentage < 1.0 else '#FFA500'};'>
-                            ${zone.distance_from_current:.2f} ({zone.distance_percentage:.2f}% {direction})
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style='padding: 3px;'><b>Zone Range:</b></td>
-                        <td>${zone.zone_low:.2f} - ${zone.zone_high:.2f}</td>
-                        <td style='padding: 3px;'><b>Width:</b></td>
-                        <td>${zone.zone_width:.2f}</td>
-                    </tr>
-                    <tr>
-                        <td style='padding: 3px;'><b>Timeframes:</b></td>
-                        <td>{', '.join(f'{tf}d' for tf in sorted(zone.timeframes))}</td>
-                        <td style='padding: 3px;'><b>Volume:</b></td>
-                        <td>{zone.total_volume_weight:.2f}%</td>
-                    </tr>
-                </table>
-                <div style='margin-top: 8px; font-size: 11px; color: #bbbbbb;'>
+                
+                <!-- Volume-based zone info -->
+                <div style='margin-bottom: 10px; padding: 10px; background-color: #2a2a2a; border-radius: 5px;'>
+                    <h4 style='color: #7B68EE; margin: 0 0 8px 0; font-size: 13px;'>📊 VOLUME-BASED ZONE</h4>
+                    <table style='width: 100%; color: #ffffff; font-size: 12px;'>
+                        <tr>
+                            <td style='padding: 3px; width: 30%;'><b>Center:</b></td>
+                            <td style='color: #7B68EE;'>${zone.center_price:.2f}</td>
+                            <td style='padding: 3px; width: 30%;'><b>Distance:</b></td>
+                            <td style='color: {'#50C878' if zone.distance_percentage < 1.0 else '#FFA500'};'>
+                                ${zone.distance_from_current:.2f} ({zone.distance_percentage:.2f}% {direction})
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 3px;'><b>Zone Range:</b></td>
+                            <td>${zone.zone_low:.2f} - ${zone.zone_high:.2f}</td>
+                            <td style='padding: 3px;'><b>Width:</b></td>
+                            <td>${zone.zone_width:.2f}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 3px;'><b>Timeframes:</b></td>
+                            <td>{', '.join(f'{tf}d' for tf in sorted(zone.timeframes))}</td>
+                            <td style='padding: 3px;'><b>Volume:</b></td>
+                            <td>{zone.total_volume_weight:.2f}%</td>
+                        </tr>
+                    </table>
+                </div>
             """
             
-            # Add peak details
+            # Add ATR zone info if available
+            if atr_zone:
+                # Zone relationship icon
+                if atr_zone.zones_aligned:
+                    relationship_icon = "✅"
+                    relationship_text = "Aligned"
+                elif atr_zone.atr_to_volume_ratio > 2.0:
+                    relationship_icon = "⚡"
+                    relationship_text = "High Volatility"
+                else:
+                    relationship_icon = "📍"
+                    relationship_text = "Tight Range"
+                
+                zone_html += f"""
+                <!-- ATR-based zone info -->
+                <div style='margin-bottom: 10px; padding: 10px; background-color: #2a2a2a; border-radius: 5px;'>
+                    <h4 style='color: #7B68EE; margin: 0 0 8px 0; font-size: 13px;'>
+                        📈 15-MIN ATR ZONE {relationship_icon} {relationship_text}
+                    </h4>
+                    <table style='width: 100%; color: #ffffff; font-size: 12px;'>
+                        <tr>
+                            <td style='padding: 3px; width: 30%;'><b>ATR Upper:</b></td>
+                            <td style='color: #87CEEB;'>${atr_zone.atr_upper:.2f}</td>
+                            <td style='padding: 3px; width: 30%;'><b>Extension:</b></td>
+                            <td style='color: {'#FFA500' if atr_zone.atr_extends_above else '#50C878'};'>
+                                {'+$' + f'{atr_zone.upper_extension:.2f}' if atr_zone.atr_extends_above else 'Within'}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 3px;'><b>ATR Lower:</b></td>
+                            <td style='color: #87CEEB;'>${atr_zone.atr_lower:.2f}</td>
+                            <td style='padding: 3px;'><b>Extension:</b></td>
+                            <td style='color: {'#FFA500' if atr_zone.atr_extends_below else '#50C878'};'>
+                                {'-$' + f'{atr_zone.lower_extension:.2f}' if atr_zone.atr_extends_below else 'Within'}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 3px;'><b>ATR Width:</b></td>
+                            <td>${atr_zone.atr_zone_width:.2f}</td>
+                            <td style='padding: 3px;'><b>Ratio:</b></td>
+                            <td>{atr_zone.atr_to_volume_ratio:.2f}x volume zone</td>
+                        </tr>
+                    </table>
+                """
+                
+                # Add price position if inside ATR zone
+                if atr_zone.contains_price(self.current_price):
+                    position = atr_zone.get_price_position(self.current_price)
+                    zone_html += f"""
+                    <div style='margin-top: 8px; padding: 5px; background-color: #3a3a5a; border-radius: 3px;'>
+                        <p style='margin: 0; font-size: 11px; color: #50C878;'>
+                            💹 Price is {position['atr_percentage']:.1f}% of ATR from center
+                            (${abs(position['distance_from_center']):.2f} {'above' if position['distance_from_center'] > 0 else 'below'})
+                        </p>
+                    </div>
+                    """
+                
+                zone_html += "</div>"
+            
+            # Add peak details (existing code)
+            zone_html += f"""
+                <div style='margin-top: 8px; font-size: 11px; color: #bbbbbb;'>
+                    <b>Contributing Peaks:</b><br>
+            """
+            
             for tf, price, vol in zone.peaks:
                 zone_html += f"• {tf}d peak at ${price:.2f} ({vol:.2f}%)<br>"
                 
@@ -371,10 +507,14 @@ class ConfluenceSection(QWidget):
             html += zone_html
             
         # Add analysis footer
+        footer_time = analysis.analysis_time.strftime('%Y-%m-%d %H:%M:%S')
+        if self.atr_zone_analysis:
+            footer_time = self.atr_zone_analysis.analysis_time.strftime('%Y-%m-%d %H:%M:%S')
+            
         html += f"""
         <div style='margin-top: 15px; padding: 10px; background-color: #2a2a2a; border-radius: 5px; font-size: 11px; color: #888888;'>
             <p style='margin: 0;'>
-                Analysis Time: {analysis.analysis_time.strftime('%Y-%m-%d %H:%M:%S')} | 
+                Analysis Time: {footer_time} | 
                 Total Zones: {analysis.total_zones_found} | 
                 Strongest: Zone #{analysis.strongest_zone.zone_id if analysis.strongest_zone else 'N/A'} | 
                 Nearest: Zone #{analysis.nearest_zone.zone_id if analysis.nearest_zone else 'N/A'}
@@ -655,21 +795,39 @@ class HVNPeakAnalyzer(QMainWindow):
         """Store current price for confluence calculation"""
         self.current_price = price
         
-    def on_calculation_finished(self, results: Dict[int, TimeframeResult]):
-        """Handle calculation completion"""
+    def on_calculation_finished(self, results: Dict):
+        """Handle calculation completion with ATR zones"""
+        # Extract components from enhanced results
+        timeframe_results = results.get('timeframe_results', {})
+        confluence_analysis = results.get('confluence_analysis')
+        atr_zone_analysis = results.get('atr_zone_analysis')
+        current_price = results.get('current_price', self.current_price)
+        
         # Update tables
-        if 120 in results:
-            self.table_120.update_data(results[120])
-        if 60 in results:
-            self.table_60.update_data(results[60])
-        if 15 in results:
-            self.table_15.update_data(results[15])
+        if 120 in timeframe_results:
+            self.table_120.update_data(timeframe_results[120])
+        if 60 in timeframe_results:
+            self.table_60.update_data(timeframe_results[60])
+        if 15 in timeframe_results:
+            self.table_15.update_data(timeframe_results[15])
             
-        # Update confluence analysis using the imported module
-        self.confluence_section.update_analysis(results, self.current_price)
+        # Update confluence analysis with ATR zones
+        if confluence_analysis:
+            self.confluence_section.update_analysis(
+                timeframe_results, 
+                current_price,
+                atr_zone_analysis
+            )
+        else:
+            # Fallback to original method if no confluence analysis
+            self.confluence_section.update_analysis(timeframe_results, current_price)
             
-        # Reset window title
-        self.setWindowTitle("HVN Peak Analyzer")
+        # Update window title with ATR info if available
+        if atr_zone_analysis:
+            atr_value = atr_zone_analysis.atr_result.atr_value
+            self.setWindowTitle(f"HVN Peak Analyzer - 15m ATR: ${atr_value:.2f}")
+        else:
+            self.setWindowTitle("HVN Peak Analyzer")
         
         # Re-enable run button
         self.run_button.setEnabled(True)
